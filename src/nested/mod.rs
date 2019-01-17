@@ -1336,7 +1336,6 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
-
     /*for cell in actual_res.into_iter() {
       println!("@@@@@ cell a: {:?}", cell);
     }*/

@@ -5,20 +5,45 @@ use std::mem;
 // use std::option::Option;
 // use std::slice::Iter;
 
+/// Cardinal points 
+#[derive(Debug, PartialEq)]
 pub enum Cardinal {
+  /// South direction
   S,
+  /// East direction
   E,
+  /// North direction
   N,
+  /// West direction
   W
 }
 
 impl Cardinal {
 
+  /// Returns a Cardinal point give an index.
   /// We define this method for calls from external languages
   /// - 0 => S
   /// - 1 => E
   /// - 2 => N
   /// - 3 => W
+  /// 
+  /// # Input
+  /// - `i` index in `[0, 3]`
+  /// 
+  /// # Output
+  /// - cardinal point
+  /// 
+  /// # Panics
+  /// If the given index in not in `[0, 3]`
+  /// 
+  /// ```rust
+  /// use cdshealpix::compass_point::{Cardinal};
+  /// 
+  /// assert_eq!(Cardinal::from_index(0), Cardinal::S);
+  /// assert_eq!(Cardinal::from_index(1), Cardinal::E);
+  /// assert_eq!(Cardinal::from_index(2), Cardinal::N);
+  /// assert_eq!(Cardinal::from_index(3), Cardinal::W);
+  /// ```
   pub fn from_index(i: u8) -> Cardinal {
     match i {
       0 => Cardinal::S,
@@ -42,7 +67,7 @@ impl Cardinal {
   /// - South: -offset
   /// - North: +offset
   /// - East and West: 0
-  pub fn offset_sn(&self, offset: f64) -> f64 {
+  pub(super) fn offset_sn(&self, offset: f64) -> f64 {
     match *self {
       Cardinal::S => -offset,
       Cardinal::N => offset,
@@ -54,7 +79,7 @@ impl Cardinal {
   /// - West: -offset
   /// - East: +offset
   /// - South and North: 0
-  pub fn offset_we(&self, offset: f64) -> f64 {
+  pub(super) fn offset_we(&self, offset: f64) -> f64 {
     match *self {
       Cardinal::W => -offset,
       Cardinal::E => offset,

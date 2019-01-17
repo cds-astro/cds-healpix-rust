@@ -1,3 +1,6 @@
+//! Module containing spherical geometry structures and methods like 3D vectors, 
+//! polygon or cone on the unit sphere...
+
 
 pub(super) mod coo3d;
 pub(super) mod cone;
@@ -276,7 +279,7 @@ fn polygon_edge_intersects_great_circle(a_dot_edge_normal: f64, b_dot_edge_norma
 
 /// Tells if the intersection line (i) between the two planes defined by vector a, b and pA, pB
 /// respectively in inside the zone [pA, pB].
-pub fn intersect_point_in_polygon_great_circle_arc(
+fn intersect_point_in_polygon_great_circle_arc(
   a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> bool {
   let intersect = normalized_intersect_point(a, b, a_dot_edge_normal, b_dot_edge_normal);
   let papb = dot_product(pa, pb);

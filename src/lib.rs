@@ -1340,10 +1340,11 @@ fn base_cell(i: u8, j: u8) -> u8 {
 }
 
 
-/// Module for the NESTED scheme
+/// Module containing NESTED scheme methods
 pub mod nested;
 
-pub mod sph_geom;
+/// No need to make it public!
+mod sph_geom;
 
 #[cfg(test)]
 mod tests {
