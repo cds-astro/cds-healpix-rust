@@ -317,22 +317,22 @@ impl<'a> BMOCFlatIter<'a> {
     match self.raw_val_iter.next() {
       None => self.curr_val.take(),
       Some(&raw_value) => {
-        /*// Remove the flag bit, then divide by 2 (2 bits per level)
+        // Remove the flag bit, then divide by 2 (2 bits per level)
         let delta_depth = ((raw_value >> 1).trailing_zeros() >> 1) as u8;
         let twice_delta_depth = delta_depth << 1;
         // Remove 2 bits per depth difference + 1 sentinel bit + 1 flag bit
         let hash = raw_value >> (2 + twice_delta_depth);
         let val = hash << twice_delta_depth;
         self.curr_val_max = val | ((1_u64 << twice_delta_depth) - 1_u64);
-        self.curr_val.replace(val)*/
+        self.curr_val.replace(val)
 
-        // Remove the flag bit, then divide by 2 (2 bits per level)
+        /*// Remove the flag bit, then divide by 2 (2 bits per level)
         let twice_delta_depth = (raw_value >> 1).trailing_zeros() as u8;
         // Remove 2 bits per depth difference + 1 sentinel bit + 1 flag bit
         let mask = 0xFFFFFFFFFFFFFFFC_u64 << twice_delta_depth;
         let min = raw_value & mask;
         self.curr_val_max = min | ((!mask) >> 1);
-        self.curr_val.replace(min)
+        self.curr_val.replace(min)*/
       },
     }
   }
