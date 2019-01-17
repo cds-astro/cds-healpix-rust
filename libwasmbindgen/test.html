@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>HEALPix webassembly demo</title>
+  </head>
+  <body>
+    <script>
+      delete WebAssembly.instantiateStreaming;
+    </script>
+    <script src='./cdshealpix.js'></script>
+    <script>
+      function run() {
+         // use 'cdshealpix', as simple alias nicer than 'wasm_bindgen'
+         hpx = wasm_bindgen;
+         console.log("You can call methods (coordinate are given and returned in degrees):")
+         console.log("  hpx.getOrderMax()")
+         console.log("  hpx.lonlatToNested(order, ra, dec)");
+         console.log("  hpx.multiLonlatToNested(order, [ra1, dec1, ra2, dec2, ..., raN, decN]")
+         console.log("  hpx.nestedCenter(order, cellNumber)")
+         console.log("  hpx.vertices(order, cellNumber)");
+         console.log("  hpx.nestedNeighbours(order, cellNumber)");
+         console.log("  hpx.nestedQueryCone(order, cone_ra, cone_dec, cone_radius)");
+         console.log("  hpx.nestedQueryConeBMOC(order, cone_ra, cone_dec, cone_radius)");
+         console.log("  hpx.nestedQueryPolygon(order, [ra1, dec1, ra2, dec2, ..., raN, decN])");
+         console.log("  hpx.nestedQueryPolygonBMOC(order, [ra1, dec1, ra2, dec2, ..., raN, decN])");
+         console.log("From a BMOC, you can get its number of cells `bmoc.getSize()` and access each cell `bmoc.getCell(i)`");
+         console.log("From a Cell, you can access directly its `order`, `icell` and `idfull` attributes");
+      }
+      wasm_bindgen('./cdshealpix_bg.wasm')
+        .then(run)
+        .catch(console.error);
+    </script>
+    Look at your web browser console!
+  </body>
+</html>
+

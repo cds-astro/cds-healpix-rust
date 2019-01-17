@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>HEALPix webassembly demo</title>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script>
+      delete WebAssembly.instantiateStreaming;
+    </script>
+    <script src='./cdshealpix.js'></script>
+    <script>
+      function init() {
+        hpx = wasm_bindgen;
+        $('#compute').click(function() {
+          $('#hpxhash').val(hpx.lonlatToNested($('#depth').val(), $('#lon').val(), $('#lat').val()));
+        });
+      }
+      wasm_bindgen('./cdshealpix_bg.wasm')
+        .then(init)
+        .catch(console.error);
+    </script>
+  </head>
+  <body>
+    <div>
+      <fieldset id="hpxHash">
+        <legend>HEALPix hash computer</legend>
+	<ul>
+          <li>
+            <label for="lon">Longitude (deg): </label>
+	    <input type='text' id="lon" placeholder="254.391654"/>
+	  </li>
+          <li>
+            <label for="lat">Latitude (deg): </label>
+	    <input type='text' id="lat" placeholder="-78.985027"/>
+	  </li>
+          <li>
+            <label for="depth">Healpix depth: </label>
+	    <select id="depth">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+              <option value="24">24</option>
+	    </select>
+	  </li>
+	  <input type="submit" value="Compute" id="compute"/>
+	  <li>
+	    <label for="hpxhash">Healpix hash (ipix, icell): </label>
+	    <input type='text' id="hpxhash" disabled/>
+	  </li>
+        </ul>
+      </fieldset>
+    </div>
+  </body>
+</html>
+
