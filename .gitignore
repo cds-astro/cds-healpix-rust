@@ -1,0 +1,13 @@
+# Ignore dirs
+/trash/
+/target/
+/libwasm/
+/libpsql/
+/libpsql10/
+
+# Ignore files
+GIT_NOTICE.txt
+Cargo.lock
+Makefile
+**/*.rs.bk
+
