@@ -3,7 +3,13 @@ name = "cdshealpix"
 version = "0.1.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
-
+license = "MIT/Apache-2.0"
+readme = "README.md"
+categories = ["algorithms", "science"] 
+repository = "https://github.com/cds-astro/cds-healpix-rust/"
+description = """
+Rust implementation of the HEALPix tesselation.
+"""
 
 [lib]
 name = "cdshealpix"
@@ -21,16 +27,12 @@ path = "src/bin.rs"
 [dependencies]
 # External dependencies
 structopt = "0.2"        # CLI lib (based on clap)
-#rand = "0.6"
 
 [features]
 nightly = []
-#default = []
 
 [profile.release]
 lto = true
 debug = false
-#panic = 'abort'
-
 
 
