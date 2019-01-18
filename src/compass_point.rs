@@ -1,9 +1,6 @@
 //! Module defining the commodity enums Cardinal (points) and MainWind (points). 
 
 use std::mem;
-// use std::iter::FilterMap;
-// use std::option::Option;
-// use std::slice::Iter;
 
 /// Cardinal points 
 #[derive(Debug, PartialEq)]
@@ -36,6 +33,7 @@ impl Cardinal {
   /// # Panics
   /// If the given index in not in `[0, 3]`
   /// 
+  /// # Example
   /// ```rust
   /// use cdshealpix::compass_point::{Cardinal};
   /// 
@@ -88,6 +86,8 @@ impl Cardinal {
   }
 }
 
+/// Cardinal set. 
+/// Internally the information is stored on 4 bits.
 pub struct CardinalSet {
   // Byte storing the 4 boolean values
   byte: u8,
@@ -95,12 +95,21 @@ pub struct CardinalSet {
 
 impl CardinalSet {
   
+  /// Retuns a new empty cardinal set.
   pub fn new() -> CardinalSet {
     CardinalSet {
       byte: 0u8,
     }
   }
   
+  /// Retusn a cardinal set with all directions set
+  pub fn all() -> CardinalSet {
+    CardinalSet {
+      byte: 0b00001111_u8,
+    }
+  }
+  
+  /// Add or remove (or do nothing) the given direction to the set.
   pub fn set(&mut self, key: Cardinal, value: bool) {
     let i = key.index() as u8;
     let mask = 1u8 << i;
@@ -111,6 +120,7 @@ impl CardinalSet {
     }
   }
   
+  /// Returns `true` if the given direction is in the set.
   pub fn get(&self, key: Cardinal) -> bool {
     let i = key.index();
     self.get_from_index(i)
@@ -121,6 +131,7 @@ impl CardinalSet {
     self.byte & mask != 0u8
   }
   
+  /// Remove all directions from the set
   pub fn clear(&mut self) {
     self.byte = 0u8;
   }
@@ -138,6 +149,7 @@ impl IntoIterator for CardinalSet {
   }
 }
 
+/// Structure used to iterate over a CardinalSet
 pub struct CardinalSetIterator {
   cardinal_set: CardinalSet,
   index: u8,
@@ -160,30 +172,37 @@ impl Iterator for CardinalSetIterator {
   }
 }
 
+/// Equivalent of a Java EnumMap for cardinal directions.
 /// We require T to implement the Copy trait since internally we use an array stored on the stack.
 pub struct CardinalMap<T: Copy> {
   array: [Option<T>; 4],
 }
 
+/// Equivalent of a Java EnumMap for the cardinal points.
+/// We require T to implement the Copy trait since internally we use an array stored on the stack.
 impl<V: Copy> CardinalMap<V> {
 
+  /// Creates a new empty map.
   pub fn new() ->  CardinalMap<V> {
     CardinalMap {
       array: [Option::None; 4],
     }
   }
 
+  /// Associate the given value with the given direction
   pub fn put(&mut self, key: Cardinal, value: V) -> Option<V> {
     mem::replace(&mut self.array[key.index() as usize], Some(value))
   }
 
+  /// Get a pointer to the value associated with the given direction
   pub fn get(&self, key: Cardinal) -> Option<&V> {
     match self.array[key.index() as usize] {
       Some(ref v) => Some(v),
       None => None,
     }
   }
-
+  
+  /// Replace all values by None
   pub fn clear(&mut self) {
     // fill_with_none(self.array);
     for i in 0..4 {
@@ -197,21 +216,32 @@ impl<V: Copy> CardinalMap<V> {
 // MAIN WIND //
 ///////////////
 
-#[derive(PartialEq)]
-#[derive(Debug)]
+/// Main winds directions
+#[derive(Debug, PartialEq)]
 pub enum MainWind {
+  /// South
   S,
+  /// Southeast
   SE,
+  /// East
   E,
+  /// Southwest
   SW,
+  /// Center (not a real main winds)
   C,
+  /// Northeast
   NE,
+  /// West
   W,
+  /// Norhtwest
   NW,
+  /// North
   N
 }
 
 impl MainWind {
+
+  /// Returns a Main wind direction give an index.
   /// We define this method for calls from external languages
   /// - 0 => S
   /// - 1 => SE
@@ -222,6 +252,31 @@ impl MainWind {
   /// - 6 => W
   /// - 7 => NW
   /// - 8 => N
+  /// 
+  /// # Input
+  /// - `i` index in `[0, 8]`
+  /// 
+  /// # Output
+  /// - main wind direction
+  /// 
+  /// # Panics
+  /// If the given index in not in `[0, 8]`
+  /// 
+  /// # Example
+  /// 
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// 
+  /// assert_eq!(MainWind::from_index(0), MainWind::S);
+  /// assert_eq!(MainWind::from_index(1), MainWind::SE);
+  /// assert_eq!(MainWind::from_index(2), MainWind::E);
+  /// assert_eq!(MainWind::from_index(3), MainWind::SW);
+  /// assert_eq!(MainWind::from_index(4), MainWind::C);
+  /// assert_eq!(MainWind::from_index(5), MainWind::NE);
+  /// assert_eq!(MainWind::from_index(6), MainWind::W);
+  /// assert_eq!(MainWind::from_index(7), MainWind::NW);
+  /// assert_eq!(MainWind::from_index(8), MainWind::N);
+  /// ```
   pub fn from_index(i: u8) -> MainWind {
     match i {
       0 => MainWind::S,
@@ -240,6 +295,9 @@ impl MainWind {
   /// Returns the given Main Wind direction according to the given offsets.
   /// - `offset_se must` be in `[-1, 1]`
   /// - `offset_sw must` be in `[-1, 1]`
+  /// 
+  /// # Example
+  /// 
   /// ```rust
   /// use cdshealpix::compass_point::MainWind;
   /// use cdshealpix::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
@@ -282,7 +340,7 @@ impl MainWind {
   /// _S SE _E 
   /// ----------> SE
   /// -1  0  1
-  pub fn offset_se(&self) -> i8 {
+  pub(super) fn offset_se(&self) -> i8 {
     match *self {
       MainWind::S  => -1,
       MainWind::SE =>  0,
@@ -301,7 +359,7 @@ impl MainWind {
   ///  1 | _W NW _N
   ///  0 | SW _C NE
   /// -1 | _S SE _E
-  pub fn offset_sw(&self) -> i8 {
+  pub(super) fn offset_sw(&self) -> i8 {
     match *self {
       MainWind::S  => -1,
       MainWind::SE => -1,
@@ -316,6 +374,7 @@ impl MainWind {
   }
 }
 
+/// Equivalent of a Java EnumMap for the main winds.
 /// We require T to implement the Copy trait since internally we use an array stored on the stack.
 #[derive(Debug)]
 pub struct MainWindMap<T: Copy> {
@@ -324,30 +383,31 @@ pub struct MainWindMap<T: Copy> {
 
 impl<V: Copy> MainWindMap<V> {
 
+  /// Creates a new empty map.
   pub fn new() -> MainWindMap<V> {
     MainWindMap {
       array: [Option::None; 9],
     }
   }
 
+  /// Associate the given value with the given direction
   pub fn put(&mut self, key: MainWind, value: V) -> Option<V> {
     mem::replace(&mut self.array[key.index() as usize], Some(value))
   }
 
+  /// Associate None with the given direction
   pub fn put_none(&mut self, key: MainWind) -> Option<V> {
     mem::replace(&mut self.array[key.index() as usize], None)
   }
-  
+
+  /// Associate the given Option with the given direction
   pub fn put_opt(&mut self, key: MainWind, value: Option<V>) -> Option<V> {
     mem::replace(&mut self.array[key.index() as usize], value)
   }
 
+  /// Get a pointer to the value associated with the given direction
   pub fn get(&self, key: MainWind) -> Option<&V> {
     self.get_from_index(key.index() as usize)
-    /*match self.array[key.index() as usize] {
-      Some(ref v) => Some(v),
-      None => None,
-    }*/
   }
 
   fn get_from_index(&self, index: usize) -> Option<&V> {
@@ -357,77 +417,29 @@ impl<V: Copy> MainWindMap<V> {
     }
   }
   
+  /// Replace all values by None 
   pub fn clear(&self) {
     let mut a = self.array; 
     fill_with_none(&mut a);
-    //self.array.iter_mut().for_each(|o| *o = None);
-    /*let mut a = self.array;
-    for i in 0..9 {
-      a[i] = None;
-    }*/
   }
 
+  /// Returns a vector of values
   pub fn values_vec(&self) -> Vec<V> {
     self.array.into_iter().filter_map(|&o| o).collect::<Vec<V>>()
   }
   
-  /*
-  /// -1 value to code NULL
-  pub fn to_flat_array(&self) -> [u64; 9] {
-    let a = [-1_u64; 8];
-    for i in 0..8 {
-      match self.array[i] {
-        Some(h) => a[i] = h,   
-      }
-    }
-    a
-  }
-  /// -1 value to code NULL
-  pub fn to_flat_array_no_center(&self) -> [u64; 8] {
-    let a: [u64; 8] = [-1; 8];
-    for i in 0..8 {
-      match self.array[i] {
-        Some(h) => a[i] = h,
-      }
-    }
-    a
-  }
-  */
-
-  /*pub fn values(&self) -> MainWindMapValues {
-    MainWindMapValues<V> { 
-      mw_map: self,
-      index: 0_u8,
-    }
-  }*/
-  
 }
-
-/*pub struct Values<V> {
-  inner: Iter<'a, K, V>,
-}
-impl<'a, K, V> Iterator for Values<'a, K, V> {
-  type Item = &'a V;
-
-  #[inline]
-  fn next(&mut self) -> Option<(&'a V)> {
-    self.inner.next().map(|(_, v)| v)
-  }
-  #[inline]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    self.inner.size_hint()
-  }
-}*/
-
 
 impl<V: Copy + Ord> MainWindMap<V> {
   
+  /// Returns the values contained in the map, ordered in their natural order in a fixed length array
   pub fn sorted_values(&self) -> Box<[V]> {
     let mut values = self.values_vec().into_boxed_slice();
     values.sort_unstable();
     values
   }
 
+  /// Returns the values contained in the map, ordered in their natural order in a growable array
   pub fn sorted_values_vec(&self) -> Vec<V> {
     let mut values: Vec<V> = self.values_vec();
     values.sort_unstable();
@@ -435,25 +447,6 @@ impl<V: Copy + Ord> MainWindMap<V> {
   }
 }
 
-/*pub struct MainWindMapValues<V: Copy> {
-  mw_map: MainWindMap<V>,
-  index: u8,
-}
-
-impl<V> Iterator for MainWindMapValues<V> {
-  type Item = V;
-
-  fn next(&mut self) -> Option<V> {
-    while self.index < 9 {
-      if let Some(ref v) = self.array[self.index as usize] {
-        self.index += 1;
-        return Some(v);
-      }
-      self.index += 1;
-    }
-    None
-  }
-}*/
 
 /// Fill the given (mutable reference on a) slice of Option with the None value
 fn fill_with_none<T>(array_of_option: &mut [Option<T>]) {

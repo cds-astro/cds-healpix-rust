@@ -395,7 +395,7 @@ pub fn largest_center_to_vertex_distance_with_radius(depth: u8, lon: f64, lat: f
 }
 
 /// Same as [largest_center_to_vertex_distance_with_radius](#fn.largest_center_to_vertex_distance_with_radius)
-/// but making the computation for several depths at the same tile?
+/// but making the computation for several depths at the same time.
 pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_depth: u8, lon: f64, lat: f64, radius: f64) -> Box<[f64]> {
   let mut vec: Vec<f64> = Vec::with_capacity((to_depth - from_depth) as usize);
   // Specific case for depth 0
@@ -1233,7 +1233,7 @@ fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64
     *b = f64::from_bits(f64::to_bits(*b) | b_sign);
 }
 
-// Import moducle compass point
+// Import module compass point
 pub mod compass_point;
 use crate::compass_point::{MainWind};
 use crate::compass_point::MainWind::*;

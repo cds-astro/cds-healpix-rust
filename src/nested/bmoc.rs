@@ -1,3 +1,5 @@
+//! Definition of a BMOC, i.e. a MOC storing an additional flag telling if a cell is fully
+//! or partially covered by the MOC.
 
 use std::slice::Iter;
 
@@ -172,7 +174,7 @@ impl BMOCBuilderUnsafe {
   }
 }
 
-
+/// Structure defining a simple BMOC.
 pub struct BMOC {
   pub depth_max: u8,
   pub entries: Box<[u64]>,
@@ -238,10 +240,22 @@ impl BMOC {
     self.entries.iter()
   }
   
+  /// Returns an iterator iterating over all cells at the BMOC maximum depth
+  /// (the iteration is made in the natural cell order).
   pub fn flat_iter(&self) -> BMOCFlatIter {
     BMOCFlatIter::new(self.depth_max, self.deep_size(),self.entries.iter())
   }
   
+  /// Returns an array containing all the BMOC cells flattened at the maximum depth.
+  /// This is an utility methods bascailly calling `deep_size` to initialize an array
+  /// and `flat_iter` to retrieve all cells.
+  pub fn to_flat_array(&self) -> Box<[u64]> {
+    let mut res: Vec<u64> = Vec::with_capacity(self.deep_size());
+    for cell in self.flat_iter() {
+      res.push(cell);
+    }
+    res.into_boxed_slice()
+  }
   
   fn get_depth(&self, raw_value: u64) -> u8 {
     self.get_depth_no_flag(rm_flag(raw_value))

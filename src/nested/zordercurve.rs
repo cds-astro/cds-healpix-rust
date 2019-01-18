@@ -1,27 +1,27 @@
-
-use std::mem;
-
-/// 2D Morton code implementation.
-/// For BMI 2.0 referecnes, see:
-/// - [here](https://github.com/gnzlbg/bitwise/blob/master/src/word/morton.rs) to use BMI 2.0 pdep/pext instructions.
-/// - [here](https://stackoverflow.com/questions/4909263/how-to-efficiently-de-interleave-bits-inverse-morton) another example with BMI2.0 instructions 
-/// - [here](https://docs.rs/bitintr/0.2.0/src/bitintr/pdep.rs.html#68-87) code using BMI 2.0 and Rust macro 
-/// - [The rust doc](https://doc.rust-lang.org/beta/core/arch/x86_64/) for the X86_64 architecture
-/// - See also the comment of Julien Bilalte [here](https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/):
-/// > If you can afford the luxury of compiling for BMI2-enabled CPUs, it just boils down to one 
-/// > pdep / pext instruction per dimension`
-/// > These instructions have latency/troughput of 3/1 on Haswell, so it ends up being much faster 
-/// > than the LUT methods as well.
-/// > (and also faster than a SIMD implementation that processes 4 morton codes at a time, 
-/// > although one could probably avoid pipeline starvations by intertwining a SIMD implementation 
-/// > with a few iterations of the pext/pdep versions to get even further speed out of it,
-/// > if you’ve got the need to generate a stream of morton codes for some reason… :) )
+//! 2D Morton code implementation.
+//! For BMI 2.0 referecnes, see:
+//! - [here](https://github.com/gnzlbg/bitwise/blob/master/src/word/morton.rs) to use BMI 2.0 pdep/pext instructions.
+//! - [here](https://stackoverflow.com/questions/4909263/how-to-efficiently-de-interleave-bits-inverse-morton) another example with BMI2.0 instructions 
+//! - [here](https://docs.rs/bitintr/0.2.0/src/bitintr/pdep.rs.html#68-87) code using BMI 2.0 and Rust macro 
+//! - [The rust doc](https://doc.rust-lang.org/beta/core/arch/x86_64/) for the X86_64 architecture
+//! - See also the comment of Julien Bilalte [here](https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/):
+//! > If you can afford the luxury of compiling for BMI2-enabled CPUs, it just boils down to one 
+//! > pdep / pext instruction per dimension`
+//! > These instructions have latency/troughput of 3/1 on Haswell, so it ends up being much faster 
+//! > than the LUT methods as well.
+//! > (and also faster than a SIMD implementation that processes 4 morton codes at a time, 
+//! > although one could probably avoid pipeline starvations by intertwining a SIMD implementation 
+//! > with a few iterations of the pext/pdep versions to get even further speed out of it,
+//! > if you’ve got the need to generate a stream of morton codes for some reason… :) )
 // If needed one day, to encore 3D data (from one of the above ref, I think), from Julien Bilalte:
 // encode3(u32 x, u32 y, u32 z) return _pdep_u32(z, 0x24924924) | _pdep_u32(y, 0x12492492) | _pdep_u32(x, 0x09249249);
 // decode3(u32 code, u32 &outX, u32 &outY, u32 &outZ)
 //  outX = _pext_u32(code, 0x09249249);
 //  outY = _pext_u32(code, 0x12492492);
 //  outZ = _pext_u32(code, 0x24924924);
+use std::mem;
+
+
 
 static LUPT_TO_HASH: [u16; 256] = [
   0x0000, 0x0001, 0x0004, 0x0005, 0x0010, 0x0011, 0x0014, 0x0015, 0x0040, 0x0041, 0x0044,

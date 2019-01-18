@@ -64,16 +64,11 @@ pub fn vertices(depth: u8, hash: u64) -> [(f64, f64); 4] {
   get_or_create(depth).vertices(hash)
 }
 
-
-pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64> {
-  get_or_create(depth).neighbours(hash, include_center)
-}
-
-/// Conveniency function simply calling the [cone_overlap_flat](struct.Layer.html#method.cone_overlap_flat) method
+/// Conveniency function simply calling the [neighbours](struct.Layer.html#method.neighbours) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn cone_overlap_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
-  get_or_create(depth).cone_overlap_flat(cone_lon, cone_lat, cone_radius)
+pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64> {
+  get_or_create(depth).neighbours(hash, include_center)
 }
 
 /// Conveniency function simply calling the [cone_overlap_approx](struct.Layer.html#method.cone_overlap_approx) method
@@ -83,9 +78,18 @@ pub fn cone_overlap_approx(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius:
   get_or_create(depth).cone_overlap_approx(cone_lon, cone_lat, cone_radius)
 }
 
+/// Conveniency function simply calling the [cone_overlap_flat](struct.Layer.html#method.cone_overlap_approx) method
+/// of the [Layer] of the given *depth* and retrieving a flat array.
+#[inline]
+pub fn cone_overlap_approx_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
+  get_or_create(depth).cone_overlap_approx(cone_lon, cone_lat, cone_radius).to_flat_array()
+}
+
+/// Conveniency function simply calling the [cone_overlap_approx_custom](struct.Layer.html#method.cone_overlap_approx_custom) method
+/// of the [Layer] of the given *depth*.
 #[inline]
 pub fn cone_overlap_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-  get_or_create(depth).cone_overlap_approx_v2(delta_depth, cone_lon, cone_lat, cone_radius)
+  get_or_create(depth).cone_overlap_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
 }
 
 /// Conveniency function simply calling the [polygon_overlap_approx](struct.Layer.html#method.polygon_overlap_approx) method
@@ -95,20 +99,8 @@ pub fn polygon_overlap_approx(depth: u8, vertices: &[(f64, f64)]) -> BMOC {
 }
 
 
-// N, E, S, W
-// vertices ->  ((), (), (), ())
-
-// vertices, n -> [(), (), ..., ()]
-
-// neighbours -> 
-
-
-
 pub mod bmoc;
-/// Zorder curve module. So far based on the Look-up tables (tests in Java show better
-/// performances with respect to the the "Hacker's Delight" XOR Shuffling Bits)
 mod zordercurve;
-
 
 use self::zordercurve::{ZOrderCurve, get_zoc};
 use self::bmoc::*;
@@ -120,6 +112,9 @@ use super::{proj};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
 
+/// Defines an HEALPix layer in the NESTED scheme.
+/// A layer is simply an utility structure containing all constants and methods related
+/// to a given depth.
 pub struct Layer { // Why not creating all of them at compilation using a macro?!
   depth: u8,
   nside: u32,
@@ -137,7 +132,8 @@ pub struct Layer { // Why not creating all of them at compilation using a macro?
 }
 
 impl Layer {
-  pub(super) fn new(depth: u8) -> Layer {
+  
+  fn new(depth: u8) -> Layer {
     let twice_depth: u8 = depth << 1u8;
     let nside: u32 = 1u32 << depth;
     let mut x_mask = 0u64;
@@ -188,13 +184,11 @@ impl Layer {
   /// let depth = 12u8;
   /// let nside = nside(depth) as u64;
   /// let nested12: &Layer = get_or_create(depth);
-  /// assert_eq!(nside * nside - 1, nested12.hash(12.5f64.to_radians(), 89.99999f64.to_radians()));
+  /// assert_eq!(nside * nside - 1, nested12.hash(12.5_f64.to_radians(), 89.99999_f64.to_radians()));
   /// ```
   pub fn hash(&self, lon: f64, lat: f64) -> u64 {
     let mut xy = proj(lon, lat);
-    if xy.0 < 0_f64 {
-      xy.0 += 8_f64;
-    }
+    xy.0 = ensures_x_is_positive(xy.0);
     self.shift_rotate_scale(&mut xy);
     let mut ij = discretize(xy);
     let ij_d0c = self.base_cell_coos(&ij);
@@ -202,16 +196,12 @@ impl Layer {
     self.to_coos_in_base_cell(&mut ij);
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
-
+  
   #[inline]
   fn shift_rotate_scale(&self, xy: &mut (f64, f64)) {
     let (ref mut x, ref mut y) = *xy;
-    let tmp: f64 = if *x < 0f64 {
-      -*x
-    } else {
-      8f64 - *x
-    };
-    *y += 1f64;
+    let tmp = 8.0 - *x;
+    *y += 1.0;
     *x = f64::from_bits((self.time_half_nside + f64::to_bits(*x + *y) as i64) as u64);
     *y = f64::from_bits((self.time_half_nside + f64::to_bits(*y + tmp) as i64) as u64);
   }
@@ -331,15 +321,75 @@ impl Layer {
 
   /// Computes the position on the unit sphere of the cell vertex located at the given *direction*
   /// with respect to the center of the cell.
-  /// TODO: continue the doc!!
+  ///   
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for the position of a vertex
+  /// - `vertex_direction`: the direction of the wanted vertex coordiantes
   /// 
+  /// # Output
+  /// - `(lon, lat)` in radians, the position (on the unit sphere) of the vertex
+  ///   - `lon`, longitude in `[0, 2pi]` radians;
+  ///   - `lat`, latitude in `[-pi/2, pi/2]` radians.
+  /// 
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  ///
+  /// # Example
+  /// ```rust
+  /// use std::f64::consts::{PI};
+  /// use cdshealpix::compass_point::{Cardinal};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
+  ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
+  ///   let sindlat = f64::sin(0.5 * (p2.1 - p1.1));
+  ///   2f64 * f64::asin(f64::sqrt(sindlat * sindlat + p1.1.cos() * p2.1.cos() * sindlon * sindlon))
+  /// }
+  /// 
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  ///
+  /// assert!(dist((PI / 4f64, 0.0) , nested0.vertex(0, Cardinal::S)) < 1e-15);
+  /// ```
   #[inline]
   pub fn vertex(&self, hash: u64, vertex_direction: Cardinal) -> (f64, f64) {
     let (x, y) = self.center_of_projected_cell(hash);
     self.vertex_lonlat(x, y, &vertex_direction)
   }
 
-  /// TODO: write the doc
+  /// Computes the positions on the unit sphere of the 4 vertices of the given cell.
+  /// If you want to access the position for a given direction, use method 
+  /// [vertices_map](#method.vertices_map).
+  ///   
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for the positions of its vertices
+  /// 
+  /// # Output
+  /// - `[(lon_S, lat_S), (lon_E, lat_E), (lon_N, lat_N), (lon_W, lat_W)]` in radians, 
+  ///   the positions (on the unit sphere) of the vertices
+  ///   - `lon`, longitude in `[0, 2pi]` radians;
+  ///   - `lat`, latitude in `[-pi/2, pi/2]` radians.
+  /// 
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  ///
+  /// # Example
+  /// ```rust
+  /// use std::f64::consts::{PI};
+  /// use cdshealpix::compass_point::{Cardinal};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
+  ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
+  ///   let sindlat = f64::sin(0.5 * (p2.1 - p1.1));
+  ///   2f64 * f64::asin(f64::sqrt(sindlat * sindlat + p1.1.cos() * p2.1.cos() * sindlon * sindlon))
+  /// }
+  /// 
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  ///
+  /// assert!(dist((PI / 4f64, 0.0) , nested0.vertices(0)[0]) < 1e-15);
+  /// ```
   #[inline]
   pub fn vertices(&self, hash: u64) -> [(f64, f64); 4] {
     let (x, y) = self.center_of_projected_cell(hash);
@@ -351,7 +401,39 @@ impl Layer {
     ]
   }
 
-  /// TODO: write the doc
+  /// Computes the positions on the unit sphere of the vertices of the given cell which direction 
+  /// are in the given set.
+  /// If you don't care about the association between position and direction, 
+  /// you should use [vertices](#method.vertices).
+  ///   
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for the positions of its vertices
+  /// 
+  /// # Output
+  /// - the vertices position stored in a map associating each vertex direction with its position.
+  ///   - `lon`, longitude in `[0, 2pi]` radians;
+  ///   - `lat`, latitude in `[-pi/2, pi/2]` radians.
+  /// 
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  ///
+  /// # Example
+  /// ```rust
+  /// use std::f64::consts::{PI};
+  /// use cdshealpix::compass_point::{Cardinal, CardinalSet};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
+  ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
+  ///   let sindlat = f64::sin(0.5 * (p2.1 - p1.1));
+  ///   2f64 * f64::asin(f64::sqrt(sindlat * sindlat + p1.1.cos() * p2.1.cos() * sindlon * sindlon))
+  /// }
+  /// 
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  ///
+  /// assert!(dist((PI / 4f64, 0.0) , *nested0.vertices_map(0, CardinalSet::all()).get(Cardinal::S).unwrap()) < 1e-15);
+  /// ```
   #[inline]
   pub fn vertices_map(&self, hash: u64, directions: CardinalSet) -> CardinalMap<(f64, f64)> {
     let (x, y) = self.center_of_projected_cell(hash);
@@ -371,6 +453,28 @@ impl Layer {
   /// If the cell do not have a neighbour in the given direction (which is the case of the
   /// eastmost and westmost cells in polar caps base cells and northmost and southmost cells of the
   /// equatorial region base cells), the return Option is None.
+  /// 
+  /// # Input
+  /// - `hash` the hash value of the cell we look for the neighbour
+  /// - `direction` the direction of the neighbour we look for the cell number
+  /// 
+  /// # Output
+  /// - the cell number (hash value) of the neighbour of the given cell in the given direction
+  ///   (`None` if their is no neighbour in the given direction) .
+  /// 
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  ///
+  /// assert_eq!(5 , nested0.neighbour(4, MainWind::E).unwrap());
+  /// ```
   #[inline]
   pub fn neighbour(&self, hash: u64, direction: MainWind) -> Option<u64> {
     let h_parts: HashParts = self.decode_hash(hash);
@@ -379,6 +483,28 @@ impl Layer {
 
   /// Returns the hash values of all the neighbour cells of the cell of given hash.
   /// The given cell itself can be included (setting the `include_center` parameters to `true`).
+  /// 
+  /// # Input
+  /// - `hash` the hash value of the cell we look for the neighbours
+  /// - `include_center` include (or not) the input cell in the MainWind::C key of the returned map
+  /// 
+  /// # Output
+  /// - the cell number (hash value) of the neighbour of the given cell in the given direction
+  ///   (`None` if their is no neighbour in the given direction) .
+  /// 
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  ///
+  /// assert_eq!(5 , *nested0.neighbours(4, false).get(MainWind::E).unwrap());
+  /// ```
   pub fn neighbours(&self, hash: u64, include_center: bool) -> MainWindMap<u64> {
     self.check_hash(hash);
     let mut result_map = MainWindMap::new();
@@ -480,6 +606,7 @@ impl Layer {
     offset
   }
 
+  #[inline]
   fn neighbour_from_shifted_coos(&self, d0h: u8, i: u32, j: u32, base_cell_neighbour_dir: MainWind) -> Option<u64> {
     if base_cell_neighbour_dir == MainWind::C {
       debug_assert!(i < self.nside && j < self.nside);
@@ -601,14 +728,84 @@ impl Layer {
     move |(h, _)| h >> twice_depth_diff
   }
 
-  /// TBW
+  /// Returns a hierarchical view of the list of cells overlapped by the given cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
+  /// The algorithm is fast but approximated: it may return false positive, 
+  /// i.e. cells which are near from the cone but do not overlap it.
+  /// To control the approximation, see the method 
+  /// [cone_overlap_approx_custom](#method.cone_overlap_approx_custom)
+  /// 
+  /// # Input
+  /// - `cone_lon` the longitude of the center of the cone, in radians
+  /// - `cone_lat` the latitude of the center of the cone, in radians
+  /// - `cone_radius` the radius of the cone, in radians
+  /// 
+  /// # Output
+  /// - the list of cells overlapped by the given cone, in a BMOC (hierarchical view also telling
+  ///   if a cell is fully or partially covered).
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 3_u8;
+  /// let nested3 = get_or_create(depth);
+  ///
+  /// let lon = 13.158329_f64.to_radians();
+  /// let lat = -72.80028_f64.to_radians();
+  /// let radius = 5.64323_f64.to_radians();
+  /// 
+  /// let actual_res = nested3.cone_overlap_approx(lon, lat, radius);
+  /// let expected_res: [u64; 10] = [512, 514, 515, 520, 521, 522, 544, 705, 708, 709];
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///      assert_eq!(h1, *h2);
+  /// }
+  /// ```
   pub fn cone_overlap_approx(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
     self.cone_overlap_approx_internal(cone_lon, cone_lat, cone_radius).to_bmoc_packing()
   }
-
-  /// TBW
-  /// delta_depth: additional depth used for computation (to reduce approximations)
-  pub fn cone_overlap_approx_v2(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  
+  /// Returns a hierarchical view of the list of cells overlapped by the given cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
+  /// The algorithm is fast but approximated: it may return false positive, 
+  /// i.e. cells which are near from the cone but do not overlap it.
+  /// To control the approximation, you can choose to perform the computations at a deeper depth
+  /// using the `delta_depth` parameter.
+  /// 
+  /// # Input
+  /// - `delta_depth` the difference between this Layer depth and the depth at which the computations
+  ///   are made (should remain quite small).
+  /// - `cone_lon` the longitude of the center of the cone, in radians
+  /// - `cone_lat` the latitude of the center of the cone, in radians
+  /// - `cone_radius` the radius of the cone, in radians
+  /// 
+  /// # Output
+  /// - the list of cells overlapped by the given cone, in a BMOC (hierarchical view also telling
+  ///   if a cell is fully or partially covered).
+  ///
+  /// # Panics
+  /// If this layer depth + `delta_depth` > the max depth (i.e. 29)
+  /// 
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 3_u8;
+  /// let nested3 = get_or_create(depth);
+  ///
+  /// let lon = 13.158329_f64.to_radians();
+  /// let lat = -72.80028_f64.to_radians();
+  /// let radius = 5.64323_f64.to_radians();
+  /// 
+  /// let actual_res = nested3.cone_overlap_approx_custom(2, lon, lat, radius);
+  /// let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///     assert_eq!(h1, *h2);
+  /// }
+  /// ```
+  pub fn cone_overlap_approx_custom(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
     get_or_create(self.depth + delta_depth)
       .cone_overlap_approx_internal(cone_lon, cone_lat, cone_radius)
       .to_lower_depth_bmoc_packing(self.depth)
@@ -665,7 +862,6 @@ impl Layer {
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
       for &root_hash in neigs.sorted_values().into_iter() {
-// println!("@@@ depth: {}, hash: {}", depth_start, root_hash);
         self.cone_overlap_approx_recur(depth_start, root_hash,
                                 &shs_computer(cone_lon, cone_lat, cos_cone_lat),
                                 &minmax_array, 0, &mut bmoc_builder);
@@ -695,7 +891,7 @@ impl Layer {
       }
     }
   }
-  
+  /*
   /// Returns the list of cells overlapping the given cone
   /// REPLACE THIS BY cone_overlap_approx AND CALLING A METHOD ON THE RESULTING BMOC
   pub fn cone_overlap_flat(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
@@ -777,7 +973,8 @@ impl Layer {
         self.cone_overlap_recur(depth, deeper_hash | 3_u64, shs_computer, shs_minmax, recur_depth, result);
       }
     }
-  }
+  }*/
+  
   /// cone_radius in radians
   /// TODO: find a better function!!
   #[inline]
@@ -809,9 +1006,42 @@ impl Layer {
     4_usize * (1_usize + (self.nside as f64 * TWICE_SQRT_3 * cone_radius + 0.99f64) as usize)
   }
 
+
+  /// Returns a hierarchical view of the list of cells overlapped by the given polygon.
+  /// Self intersecting polygons are supported.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the polygon.
+  /// 
+  /// If you want the complementary solution, apply the NOT operator on the BMOC (to be implemented).
+  /// 
+  /// Here we make the following approximation when testing the intersection between a polygon segment
+  /// and an HEALPix cell edge: we consider that each edge of the HEALPix cell is on a great-circle arc.*
+  /// We plan to provide an exact solution by first testing for each polygon segment if it
+  /// contains a 'special point', like for the exact cone solution (implemented in Java but not yet in Rust).
   ///
-  /// # Inputs
-  /// - `vertices` an slice of tuples (lon, lat) in radians
+  /// 
+  /// # Input
+  /// - `vertices` the list of vertices (in a slice) coordinates, in radians
+  ///              `[(lon, lat), (lon, lat), ..., (lon, lat)]`
+  /// 
+  /// # Output
+  /// - the list of cells overlapped by the given polygon, in a BMOC (hierarchical view also telling
+  ///   if a cell is fully or partially covered).
+  /// 
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 3_u8;
+  /// let nested3 = get_or_create(depth);
+  /// 
+  /// let actual_res =nested3.polygon_overlap_approx(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)]);
+  /// let expected_res: [u64; 8] = [304, 305, 306, 307, 308, 310, 313, 316];
+  /// 
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///     assert_eq!(h1, *h2);
+  /// }
+  /// ```
   pub fn polygon_overlap_approx(&self, vertices: &[(f64, f64)]) -> BMOC {
     let poly = Polygon::new(
       vertices.iter().map(|(lon, lat)| LonLat { lon: *lon, lat: *lat} )
@@ -864,6 +1094,7 @@ impl Layer {
         if depth == self.depth {
           moc_builder.push(depth, hash, false);
         } else {
+          // I known, I don't like this code repetition, TODO: see how to remove it
           let hash = hash << 2;
           let depth = depth + 1;
           self.polygon_overlap_recur(moc_builder, depth, hash    , poly, sorted_poly_vertices_hash);
@@ -972,7 +1203,7 @@ fn bits_2_hash(d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64) -> u64 {
 
 #[inline]
 fn ensures_x_is_positive(x: f64) -> f64 {
-  if x < 0f64 { x + 8f64 } else { x }
+  if x < 0.0 { x + 8.0 } else { x }
 }
 
 /// x / 4

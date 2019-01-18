@@ -1,7 +1,6 @@
 //! Module containing spherical geometry structures and methods like 3D vectors, 
 //! polygon or cone on the unit sphere...
 
-
 pub(super) mod coo3d;
 pub(super) mod cone;
 
@@ -11,8 +10,6 @@ const TWO_PI: f64 = 2.0_f64 * PI;
 
 
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
-
-// see https://internals.rust-lang.org/t/arrays-with-run-time-known-length-and-multi-dimensional-arrays/1448/5
 
 
 trait ContainsSouthPoleComputer {
