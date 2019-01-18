@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix_ffi"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 

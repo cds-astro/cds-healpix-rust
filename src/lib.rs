@@ -303,6 +303,7 @@ fn pow2(x: f64) -> f64 {
   }
 }*/
 
+/// Simple trait used to implements `pow2`, `twice` and `half` on f64.
 pub trait Customf64 {
   #[inline]
   fn pow2(self) -> f64;
@@ -313,14 +314,17 @@ pub trait Customf64 {
 }
 
 impl Customf64 for f64 {
+  /// Returns x^2
   #[inline]
   fn pow2(self) -> f64 {
     self * self // or powi ?
   }
+  /// Returns 2 * x
   #[inline]
   fn twice(self) -> f64 {
     2.0 * self // self + self (I hope the compiler know the simple shift bit to be used for x2)
   }
+  /// Returns x / 2
   #[inline]
   fn half(self) -> f64 {
     0.5 * self

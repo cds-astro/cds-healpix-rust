@@ -181,7 +181,7 @@ impl Layer {
   /// use cdshealpix::{nside};
   /// use cdshealpix::nested::{get_or_create, Layer};
   ///
-  /// let depth = 12u8;
+  /// let depth = 12_u8;
   /// let nside = nside(depth) as u64;
   /// let nested12: &Layer = get_or_create(depth);
   /// assert_eq!(nside * nside - 1, nested12.hash(12.5_f64.to_radians(), 89.99999_f64.to_radians()));
@@ -746,7 +746,6 @@ impl Layer {
   ///
   /// # Example
   /// ```rust
-  /// use cdshealpix::compass_point::{MainWind};
   /// use cdshealpix::nested::{get_or_create, Layer};
   ///
   /// let depth = 3_u8;
@@ -789,7 +788,6 @@ impl Layer {
   /// 
   /// # Example
   /// ```rust
-  /// use cdshealpix::compass_point::{MainWind};
   /// use cdshealpix::nested::{get_or_create, Layer};
   ///
   /// let depth = 3_u8;
