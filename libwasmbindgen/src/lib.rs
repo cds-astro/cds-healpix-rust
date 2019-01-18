@@ -4,7 +4,7 @@
 extern crate cdshealpix;
 extern crate wasm_bindgen;
 
-use cdshealpix::nested::{hash, center, neighbours, vertices, cone_overlap_flat, cone_overlap_approx, polygon_overlap_approx};
+use cdshealpix::nested::{hash, center, neighbours, vertices, cone_overlap_approx_flat, cone_overlap_approx, polygon_overlap_approx};
 use cdshealpix::nested::bmoc::*;
 use cdshealpix::compass_point::{MainWind, MainWindMap};
 use wasm_bindgen::prelude::*;
@@ -395,7 +395,7 @@ pub fn wasm_cone_overlap(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f
 /// - the flat list of HEALPix cell of given order covered by the given cone
 #[wasm_bindgen(js_name = nestedQueryCone)]
 pub fn wasm_cone_overlap_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[f64]>  {
-  let a: Vec<f64> = cone_overlap_flat(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians())
+  let a: Vec<f64> = cone_overlap_approx_flat(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians())
     .iter().map(|&h| h as f64).collect();
   a.into_boxed_slice()
 }
