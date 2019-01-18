@@ -5,6 +5,9 @@
 
 **[CDS](http://cdsweb.u-strasbg.fr) implementation of the HEALPix tesselation in Rust and modules to generate libraries in WebAssemnly, Python, ...**
 
+[![](https://meritbadge.herokuapp.com/cdshealpix)](https://crates.io/crates/cdshealpix)
+[![](https://img.shields.io/crates/d/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
+[![API Documentation on docs.rs](https://docs.rs/cdshealpix/badge.svg)](https://docs.rs/cdshealpix/0.1.1/cdshealpix/)
 
 About
 -----
