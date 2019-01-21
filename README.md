@@ -19,7 +19,10 @@ For informations on HEALPix in general, see:
 
 See also the [official page](https://healpix.sourceforge.io/) containing GPL v2 codes in Fortran, C++, Java, IDL, Python, ...
 
-(Help me to add links to other HEALPix resources and codes).
+Other HEALPix implementations:
+ * [Astropy-healpix](https://github.com/astropy/astropy-healpix) python wrapper using a C code (C code by Dustin Lang)
+ * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
+ * ... (Help me to add links to other HEALPix resources and codes).
 
 This library is mainly a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java). 
 
@@ -69,7 +72,7 @@ Get the spherical coorinates of the 4 vertices of a given cell at a given depth:
 use cdshealpix::nested::{get_or_create, Layer};
 
 let depth = 12_u8;
-let celll_number= 10_u64;
+let cell_number= 10_u64;
 
 let nested_d12 = get_or_create(depth);
 
@@ -94,7 +97,10 @@ let lon = 13.158329_f64.to_radians();
 let lat = -72.80028_f64.to_radians();
 let radius = 5.64323_f64.to_radians();
  
-let moc = nested3.cone_overlap_approx(lon, lat, radius);
+let moc = nested_d6.cone_overlap_approx(lon, lat, radius);
+for cell in moc.into_iter() {
+    println!("cell: {:?}", cell);
+}
 ```
 
 Standalone
