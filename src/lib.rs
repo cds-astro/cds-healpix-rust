@@ -5,7 +5,10 @@
 //! * Calabretta2004: "Mapping on the HEALPix grid", Calabretta, M. R., 2004; 2004astro.ph.12607C
 //! * Calabretta2007: "Mapping on the HEALPix grid", Calabretta, M. R. et Roukema, B. F., 2007; 2007MNRAS.381..865C
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
-#![feature(test)]
+
+#![cfg_attr(test, feature(test))]
+
+#[cfg(test)]
 extern crate test;
 
 use std::sync::Once;
@@ -174,6 +177,30 @@ static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
 }
 static CSTS_C2V: [ConstantsC2V; 30] = unsafe { make_array!(30, |depth| new_cst_c2v(depth)) };
 */
+
+/*
+/// Defines a simple range `from` a given index (inclusive) `to` a given index (exclusive) 
+pub struct Range {
+  pub from: u64,
+  pub to: u64,
+}
+
+impl Range {
+  
+  pub fn new(from: u64, to: u64) -> Range {
+    if from >= to {
+      panic!("Illegal argument: from '{}' must be lower than to '{}'.", from, to);
+    }
+    new_unsafe(from, to)
+  }
+  
+  fn new_unsafe(from: u64, to: u64) -> Range {
+    Range{from, to}
+  }
+  
+}
+*/
+
 /// See the get_or_create function, each object is used for the lazy instantiation of the 
 /// layer of the corresponding depht.
 /// Info: Unfortunatly Default::default(); do no work with static arrays :o/

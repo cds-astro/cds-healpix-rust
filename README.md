@@ -106,11 +106,13 @@ for cell in moc.into_iter() {
 Standalone
 ----------
 
-The code source of the very beginning of a standalone exec can be found in `src/bin.rs`.
+(Not on crates.io, but on github)
+The code source of the very beginning of a standalone exec can be found in `cli/src/bin.rs`.
 
 WebAssembly
 -----------
 
+(Not on crates.io, but on github)
 To build and use the WebAssembly (and Javascript) files, the `libwasmbingen` directory.
 We rely on [wasm-bingen](https://github.com/rustwasm/wasm-bindgen).
 
@@ -118,9 +120,11 @@ We rely on [wasm-bingen](https://github.com/rustwasm/wasm-bindgen).
 Python
 ------
 
+(Not on crates.io, but on github)
 See the `libpython` directory containing so far a very basic python script showing how to use the library from python.
-We are currently working on making a clean Python wrapper and generating Python Wheels for a simple install through `pip`. 
 
+We are currently working on making a clean Python wrapper and generating Python Wheels for a simple install through `pip`. 
+See the Matthieu Baumann's project [here on github](https://github.com/cds-astro/cds-healpix-python/).
 
 License
 -------
@@ -146,5 +150,5 @@ shall be dual licensed as above, without any additional terms or conditions.
 Disclaimer
 ----------
 
-This is my very first project in Rust so please be indulgent and find better examples if you want to learn Rust.
+It a first code in Rust, feel free to give some advice/feedback.
 

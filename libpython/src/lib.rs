@@ -148,7 +148,7 @@ fn to_i64(val: Option<&u64>) -> i64 {
 #[repr(C)]
 pub struct PyBMOC {
   len: u32,
-  data: *mut BMOCCell,
+  cells: Vec<BMOCCell>,
 }
 
 #[derive(Debug)]
@@ -162,7 +162,10 @@ pub struct BMOCCell {
 #[no_mangle]
 pub extern "C" fn bmoc_free(ptr: *mut PyBMOC) {
   if !ptr.is_null() {
-    unsafe { Box::from_raw(ptr) };
+    unsafe {
+        Box::from_raw(ptr)
+        // Drop the content of the PyBMOC here.
+    };
   }
 }
 
@@ -179,13 +182,10 @@ pub extern "C" fn length(ptr: *const BMOCCell) -> f64 {
 #[no_mangle]
 pub extern "C" fn hpx_query_cone_approx(depth: u8, lon: f64, lat: f64, radius: f64) -> *mut PyBMOC {
   let mut cells = to_bmoc_cell_array(cone_overlap_approx(depth, lon, lat, radius));
-  cells.shrink_to_fit();
-  let data = cells.as_mut_ptr();
   let len = cells.len() as u32;
-  std::mem::forget(cells);
   let bmoc = Box::new(PyBMOC {
     len,
-    data,
+    cells,
   });
   Box::into_raw(bmoc)
 }
@@ -193,13 +193,10 @@ pub extern "C" fn hpx_query_cone_approx(depth: u8, lon: f64, lat: f64, radius: f
 #[no_mangle]
 pub extern "C" fn hpx_query_cone_approx_custom(depth: u8, delta_depth: u8, lon: f64, lat: f64, radius: f64) -> *mut PyBMOC {
   let mut cells = to_bmoc_cell_array(cone_overlap_approx_custom(depth, delta_depth, lon, lat, radius));
-  cells.shrink_to_fit();
-  let data = cells.as_mut_ptr();
   let len = cells.len() as u32;
-  std::mem::forget(cells);
   let bmoc = Box::new(PyBMOC {
     len,
-    data,
+    cells,
   });
   Box::into_raw(bmoc)
 }
@@ -207,22 +204,20 @@ pub extern "C" fn hpx_query_cone_approx_custom(depth: u8, delta_depth: u8, lon: 
 #[no_mangle]
 pub extern "C" fn hpx_query_polygon_approx(depth: u8, n_vertices: u32, vertices_ptr: *mut f64) -> *mut PyBMOC  { // *mut [BMOCCell]
   let n_vertices = n_vertices as usize;
+  
   let vertices_coos = unsafe{ build_array(vertices_ptr, 2 * n_vertices) };
+  
   let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(n_vertices);
   for i in (0..n_vertices << 1).step_by(2) {
-    vertices.push((vertices_coos[i], vertices_coos[i+1]));
+    vertices.push((vertices_coos[i], vertices_coos[i + 1]));
   }
-  // println!("entry len: {}", vertices.len());
-  std::mem::forget(vertices_coos);
-  let mut cells = to_bmoc_cell_array(polygon_overlap_approx(depth, &vertices.into_boxed_slice()));
-  cells.shrink_to_fit();
-  let ptr = cells.as_mut_ptr();
+
+  let cells = to_bmoc_cell_array(polygon_overlap_approx(depth, &vertices.into_boxed_slice()));
   let len = cells.len() as u32;
-  std::mem::forget(cells);
-  // Box::into_raw(cells)
+
   let bmoc = Box::new(PyBMOC {
     len,
-    data: ptr, //Box::into_raw(cells),
+    cells,
   });
   Box::into_raw(bmoc)
 }
@@ -238,6 +233,8 @@ fn to_bmoc_cell_array(bmoc: BMOC) -> Vec<BMOCCell> {
       flag: cell.is_full as u8,
     });
   }
+  // Free the cells which are not occupied
+  cells.shrink_to_fit();
   cells
 }
 

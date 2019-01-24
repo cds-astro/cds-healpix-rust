@@ -43,6 +43,11 @@ pub fn get_or_create(depth: u8) -> &'static Layer {
   }
 }
 
+pub fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
+  let twice_delta_depth = delta_depth << 1;
+  (hash << twice_delta_depth)..((hash + 1) << twice_delta_depth)
+}
+
 /// Conveniency function simply calling the [hash](struct.Layer.html#method.hash) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -1565,7 +1570,8 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
-    /*for cell in actual_res.into_iter() {
+    /*println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
       println!("@@@@@ cell a: {:?}", cell);
     }*/
     /*println!("@@@@@ FLAT VIEW");
@@ -1581,6 +1587,10 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
+    /*println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
   }
 
   #[test]
@@ -1594,6 +1604,27 @@ mod tests {
     for cell in actual_res.flat_iter() {
       println!("@@@@@ cell a: {:?}", cell);
     }
+  }
+
+
+  #[test]
+  fn testok_bmoc_not() {
+    let actual_res = cone_overlap_approx_custom(3, 4, 36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
+    println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
+    println!("@@@@@ HIERARCH VIEW, NOT");
+    let complement: BMOC = actual_res.not();
+    for cell in complement.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
+    let org = complement.not();
+    assert!(actual_res.equals(&org));
+    /*println!("@@@@@ FLAT VIEW");
+    for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
   }
   
 }

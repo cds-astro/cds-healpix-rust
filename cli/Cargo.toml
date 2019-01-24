@@ -1,6 +1,6 @@
 [package]
-name = "cdshealpix"
-version = "0.1.2"
+name = "cdshealpix-cli"
+version = "0.1.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
@@ -8,23 +8,23 @@ readme = "README.md"
 categories = ["algorithms", "science"] 
 repository = "https://github.com/cds-astro/cds-healpix-rust/"
 description = """
-Rust implementation of the HEALPix tesselation.
+Command line interface for cdshealpix.
 """
 
-[lib]
-name = "cdshealpix"
-path = "src/lib.rs"
-test = true
-doctest = true
-bench = true
-doc = true
+[[bin]]
+name = "hpx"
+path = "src/bin.rs"
+
+[build-dependencies]
+cdshealpix = { version = "0.1.2", path = ".." }
 
 [dependencies]
+cdshealpix = { version = "0.1.2", path = ".." }
 # External dependencies
-#structopt = "0.2"        # CLI lib (based on clap)
+structopt = "0.2"        # CLI lib (based on clap)
 
 [features]
-# nightly = []
+nightly = []
 
 [profile.release]
 lto = true
