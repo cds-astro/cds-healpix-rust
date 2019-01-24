@@ -11,7 +11,7 @@ description = """
 Rust implementation of the HEALPix tesselation.
 """
 exclude = [
-    "makeDoc.bash"
+    "makeDoc.bash",
     "resources/4doc",
 ]
 
