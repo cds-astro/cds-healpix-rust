@@ -10,6 +10,11 @@ repository = "https://github.com/cds-astro/cds-healpix-rust/"
 description = """
 Rust implementation of the HEALPix tesselation.
 """
+exclude = [
+    "makeDoc.bash"
+    "resources/4doc",
+]
+
 
 [lib]
 name = "cdshealpix"
