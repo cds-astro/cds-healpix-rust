@@ -7,7 +7,7 @@
 
 [![](https://meritbadge.herokuapp.com/cdshealpix)](https://crates.io/crates/cdshealpix)
 [![](https://img.shields.io/crates/d/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
-[![API Documentation on docs.rs](https://docs.rs/cdshealpix/badge.svg)](https://docs.rs/cdshealpix/0.1.1/cdshealpix/)
+[![API Documentation on docs.rs](https://docs.rs/cdshealpix/badge.svg)](https://docs.rs/cdshealpix/0.1.2/cdshealpix/)
 
 About
 -----
@@ -24,7 +24,8 @@ Other HEALPix implementations:
  * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
  * ... (Help me to add links to other HEALPix resources and codes).
 
-This library is mainly a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java). 
+Initially, this library is a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java),
+but changes have been added while porting the code.
 
 Features
 --------
@@ -32,6 +33,7 @@ Features
  * Supports the **HEALix Nested scheme**
  * Supports approximated `cone` and `polygon` queries
  * Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
+ * Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
 
 Missing Features
 ----------------
@@ -42,8 +44,6 @@ Missing Features
    * (Help me fill this)
  * Not yet implemented
    * Exact cone and polygon solution
-   * Logical operations on MOC/BMOC
-   * MOC creation from arbritrary input
 
 Examples
 --------
@@ -106,13 +106,13 @@ for cell in moc.into_iter() {
 Standalone
 ----------
 
-(Not on crates.io, but on github)
+(Not on crates.io, but on github) 
 The code source of the very beginning of a standalone exec can be found in `cli/src/bin.rs`.
 
 WebAssembly
 -----------
 
-(Not on crates.io, but on github)
+(Not on crates.io, but on github) 
 To build and use the WebAssembly (and Javascript) files, the `libwasmbingen` directory.
 We rely on [wasm-bingen](https://github.com/rustwasm/wasm-bindgen).
 
@@ -120,7 +120,7 @@ We rely on [wasm-bingen](https://github.com/rustwasm/wasm-bindgen).
 Python
 ------
 
-(Not on crates.io, but on github)
+(Not on crates.io, but on github) 
 See the `libpython` directory containing so far a very basic python script showing how to use the library from python.
 
 We are currently working on making a clean Python wrapper and generating Python Wheels for a simple install through `pip`. 

@@ -1,5 +1,8 @@
 //! Definition of a BMOC, i.e. a MOC storing an additional flag telling if a cell is fully
 //! or partially covered by the MOC.
+//! 
+//! So far, all BMOC logical operations (not, and, or, xor) are made from the BMOC representation.
+//! It is probably simpler and faster to work on ranges (but we have to handle the flag).
 
 use std::slice::Iter;
 use std::cmp::max;
@@ -10,7 +13,8 @@ use super::super::{nside_square_unsafe};
 
 /// A very basic and simple BMOC Builder: we push elements in it assuming that we provide them
 /// in the write order, without duplicates and small cells included in larger cells.
-pub(super) struct BMOCBuilderUnsafe {
+#[derive(Debug)]
+pub struct BMOCBuilderUnsafe { // (super) // removed because of external test
   depth_max: u8,
   entries: Option<Vec<u64>>,
 }
@@ -67,6 +71,14 @@ impl BMOCBuilderUnsafe {
     BMOC::create_unsafe(self.depth_max, self.entries.take().expect("Empty builder!").into_boxed_slice())
   }
 
+  /// We consider that the pushed elements are not ordered, but they come from a valid BMOC (i.e.
+  /// no cell included in another cell)
+  pub fn to_bmoc_from_unordered(&mut self) -> BMOC {
+    let mut res = self.entries.take().expect("Empty builder!");
+    res.sort_unstable();
+    BMOC::create_unsafe(self.depth_max, res.into_boxed_slice())
+  }
+  
   fn pack(&mut self) -> Vec<u64> {
     let mut entries = self.entries.take().expect("Empty builder!");
     // On-place pack
@@ -188,9 +200,146 @@ impl BMOCBuilderUnsafe {
   }
 }
 
+/// Builder taking cell at the MOC maximum depth.
+pub struct BMOCBuilderFixedDepth {
+  depth: u8,
+  bmoc: Option<BMOC>,
+  is_full: bool,
+  buffer: Vec<u64>,
+  sorted: bool,
+}
+
+impl BMOCBuilderFixedDepth {
+  
+  ///  - `is_full`: the flag to be set for each cell number (I expect`true` to be used for example
+  ///    when building catalogues MOC.
+  /// The results of logical operations between BMOC having the flag of each of their cells 
+  /// set to `true` must equal the results of regular MOC logical operations. 
+  pub fn new(depth: u8, is_full: bool) -> BMOCBuilderFixedDepth {
+    BMOCBuilderFixedDepth::with_capacity(depth, is_full, 10_000_000)
+  }
+  
+  pub fn with_capacity(depth: u8, is_full: bool, buff_capacity: usize) -> BMOCBuilderFixedDepth {
+    BMOCBuilderFixedDepth {
+      depth,
+      bmoc: None,
+      is_full,
+      buffer: Vec::with_capacity(buff_capacity),
+      sorted: true,
+    }
+  }
+  
+  /// The hash must be at the builder depth
+  pub fn push(&mut self, hash: u64) {
+    if let Some(h) = self.buffer.last() {
+      if *h == hash {
+        return;
+      } else if self.sorted && *h > hash {
+        self.sorted = false;
+      }
+    }
+    self.buffer.push(hash);
+    if self.buffer.len() == self.buffer.capacity() {
+      self.drain_buffer();
+    }
+  }
+  
+  pub fn to_bmoc(&mut self) -> Option<BMOC> {
+    if self.buffer.len() > 0 {
+      self.drain_buffer();
+    }
+    self.bmoc.take()
+  }
+  
+  
+  fn drain_buffer(&mut self) {
+    if !self.sorted {
+      // Sort and remove duplicates
+      self.buffer.sort_unstable();
+      self.buffer.dedup(); 
+    }
+    let new_bmoc = self.buff_to_bmoc();
+    self.clear_buff();
+    self.bmoc = Some(
+      match self.bmoc.take() {
+        Some(prev_bmoc) => prev_bmoc.or(&new_bmoc),
+        None => new_bmoc, 
+      }
+    )
+  }
+  
+  fn buff_to_bmoc(&mut self) -> BMOC {
+    let mut i = 0_usize;
+    let mut k = 0_usize;
+    while i < self.buffer.len() {
+      let h = self.buffer[i];
+      let sequence_len = self.largest_lower_cell_sequence_len(h, &self.buffer[i..]);
+      /*{
+        // Look at the maximum number of cell that could be merge if the hash is the first of a cell
+        let delta_depth = (h.trailing_zeros() >> 1).min(self.depth); // low_res_cell_depth = self.depth - delta_depth
+        let num_cells = 1_usize << (dd << 1); // number of depth self.depth cells in the low_res_cell = (2^dd)^2 = 2^(2*dd)
+        // Look for a sequence
+        let mut j = i + 1;
+        let mut expected_h = h + 1_u64;
+
+        while j < self.buffer.len() && sequence_len < num_cells && self.buffer[j] == expected_h {
+          j += 1;
+          sequence_len = 1;
+          expected_h += 1;
+        }
+      }*/
+      // Look at the actual low_res_cell the sequence correspond to
+      let delta_depth = sequence_len.next_power_of_two();
+      let delta_depth = if delta_depth > sequence_len {
+        delta_depth.trailing_zeros() >> 2 // take previous value and divide by 2
+      } else {
+        debug_assert_eq!(delta_depth, sequence_len);
+        delta_depth.trailing_zeros() >> 1 // divide by 2
+      } as u8;
+      let twice_dd = delta_depth << 1;
+      let sequence_len = 1_usize << twice_dd;
+      // Write the value
+      self.buffer[k] = build_raw_value(self.depth - delta_depth, h >> twice_dd, self.is_full, self.depth);
+      k += 1;
+      i += sequence_len;
+    }
+    // self.buffer.truncate(k);
+    BMOC::create_unsafe_copying(self.depth, &self.buffer[0..k])
+  }
+  
+  #[inline]
+  fn largest_lower_cell_sequence_len(&self, mut h: u64, entries: &[u64]) -> usize {
+    // Look for the maximum number of cells that could be merged if the hash is the first of a cell
+    let dd = ((h.trailing_zeros() >> 1) as u8).min(self.depth); // low_res_cell_depth = self.depth - delta_depth
+    let n = 1_usize << (dd << 1); // number of depth self.depth cells in the low_res_cell = (2^dd)^2 = 2^(2*dd)
+    // Look for a sequence
+    let n = n.min(entries.len());
+    for i in 1..n {
+      h += 1;
+      if entries[i] != h {
+        return i;
+      }
+    }
+    n
+  }
+  
+  fn clear_buff(&mut self) {
+    self.sorted = true;
+    self.buffer.clear();
+  }
+}
+
+
 /// Structure defining a simple BMOC.
+/// Three different iterators are available:
+/// - `bmoc.iter() -> Iterator<u64>` : iterates on the raw value stored in the BMOC (the ordering follow
+///    the z-order-curve order)
+/// - `bmoc.into_iter() -> Iterator<Cell>`: same a `iter()` except that it returns Cells, i.e. decoded raw value 
+///    containing the `depth`, `order` and `flag`.
+/// - `bmoc.flat_iter() -> Iterator<u64>`: iterates on all the cell number at the maximum depth, in
+///    ascending order. 
 pub struct BMOC {
-  pub depth_max: u8,
+  depth_max: u8,
   pub entries: Box<[u64]>,
 }
 
@@ -228,6 +377,18 @@ impl BMOC {
   pub(super) fn create_unsafe(depth_max: u8, entries: Box<[u64]>) -> BMOC {
     BMOC { depth_max, entries}
   }
+
+  pub(super) fn create_unsafe_copying(depth_max: u8, entries: &[u64]) -> BMOC {
+    let mut entries_copy = Vec::with_capacity(entries.len());
+    for e in entries {
+      entries_copy.push(*e);
+    }
+    BMOC { depth_max, entries: entries_copy.into_boxed_slice() }
+  }
+  
+  pub fn get_depth_max(&self) -> u8 {
+    self.depth_max
+  }
   
   pub fn equals(&self, other: &BMOC) -> bool {
     if self.depth_max == other.depth_max && self.entries.len() == other.entries.len() {
@@ -240,12 +401,27 @@ impl BMOC {
     }
     return false;
   }
+
+  pub fn assert_equals(&self, other: &BMOC) {
+    if self.depth_max == other.depth_max {
+      for (r1, r2) in self.iter().zip(other.iter()) {
+        if *r1 != *r2 {
+          panic!("Left: {:?}; Right: {:?}", self.from_raw_value(*r1), other.from_raw_value(*r2));
+        }
+      }
+      if self.entries.len() != other.entries.len() {
+        panic!("Lengths are different");
+      }
+    } else {
+      panic!("Depths are different");
+    }
+  }
   
   /// Returns the BMOC complement:
   /// - cells with flag set to 1 (fully covered) are removed
   /// - cells with flag set to 0 (partially covered) are kept
   /// - empty cells are added with flag set to 1
-  /// TODO: test this method
+  /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn not(&self) -> BMOC {
     // Worst case: only 1 sub-cell by cell in the MOC (+11 for depth 0)
     let mut builder = BMOCBuilderUnsafe::new(self.depth_max, 3 * self.entries.len() + 12);
@@ -261,148 +437,53 @@ impl BMOC {
     let mut h = 0_u64;
     // Go down to first cell
     let mut cell = self.from_raw_value(self.entries[0]);
-// println!("Go down. From: d: {}, h: {}. To d: {}, h: {}", d, h, cell.depth, cell.hash);
-    self.go_down(&mut d, &mut h, cell.depth, cell.hash, true, &mut builder);
-// println!("done. d: {}, h: {}", &d, &h);
-
+    go_down(&mut d, &mut h, cell.depth, cell.hash, true, &mut builder);
     if !cell.is_full {
       builder.push_raw_unsafe(cell.raw_value);
     }
-    // self.go_next(&mut d, &mut h);
     // Between first and last
     for i in 1..self.entries.len() {
       cell = self.from_raw_value(self.entries[i]);
-      // go up (if needed)!
-      // - prepare variable
-      /*let target_h_at_d = if cell.depth < d { // previous hash deeper that current hash
-        cell.hash << ((d - cell.depth) << 1)
-      } else {                                //  current hash deeper that previous hash, need to go up?
-        cell.hash >> ((cell.depth - d) << 1)
-      };
-      // - look at the difference to see if we have to go up to add lower level cells
-      let dd = h ^ target_h_at_d;
-      let dd = if dd != 0_u64 { // min to handle case diff is in base cell
-        ((63_u8 - (dd.leading_zeros() as u8)) >> 1).min(d)
-      } else {
-        0_u8
-      };*/
-// println!("DD. From: d: {}, h: {}. To d: {}, h: {}", d, h, cell.depth, cell.hash);
-
       let dd = dd_4_go_up(d, h, cell.depth, cell.hash);
-      // - go up to common depth
-// println!("Go up. From: d: {}, h: {}. To d: {}. To d: {}, h: {}", d, h, d - dd, cell.depth, cell.hash);
-      self.go_up(&mut d, &mut h, dd, true, &mut builder);
-// println!("done. d: {}, h: {}", &d, &h);
-// println!("Go down. From: d: {}, h: {}. To d: {}, h: {}", d, h, cell.depth, cell.hash);
-      // go down!
-      self.go_down(&mut d, &mut h, cell.depth, cell.hash, true, &mut builder);
+      go_up(&mut d, &mut h, dd, true, &mut builder);
+      go_down(&mut d, &mut h, cell.depth, cell.hash, true, &mut builder);
       if !cell.is_full {
         builder.push_raw_unsafe(cell.raw_value);
       }
-      // self.go_next(&mut d, &mut h);
-// println!("done. d: {}, h: {}", &d, &h);// Put right element with flag = 1
     }
     // After last
     let delta_depth = d;
-// println!("Go up. From: d: {}, h: {}. To d: {}. To d: {}, h: {}", d, h, d - delta_depth, cell.depth, cell.hash);
-    self.go_up(&mut d, &mut h, delta_depth, true, &mut builder); // go up to depth 0
-// println!("done. d: {}, h: {}", &d, &h);
-// println!("complete...");
+    go_up(&mut d, &mut h, delta_depth, true, &mut builder); // go up to depth 0
     for h in h..12 { // Complete with base cells if needed
       builder.push(0_u8, h, true);
     }
-// println!("done. d: {}, h: {}", &d, &h);
     builder.to_bmoc()
   }
-
-
-  /// Starts at a given cell at a given depth, goes down to a deeper cell (target), adding all 
-  /// non-overlapping cells in the builder.
-  /// In output, the given cell in input points to the target cell.
-  /// - `flag`: value of the is_full flag to be set in cells while going down
-  /*fn go_down_first(&self, start_depth: &mut u8, start_hash: &mut u64,
-             target_depth: u8, target_hash: u64, flag: bool, builder: &mut BMOCBuilderUnsafe) {
-    debug_assert!(target_depth >= *start_depth);
-    let mut twice_dd = (target_depth - *start_depth) << 1;
-    for d in *start_depth..=target_depth { //range(0, target_depth - start_depth).rev() {
-      let target_h_at_d = target_hash >> twice_dd;
-      // println!(" - target_h_at_d: {}", target_h_at_d);
-      for h in *start_hash..target_h_at_d {
-        builder.push(d, h, flag);
-      }
-      if d != target_depth {
-        *start_hash = target_h_at_d << 2;
-        twice_dd -= 2;
-      }
-    }
-    *start_depth = target_depth;
-    *start_hash  = target_hash;
-  }*/
   
-  /// Starts at a given cell at a given depth, goes down to a deeper cell (target), adding all 
-  /// non-overlapping cells (but the starting cell) in the builder.
-  /// In output, the given cell in input points to the target cell.
-  /// - `flag`: value of the is_full flag to be set in cells while going down
-  fn go_down(&self, start_depth: &mut u8, start_hash: &mut u64, 
-             target_depth: u8, target_hash: u64, flag: bool, builder: &mut BMOCBuilderUnsafe) {
-    debug_assert!(target_depth >= *start_depth);
- // self.go_next(start_depth, start_hash);
-    let mut twice_dd = (target_depth - *start_depth) << 1;
-    for d in *start_depth..=target_depth { //range(0, target_depth - start_depth).rev() {
-      let target_h_at_d = target_hash >> twice_dd;
-// println!(" - target_h_at_d: {}", target_h_at_d);
-      for h in *start_hash..target_h_at_d {
-        builder.push(d, h, flag);
-      }
-      if d != target_depth {
-        *start_hash = target_h_at_d << 2;
-        twice_dd -= 2;
-      }
-    }
-    *start_depth = target_depth;
-    *start_hash  = target_hash;
-    self.go_next(start_depth, start_hash);
-  }
-  
-  fn go_next(&self, start_depth: &mut u8, start_hash: &mut u64) {
+  /// Go to the next hash value:
+  /// - if the input hash is not the last one of the super-cell 
+  ///   (the cell of depth deph - 1 the hash belongs to), the result is simply
+  ///   - output_depth = input_depth
+  ///   - output_hash = input_hash + 1
+  /// - else, the depth is changed (we go up) until the hash is not the last of the super-cell
+  ///   and the result is:
+  ///   - output_depth < input_depth
+  ///   - output_hash = input_hash_at_outpu_depth + 1
+  /*fn go_next(&self, start_depth: &mut u8, start_hash: &mut u64) {
     while *start_depth > 0 && ((*start_hash & 3_u64) == 3_u64) {
       *start_depth -= 1;
       *start_hash >>= 2;
     }
     *start_hash += 1;
-  }
+  }*/
   
-  
-  
-  /// Fill with all cells from `start_hash` at  `start_depth` to `start_hash_at_target_depth + 1`.
-  /// with `target_depth` = `start_depth - delta_depth`.
-  /// - `flag`: value of the is_full flag to be set in cells while going up
-  fn go_up(&self, start_depth: &mut u8, start_hash: &mut u64, delta_depth: u8, flag: bool, builder: &mut BMOCBuilderUnsafe) {
-    for _ in 0_u8..delta_depth {
-      
-      let target_hash = (*start_hash | 3_u64) + 1_u64;
-      // let depth = *start_depth - dd;
-      for h in *start_hash..target_hash {
-        builder.push(*start_depth, h, flag);
-      }
-      *start_hash = target_hash >> 2;
-      *start_depth -= 1;
-      
-      /*let target_hash = *star348t_hash | 3_u64;
-      // let depth = *start_depth - dd;
-      for h in (*start_hash + 1)..=target_hash {
-        builder.push(*start_depth, h, flag);
-      }
-      *start_hash = target_hash >> 2;
-      *start_depth -= 1;*/
-    }
-  }
+
   
   /// Returns the intersection of this BMOC with the given BMOC:
   /// - all non overlapping cells are removed
   /// - when two cells are overlapping, the overlapping part is kept
   ///   - the value of the flag is the result of a logical AND between the flags of the merged cells.
-  /// TODO: test the method
+  /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn and(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
       max(self.depth_max, other.depth_max), 
@@ -459,7 +540,7 @@ impl BMOC {
   /// - all non overlapping cells in both BMOCs are kept
   /// - overlapping cells are merged, the value of the flag is the result of a logical OR between 
   /// the flags of the merged cells.
-  /// TODO: test the method
+  /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn or(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
       max(self.depth_max, other.depth_max),
@@ -556,7 +637,7 @@ impl BMOC {
     let mut d = low_resolution.depth;
     let mut h = low_resolution.hash;
     debug_assert_eq!(true, c.is_full);
-    self.go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
+    go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
     builder.push(c.depth, c.hash, true);
     let mut is_overlapped = false;
     let mut cell = None;
@@ -566,13 +647,13 @@ impl BMOC {
     } {
       c = cell.unwrap(); // if flag => right is not None
       let dd = dd_4_go_up(d, h, c.depth, c.hash);
-      self.go_up(&mut d, &mut h, dd, false, builder);
-      self.go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
+      go_up(&mut d, &mut h, dd, false, builder);
+      go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
       builder.push(c.depth, c.hash, true);
     }
     let dd = d - low_resolution.depth;
-    self.go_up(&mut d, &mut h, dd, false, builder);
-    self.go_down(&mut d, &mut h, low_resolution.depth, low_resolution.hash + 1, false, builder);
+    go_up(&mut d, &mut h, dd, false, builder);
+    go_down(&mut d, &mut h, low_resolution.depth, low_resolution.hash + 1, false, builder);
     cell
   }
   
@@ -582,7 +663,7 @@ impl BMOC {
   /// - when two cells are overlapping, the overlapping part is:
   ///   - removed if both flags = 1
   ///   - kept if one of the flags = 0 (since 0 meas partially covered but O don't know which part)
-  /// TODO: test the method
+  /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn xor(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
       max(self.depth_max, other.depth_max),
@@ -666,37 +747,29 @@ impl BMOC {
     builder.to_bmoc_packing()
   }
 
-  fn not_in_cell_4_xor(&self, low_resolution: &Cell, mut c: &Cell,  iter: &mut BMOCIter, builder: &mut BMOCBuilderUnsafe) -> Option<Cell> {
+  fn not_in_cell_4_xor(&self, low_resolution: &Cell, c: &Cell,  iter: &mut BMOCIter, builder: &mut BMOCBuilderUnsafe) -> Option<Cell> {
     let mut d = low_resolution.depth;
     let mut h = low_resolution.hash;
-    self.go_down(&mut d, &mut h, c.depth, c.hash, true, builder);
+    go_down(&mut d, &mut h, c.depth, c.hash, true, builder);
     if !c.is_full {
       builder.push(c.depth, c.hash, false);
     }
     let mut cell = iter.next();
     while let Some(c) = &cell {
-      /*match &cell {
-        Some(cc) => {
-          c = cc;
-          is_in(low_res_depth, low_res_hash,  c.depth, c.hash)
-        },
-        None => false,
-      }
-    } {*/
       if !is_in(low_resolution,  c) {
         break;
       }
       let dd = dd_4_go_up(d, h, c.depth, c.hash);
-      self.go_up(&mut d, &mut h, dd, true, builder);
-      self.go_down(&mut d, &mut h, c.depth, c.hash, true, builder);
+      go_up(&mut d, &mut h, dd, true, builder);
+      go_down(&mut d, &mut h, c.depth, c.hash, true, builder);
       if !c.is_full {
         builder.push(c.depth, c.hash, false);
       }
       cell = iter.next()
     }
     let dd = d - low_resolution.depth;
-    self.go_up(&mut d, &mut h, dd, true, builder);
-    self.go_down(&mut d, &mut h, low_resolution.depth, low_resolution.hash + 1, true, builder);
+    go_up(&mut d, &mut h, dd, true, builder);
+    go_down(&mut d, &mut h, low_resolution.depth, low_resolution.hash + 1, true, builder);
     cell
   }
   
@@ -933,7 +1006,7 @@ fn dd_4_go_up(d: u8, h: u64, next_d: u8, next_h: u64) -> u8 {
 #[inline]
 fn is_in(low_resolution: &Cell, high_resolution: &Cell) -> bool {
   low_resolution.depth <= high_resolution.depth 
-    && low_resolution.hash == (high_resolution.hash >> ( high_resolution.depth - low_resolution.depth) << 1)
+    && low_resolution.hash == (high_resolution.hash >> ((high_resolution.depth - low_resolution.depth) << 1))
 }
 /*
 fn is_in(low_res_depth: u8, low_res_hash: u64, high_res_depth: u8, high_res_hash: u64) -> bool {
@@ -1107,4 +1180,97 @@ fn build_raw_value(depth: u8, hash: u64, is_full: bool, depth_max: u8) -> u64 {
   hash <<= 1 + ((depth_max - depth) << 1);
   // Set the flag bit if needed
   hash | (is_full as u64) // see https://doc.rust-lang.org/std/primitive.bool.html
+}
+
+
+
+/// Fill with all cells from `start_hash` at `start_depth` to `start_hash_at_target_depth + 1`.
+/// with `target_depth` = `start_depth - delta_depth`.
+/// - `flag`: value of the is_full flag to be set in cells while going up
+/// 
+/// The output depth is the input depth minus delta_depth
+/// The output hash value is the input hash at the output depth, plus one
+fn go_up(start_depth: &mut u8, start_hash: &mut u64, delta_depth: u8, flag: bool, builder: &mut BMOCBuilderUnsafe) {
+  // let output_depth = *start_depth - delta_depth;       // For debug only
+  // let output_hash = (*start_hash >> (delta_depth << 1)) + 1; // For debug only
+  for _ in 0_u8..delta_depth {
+    let target_hash = (*start_hash | 3_u64);
+    for h in (*start_hash + 1)..=target_hash {
+      builder.push(*start_depth, h, flag);
+    }
+    *start_hash >>= 2;
+    *start_depth -= 1;
+  }
+  *start_hash += 1;
+  // debug_assert_eq!(*start_depth, output_depth);
+  // debug_assert_eq!(*start_hash, output_hash);
+}
+
+fn go_down(start_depth: &mut u8, start_hash: &mut u64,
+           target_depth: u8, target_hash: u64, flag: bool, builder: &mut BMOCBuilderUnsafe) {
+  debug_assert!(target_depth >= *start_depth);
+  let mut twice_dd = (target_depth - *start_depth) << 1;
+  for d in *start_depth..=target_depth { //range(0, target_depth - start_depth).rev() {
+    let target_h_at_d = target_hash >> twice_dd;
+    for h in *start_hash..target_h_at_d {
+      builder.push(d, h, flag);
+    }
+    if d != target_depth {
+      *start_hash = target_h_at_d << 2;
+      twice_dd -= 2;
+    }
+  }
+  *start_depth = target_depth;
+  *start_hash  = target_hash;
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /*#[test]
+  fn test_go_up_and_go_down() {
+    let mut builder = BMOCBuilderUnsafe::new(12_u8, 30_usize);
+
+    let mut d1 = 12_u8;
+    let mut h1 = 134217722_u64;
+
+    let d2 = 12_u8;
+    let h2 = 146721869_u64;
+
+    let dd = dd_4_go_up(d1, h1, d2, h2);
+    let target_h_at_d = if d2 < d1 {
+      h2 << ((d1 - d2) << 1)
+    } else {
+      h2 >> ((d2 - d1) << 1)
+    };
+
+    println!("dd: {}", &dd);
+    
+    println!("h1: {:#b}", &h1);
+    //println!("ht: {:#b}", &target_h_at_d);
+    println!("h2: {:#b}", &h2);
+
+    // go_up_v2(&mut d1, &mut h1, 11_u8, true, &mut builder);
+    go_up_v2(&mut d1, &mut h1, dd, true, &mut builder);
+    
+    println!("d: {}; h: {}", &d1, &h1);
+    // println!("{:?}", &builder);
+    //for cell in builder.to_bmoc().into_iter() {
+    //  println!("cell: {:?}", cell);
+    //}
+    
+    
+    go_down_v2(&mut d1, &mut h1, d2, h2, true, &mut builder);
+
+    println!("d: {}; h: {}", &d1, &h1);
+    // println!("{:?}", &builder);
+    for cell in builder.to_bmoc().into_iter() {
+      println!("cell: {:?}", cell);
+    }
+    
+    // d = 1, h = 32 => d = 0, h = 8
+    
+  }*/
+
 }
