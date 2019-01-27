@@ -1,0 +1,2 @@
+BMOC logical operations test.
+
