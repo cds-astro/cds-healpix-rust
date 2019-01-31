@@ -10,6 +10,7 @@ extern crate cdshealpix;
 
 use std::io::prelude::*;
 use std::fs::File;
+use std::time::{Duration, Instant};
 
 use serde_derive::{Deserialize, Serialize};
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ use serde_json::Result;
 use cdshealpix::nested::bmoc::*;
 
 #[derive(Serialize, Deserialize)]
-struct Sdss {
+pub struct Sdss {
   #[serde(rename = "1")]
   d1: Vec<u64>,
   #[serde(rename = "2")]
@@ -92,7 +93,7 @@ impl Sdss {
   
 }
 
-fn load_sdss() -> Result<Sdss> {
+pub fn load_sdss() -> Result<Sdss> {
   let mut file = File::open("resources/sdss.moc.json").expect("Unable to open the SDSS file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the SDSS file");
@@ -100,7 +101,7 @@ fn load_sdss() -> Result<Sdss> {
   Ok(sdss)
 }
 
-fn load_sdss_not() -> Result<Sdss> {
+pub fn load_sdss_not() -> Result<Sdss> {
   let mut file = File::open("resources/sdss_not.moc.json").expect("Unable to open the SDSS not file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the SDSS not file");
@@ -108,7 +109,7 @@ fn load_sdss_not() -> Result<Sdss> {
   Ok(sdss)
 }
 
-fn load_s_or_g() -> Result<Sdss> {
+pub fn load_s_or_g() -> Result<Sdss> {
   let mut file = File::open("resources/sdss_or_glimpse.moc.json").expect("Unable to open the SDSS OR GLIMPSE not file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the SDSS OR GLIMPSE not file");
@@ -116,7 +117,7 @@ fn load_s_or_g() -> Result<Sdss> {
   Ok(sdss)
 }
 
-fn load_s_xor_g() -> Result<Sdss> {
+pub fn load_s_xor_g() -> Result<Sdss> {
   let mut file = File::open("resources/sdss_xor_glimpse.moc.json").expect("Unable to open the SDSS XOR GLIMPSE not file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the SDSS XOR GLIMPSE not file");
@@ -126,7 +127,7 @@ fn load_s_xor_g() -> Result<Sdss> {
 
 
 #[derive(Serialize, Deserialize)]
-struct Glimpse {
+pub struct Glimpse {
   #[serde(rename = "4")]
   d4: Vec<u64>,
   #[serde(rename = "5")]
@@ -169,7 +170,7 @@ impl Glimpse {
 
 }
 
-fn load_glimpse() -> Result<Glimpse> {
+pub fn load_glimpse() -> Result<Glimpse> {
   let mut file = File::open("resources/glimpse.moc.json").expect("Unable to open the Glimpse file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the Glimpse file");
@@ -178,7 +179,7 @@ fn load_glimpse() -> Result<Glimpse> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct NotGlimpse {
+pub struct NotGlimpse {
   #[serde(rename = "0")]
   d0: Vec<u64>,
   #[serde(rename = "1")]
@@ -241,7 +242,7 @@ impl NotGlimpse {
   }
 }
 
-fn load_not_glimpse() -> Result<NotGlimpse> {
+pub fn load_not_glimpse() -> Result<NotGlimpse> {
   let mut file = File::open("resources/glimpse_not.moc.json").expect("Unable to open the Not Glimpse file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the Glimpse file");
@@ -253,7 +254,7 @@ fn load_not_glimpse() -> Result<NotGlimpse> {
 
 
 #[derive(Serialize, Deserialize)]
-struct SandG {
+pub struct SandG {
   #[serde(rename = "5")]
   d5: Vec<u64>,
   #[serde(rename = "6")]
@@ -304,7 +305,7 @@ impl SandG {
   }
 }
 
-fn load_s_and_g() -> Result<SandG> {
+pub fn load_s_and_g() -> Result<SandG> {
   let mut file = File::open("resources/sdss_and_glimpse.moc.json").expect("Unable to open the s and g file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Unable to read the s and g file");
@@ -316,12 +317,17 @@ fn load_s_and_g() -> Result<SandG> {
 
 
 
+
+
+
+
+
 #[cfg(test)]
 mod tests {
   use super::*;
   
   #[test]
-  fn test_sdss_load() {
+  fn test_sdss_not() {
     let sdss = load_sdss().unwrap().to_bmoc();
     
     /*println!("n_cell in 1: {}", sdss.d1.len());
@@ -340,7 +346,10 @@ mod tests {
 
     let sdss_not = load_sdss_not().unwrap().to_bmoc();
     
+    let now = Instant::now();
     let not_sdss = sdss.not();
+    println!("SDSS 'not' operation done in {} ms. In / Out sizes: {} / {}", 
+             now.elapsed().as_millis(), sdss.entries.len(), not_sdss.entries.len());
     
     /*let l1 = sdss_not.entries.len();
     let l2 = not_sdss.entries.len();
@@ -363,7 +372,7 @@ mod tests {
   }
 
   #[test]
-  fn test_glimpse_load() {
+  fn test_glimpse_not() {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     /*println!("n_cell in 4: {}", glimpse.d4.len());
     println!("n_cell in 5: {}", glimpse.d5.len());
@@ -372,45 +381,76 @@ mod tests {
     println!("n_cell in 8: {}", glimpse.d8.len());
     println!("n_cell in 9: {}", glimpse.d9.len());*/
     let not_glimpse = load_not_glimpse().unwrap().to_bmoc();
-    assert!(not_glimpse.equals(&glimpse.not()));
+    
+    let now = Instant::now();
+    let glimpse_not = glimpse.not();
+    println!("GLIMPSE 'not' operation done in {} ms. In / Out sizes: {} / {}", 
+             now.elapsed().as_millis(), glimpse.entries.len(), not_glimpse.entries.len());
+    
+    assert!(not_glimpse.equals(&glimpse_not));
   }
 
   #[test]
-  fn test_and_load() {
+  fn test_and() {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     let sdss = load_sdss().unwrap().to_bmoc();
+
     let s_and_g = load_s_and_g().unwrap().to_bmoc();
-    assert!(s_and_g.equals(&sdss.and(&glimpse)));
+    
+    let now = Instant::now();
+    let sandg = sdss.and(&glimpse);
+    println!("SDSS/GLIMPSE 'and' operation done in {} ms. In / Out sizes: {} and {} => {}",
+             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sandg.entries.len());
+    
+    assert!(s_and_g.equals(&sandg));
   }
 
   
   #[test]
-  fn test_or_load() {
+  fn test_or() {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     let sdss = load_sdss().unwrap().to_bmoc();
     let s_or_g = load_s_or_g().unwrap().to_bmoc();
+    
+    let now = Instant::now();
     let sorg = &sdss.or(&glimpse);
+    println!("SDSS/GLIMPSE 'or' operation done in {} ms. In / Out sizes: {} or {} => {}",
+             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sorg.entries.len());
+    
     s_or_g.assert_equals(&sorg);
     assert!(s_or_g.equals(&sorg));
   }
 
   #[test]
-  fn test_xor_load() {
+  fn test_xor() {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     let sdss = load_sdss().unwrap().to_bmoc();
     let s_xor_g = load_s_xor_g().unwrap().to_bmoc();
-    s_xor_g.assert_equals(&sdss.xor(&glimpse));
+    
+    let now = Instant::now();
+    let sxorg = sdss.xor(&glimpse);
+    println!("SDSS/GLIMPSE 'xor' operation done in {} ms. In / Out sizes: {} xor {} => {}",
+             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sxorg.entries.len());
+    
+    s_xor_g.assert_equals(&sxorg);
     assert!(s_xor_g.equals(&sdss.xor(&glimpse)));
   }
 
   #[test]
-  fn test_build() {
+  fn test_sdss_build_from_ordered_input() {
     let sdss = load_sdss().unwrap().to_bmoc();
+    let deep_size = sdss.deep_size();
+    
     let mut builder = BMOCBuilderFixedDepth::new(sdss.get_depth_max(), true);
+
+    let now = Instant::now();
     for h in sdss.flat_iter() {
       builder.push(h);
     }
     let sdss2 = builder.to_bmoc().unwrap();
+    println!("SDSS 'build' operation (from SDSS flat iterator, deep size: {}) done in {} ms", deep_size, now.elapsed().as_millis());
+    
+    
     sdss.assert_equals(&sdss2);
     assert!(sdss.equals(&sdss2));
   }
