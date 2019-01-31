@@ -1552,12 +1552,4 @@ mod tests {
     assert!((ang_dist - ang_dist_2).abs() < 1e-4);
   }
   
-  #[test]
-  fn distance() {
-    println!("d: {}", haversine_dist(20.0_f64.to_radians(), 0.0, 0.0, 46.96145096_f64.to_radians()).to_degrees());
-    println!("d: {}", haversine_dist(20.0_f64.to_radians(), 0.0, 
-                                     359.61168163_f64.to_radians(), 46.76819719_f64.to_radians())
-      .to_degrees());
-  }
-  
 }

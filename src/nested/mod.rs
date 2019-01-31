@@ -810,11 +810,15 @@ impl Layer {
   /// }
   /// ```
   pub fn cone_coverage_approx_custom(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-    // TODO: change the algo not to put all cell in the MOC and pruning it
-    get_or_create(self.depth + delta_depth)
-      .cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius)
-      //.to_lower_depth_bmoc(self.depth)
-      .to_lower_depth_bmoc_packing(self.depth)
+    if delta_depth == 0 {
+      self.cone_coverage_approx(cone_lon, cone_lat, cone_radius)
+    } else {
+      // TODO: change the algo not to put all cell in the MOC and pruning it
+      get_or_create(self.depth + delta_depth)
+        .cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius)
+        //.to_lower_depth_bmoc(self.depth)
+        .to_lower_depth_bmoc_packing(self.depth)
+    }
   }
   
   fn cone_coverage_approx_internal(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOCBuilderUnsafe {
@@ -1617,31 +1621,17 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
-    /*println!("@@@@@ HIERARCH VIEW");
-    for cell in actual_res.into_iter() {
-      println!("@@@@@ cell a: {:?}", cell);
-    }*/
   }
-
+  
   #[test]
   fn testok_cone_approx_custom_bmoc_dbg() {
     let actual_res = cone_coverage_approx_custom(2, 1,20_f64.to_radians(), 0.0_f64.to_radians(), 50.0_f64.to_radians());
-    /*let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+    let expected_res: [u64; 50] = [0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 49, 52, 53, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 82, 88, 89, 90, 91, 94, 131, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 181, 183, 189];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
-    }*/
-    println!("@@@@@ HIERARCH VIEW");
-    for cell in actual_res.into_iter() {
-      println!("@@@@@ cell a: {:?}", cell);
     }
-    
-    /*let actual_res = cone_coverage_approx(2, 20_f64.to_radians(), 0.0_f64.to_radians(), 50.0_f64.to_radians());
-    println!("@@@@@ HIERARCH VIEW");
-    for cell in actual_res.into_iter() {
-      println!("@@@@@ cell a: {:?}", cell);
-    }*/
   }
-
+  
   #[test]
   fn testok_polygone_approx() {
     let actual_res = polygon_coverage(3, &[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);

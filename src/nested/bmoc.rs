@@ -127,6 +127,13 @@ impl BMOCBuilderUnsafe {
     entries
   }
   
+  fn low_depth_raw_val_at_lower_depth(&self, raw_value: u64, new_depth: u8) -> u64 {
+    debug_assert!(self.get_depth(raw_value) <= new_depth);
+    debug_assert!(new_depth <= self.depth_max);
+    let twice_delta_depth = (self.depth_max - new_depth) << 1;
+    (raw_value >> twice_delta_depth) | (raw_value & 1_u64)
+  }
+  
   // We assume the given entries form a valid BMOC (already packef, ordered, ...)
   fn to_lower_depth(&self, new_depth: u8, mut entries: Vec<u64>) -> Vec<u64> {
     if new_depth >= self.depth_max {
@@ -135,17 +142,16 @@ impl BMOCBuilderUnsafe {
     let mut i_new = 0_usize;
     let mut prev_hash_at_new_depth = loop {
       if i_new == entries.len() {
+        // All cells have a depth <= new_depth
         break None;
       }
       let raw_value = entries[i_new];
       let depth = self.get_depth(raw_value);
       if depth <= new_depth {
-        let twice_delta_depth = (self.depth_max - new_depth) << 1;
-        entries[i_new] = (raw_value >> twice_delta_depth) | (raw_value & 1_u64);
+        entries[i_new] = self.low_depth_raw_val_at_lower_depth(raw_value, new_depth);
         i_new += 1;
       } else {
-        // let twice_delta_depth = (depth - new_depth) << 1;
-        break Some(get_hash_from_delta_depth(raw_value, self.depth_max - depth)); // >> twice_delta_depth);
+        break Some(get_hash_from_delta_depth(raw_value, self.depth_max - new_depth));
       }
     };
     for i in (i_new + 1)..entries.len() {
@@ -156,8 +162,7 @@ impl BMOCBuilderUnsafe {
           entries[i_new] = (prev_hash_at_new_depth.take().unwrap() << 2) | 2_u64;
           i_new += 1;
         }
-        let twice_delta_depth = (self.depth_max - new_depth) << 1;
-        entries[i_new] = (raw_value >> twice_delta_depth) | (raw_value & 1_u64);
+        entries[i_new] = self.low_depth_raw_val_at_lower_depth(raw_value, new_depth);
         i_new += 1;
       } else {
         let curr_hash_at_new_depth = get_hash_from_delta_depth(raw_value, self.depth_max - new_depth);
