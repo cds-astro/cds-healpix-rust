@@ -3,7 +3,7 @@
 
 # `cdshealpix-rust`
 
-**[CDS](http://cdsweb.u-strasbg.fr) implementation of the HEALPix tesselation in Rust and modules to generate libraries in WebAssemnly, Python, ...**
+**[CDS](http://cdsweb.u-strasbg.fr) implementation of the HEALPix tesselation in Rust and modules to generate libraries in WebAssembly, Python, ...**
 
 [![](https://meritbadge.herokuapp.com/cdshealpix)](https://crates.io/crates/cdshealpix)
 [![](https://img.shields.io/crates/d/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
@@ -121,10 +121,13 @@ Python
 ------
 
 (Not on crates.io, but on github) 
-See the `libpython` directory containing so far a very basic python script showing how to use the library from python.
+See the `libpython` directory containing a very first integration in python  using [CFFI](https://cffi.readthedocs.io/en/latest/).
 
-We are currently working on making a clean Python wrapper and generating Python Wheels for a simple install through `pip`. 
-See the Matthieu Baumann's project [here on github](https://github.com/cds-astro/cds-healpix-python/).
+For a clean Python wrapper and associated Wheels, see Matthieu Baumann's project [cds-healpix-python](https://github.com/cds-astro/cds-healpix-python/).
+To use the library in python, install it through `pip` (examples are provided on github [cds-healpix-python](https://github.com/cds-astro/cds-healpix-python/)):
+```bash
+pip install cdshealpix
+```
 
 License
 -------

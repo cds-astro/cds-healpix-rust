@@ -244,6 +244,8 @@ fn is_in_lon_range(coo: &Coo3D, v1: &Coo3D, v2: &Coo3D) -> bool {
   // Cross lon == 0
   // || v2.lon - v1.lon > PI && (p < v1.lon || p > v2.lon)
   // || v1.lon - v2.lon > PI && (p < v2.lon || p > v1.lon)
+  
+  // Warning: (v2.lon() - v1.lon()).abs() > PI does not work if v1.lon() == 0 || v2.lon() == 0
   ((v2.lon() - v1.lon()).abs() > PI) ^ ((v2.lon() > coo.lon()) != (v1.lon() > coo.lon()))
 }
 
@@ -275,7 +277,7 @@ fn polygon_edge_intersects_great_circle(a_dot_edge_normal: f64, b_dot_edge_norma
 
 
 /// Tells if the intersection line (i) between the two planes defined by vector a, b and pA, pB
-/// respectively in inside the zone [pA, pB].
+/// respectively is inside the zone `[pA, pB]`.
 fn intersect_point_in_polygon_great_circle_arc(
   a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> bool {
   let intersect = normalized_intersect_point(a, b, a_dot_edge_normal, b_dot_edge_normal);
@@ -295,6 +297,7 @@ fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_do
   let y = b_dot_edge_normal * a.y() - a_dot_edge_normal * b.y();
   let z = b_dot_edge_normal * a.z() - a_dot_edge_normal * b.z();
   let norm = (x * x + y * y + z * z).sqrt();
+  // Warning, do not consider the opposite vector!!
   return UnitVect3::new_unsafe(x / norm, y / norm, z / norm);
 }
 

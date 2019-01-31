@@ -4,6 +4,7 @@
 /libwasm/
 /libpsql/
 /libpsql10/
+/test/target/
 
 # Ignore files
 GIT_NOTICE.txt

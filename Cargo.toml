@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
@@ -16,6 +16,12 @@ exclude = [
 ]
 
 
+[package.metadata.docs.rs]
+rustdoc-args = [
+    "--html-in-header",
+    ".cargo/registry/src/github.com-1ecc6299db9ec823/katex-doc-0.1.0/katex.html",
+]
+
 [lib]
 name = "cdshealpix"
 path = "src/lib.rs"
@@ -25,14 +31,11 @@ bench = true
 doc = true
 
 [dependencies]
-# External dependencies
-#structopt = "0.2"        # CLI lib (based on clap)
+katex-doc = "0.1.0"
 
 [features]
-# nightly = []
 
 [profile.release]
 lto = true
 debug = false
-
 

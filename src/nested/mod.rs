@@ -76,31 +76,31 @@ pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64
   get_or_create(depth).neighbours(hash, include_center)
 }
 
-/// Conveniency function simply calling the [cone_overlap_approx](struct.Layer.html#method.cone_overlap_approx) method
+/// Conveniency function simply calling the [cone_coverage_approx](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn cone_overlap_approx(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-  get_or_create(depth).cone_overlap_approx(cone_lon, cone_lat, cone_radius)
+pub fn cone_coverage_approx(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  get_or_create(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius)
 }
 
-/// Conveniency function simply calling the [cone_overlap_flat](struct.Layer.html#method.cone_overlap_approx) method
+/// Conveniency function simply calling the [cone_coverage_flat](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth* and retrieving a flat array.
 #[inline]
-pub fn cone_overlap_approx_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
-  get_or_create(depth).cone_overlap_approx(cone_lon, cone_lat, cone_radius).to_flat_array()
+pub fn cone_coverage_approx_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
+  get_or_create(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius).to_flat_array()
 }
 
-/// Conveniency function simply calling the [cone_overlap_approx_custom](struct.Layer.html#method.cone_overlap_approx_custom) method
+/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.cone_coverage_approx_custom) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn cone_overlap_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-  get_or_create(depth).cone_overlap_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
+pub fn cone_coverage_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  get_or_create(depth).cone_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
 }
 
-/// Conveniency function simply calling the [polygon_overlap_approx](struct.Layer.html#method.polygon_overlap_approx) method
+/// Conveniency function simply calling the [polygon_coverage_approx](struct.Layer.html#method.polygon_coverage_approx) method
 /// of the [Layer] of the given *depth*.
-pub fn polygon_overlap_approx(depth: u8, vertices: &[(f64, f64)]) -> BMOC {
-  get_or_create(depth).polygon_overlap_approx(vertices)
+pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
+  get_or_create(depth).polygon_coverage(vertices, exact_solution)
 }
 
 
@@ -116,6 +116,7 @@ use super::sph_geom::coo3d::LonLat;
 use super::{proj};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
+use super::special_points_finder::{arc_special_points};
 
 /// Defines an HEALPix layer in the NESTED scheme.
 /// A layer is simply an utility structure containing all constants and methods related
@@ -738,7 +739,7 @@ impl Layer {
   /// The algorithm is fast but approximated: it may return false positive, 
   /// i.e. cells which are near from the cone but do not overlap it.
   /// To control the approximation, see the method 
-  /// [cone_overlap_approx_custom](#method.cone_overlap_approx_custom)
+  /// [cone_coverage_approx_custom](#method.cone_coverage_approx_custom)
   /// 
   /// # Input
   /// - `cone_lon` the longitude of the center of the cone, in radians
@@ -760,14 +761,14 @@ impl Layer {
   /// let lat = -72.80028_f64.to_radians();
   /// let radius = 5.64323_f64.to_radians();
   /// 
-  /// let actual_res = nested3.cone_overlap_approx(lon, lat, radius);
+  /// let actual_res = nested3.cone_coverage_approx(lon, lat, radius);
   /// let expected_res: [u64; 10] = [512, 514, 515, 520, 521, 522, 544, 705, 708, 709];
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///      assert_eq!(h1, *h2);
   /// }
   /// ```
-  pub fn cone_overlap_approx(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-    self.cone_overlap_approx_internal(cone_lon, cone_lat, cone_radius).to_bmoc_packing()
+  pub fn cone_coverage_approx(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+    self.cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius).to_bmoc_packing()
   }
   
   /// Returns a hierarchical view of the list of cells overlapped by the given cone.
@@ -802,19 +803,21 @@ impl Layer {
   /// let lat = -72.80028_f64.to_radians();
   /// let radius = 5.64323_f64.to_radians();
   /// 
-  /// let actual_res = nested3.cone_overlap_approx_custom(2, lon, lat, radius);
+  /// let actual_res = nested3.cone_coverage_approx_custom(2, lon, lat, radius);
   /// let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///     assert_eq!(h1, *h2);
   /// }
   /// ```
-  pub fn cone_overlap_approx_custom(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  pub fn cone_coverage_approx_custom(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+    // TODO: change the algo not to put all cell in the MOC and pruning it
     get_or_create(self.depth + delta_depth)
-      .cone_overlap_approx_internal(cone_lon, cone_lat, cone_radius)
+      .cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius)
+      //.to_lower_depth_bmoc(self.depth)
       .to_lower_depth_bmoc_packing(self.depth)
   }
   
-  fn cone_overlap_approx_internal(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOCBuilderUnsafe {
+  fn cone_coverage_approx_internal(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOCBuilderUnsafe {
     // Special case: the full sky is covered
     if cone_radius >= PI {
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, 12);
@@ -830,7 +833,7 @@ impl Layer {
       let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, distances);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
       for h in 0..12 {
-        self.cone_overlap_approx_recur(0, h,
+        self.cone_coverage_approx_recur(0, h,
                                 &shs_computer(cone_lon, cone_lat, cos_cone_lat),
                                 &minmax_array, 0, &mut bmoc_builder);
       }
@@ -865,14 +868,14 @@ impl Layer {
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
       for &root_hash in neigs.sorted_values().into_iter() {
-        self.cone_overlap_approx_recur(depth_start, root_hash,
+        self.cone_coverage_approx_recur(depth_start, root_hash,
                                 &shs_computer(cone_lon, cone_lat, cos_cone_lat),
                                 &minmax_array, 0, &mut bmoc_builder);
       }
       return bmoc_builder; //.to_bmoc_packing();
     }
   }
-  fn cone_overlap_approx_recur<F>(&self, depth: u8, hash: u64, shs_computer: &F, shs_minmax: &[MinMax],
+  fn cone_coverage_approx_recur<F>(&self, depth: u8, hash: u64, shs_computer: &F, shs_minmax: &[MinMax],
                            recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe)
     where F: Fn((f64, f64)) -> f64  {
     let center = get_or_create(depth).center(hash);
@@ -887,10 +890,10 @@ impl Layer {
         let hash = hash << 2;
         let depth = depth + 1;
         let recur_depth = recur_depth + 1;
-        self.cone_overlap_approx_recur(depth, hash, shs_computer, shs_minmax, recur_depth, bmoc_builder);
-        self.cone_overlap_approx_recur(depth, hash | 1_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
-        self.cone_overlap_approx_recur(depth, hash | 2_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
-        self.cone_overlap_approx_recur(depth, hash | 3_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_approx_recur(depth, hash, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_approx_recur(depth, hash | 1_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_approx_recur(depth, hash | 2_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_approx_recur(depth, hash | 3_u64, shs_computer, shs_minmax, recur_depth, bmoc_builder);
       }
     }
   }
@@ -1014,17 +1017,29 @@ impl Layer {
   /// Self intersecting polygons are supported.
   /// The BMOC also tells if the cell if fully or partially overlapped by the polygon.
   /// 
-  /// If you want the complementary solution, apply the NOT operator on the BMOC (to be implemented).
+  /// If you want the complementary solution, apply the NOT operator on the BMOC.
   /// 
-  /// Here we make the following approximation when testing the intersection between a polygon segment
-  /// and an HEALPix cell edge: we consider that each edge of the HEALPix cell is on a great-circle arc.*
-  /// We plan to provide an exact solution by first testing for each polygon segment if it
-  /// contains a 'special point', like for the exact cone solution (implemented in Java but not yet in Rust).
+  /// This method supports both an *exact* (need more tests) and an *approximated* solution.
+  /// The second one being faster (TODO: measure and provided perf differences as a function of the
+  /// number of vertices in the polygon).
+  /// 
+  /// The approximation is the following one: 
+  /// > when testing the intersection between a polygon segment and an HEALPix cell edge
+  /// > we consider that each edge of the HEALPix cell is on a great-circle arc (which is not
+  /// > true, especially a low resolutions).
+  /// 
+  /// For the exact solution:
+  /// > for each polygon segment, we first test if the segment contains a 'special point', 
+  /// > if it is the case, we add it to the list of cell number computed from each polygin vertex
+  /// > A 'special point' is a point such that in the HEALPix projection Euclidean plane
+  /// ```math
+  /// \mathrm{d}\DeltaX(z) / \mathrm{d}Y = \pm 1
+  /// ``` 
   ///
-  /// 
   /// # Input
   /// - `vertices` the list of vertices (in a slice) coordinates, in radians
   ///              `[(lon, lat), (lon, lat), ..., (lon, lat)]`
+  /// - `exact_solution` if set 
   /// 
   /// # Output
   /// - the list of cells overlapped by the given polygon, in a BMOC (hierarchical view also telling
@@ -1038,14 +1053,14 @@ impl Layer {
   /// let depth = 3_u8;
   /// let nested3 = get_or_create(depth);
   /// 
-  /// let actual_res =nested3.polygon_overlap_approx(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)]);
+  /// let actual_res =nested3.polygon_coverage(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
   /// let expected_res: [u64; 8] = [304, 305, 306, 307, 308, 310, 313, 316];
   /// 
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///     assert_eq!(h1, *h2);
   /// }
   /// ```
-  pub fn polygon_overlap_approx(&self, vertices: &[(f64, f64)]) -> BMOC {
+  pub fn polygon_coverage(&self, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
     let poly = Polygon::new(
       vertices.iter().map(|(lon, lat)| LonLat { lon: *lon, lat: *lat} )
         .collect::<Vec<LonLat>>().into_boxed_slice()
@@ -1063,20 +1078,31 @@ impl Layer {
       neigs.sort_unstable();
       neigs
     };
-    // Compute and sort the list of cell containing at least one polygon vertex
-    let mut sorted_poly_vertices_hash = self.hashs(poly.vertices());
+    // Compute and sort the list of cells containing at least one polygon vertex
+    let mut sorted_poly_vertices_hash = self.hashs_vec(poly.vertices());
+    // Special treatment for the exact solution
+    if exact_solution {
+      let vertices= poly.vertices();
+      let mut left= &vertices[vertices.len() - 1];
+      for right in vertices {
+        let special_lonlats = arc_special_points(left, right, 1.0e-14, 20);
+        sorted_poly_vertices_hash.append(&mut self.hashs_vec(&special_lonlats));
+        left = right;
+      }
+    }
+    // Back to general case
     sorted_poly_vertices_hash.sort_unstable();
+    sorted_poly_vertices_hash.dedup();
+    let sorted_poly_vertices_hash = sorted_poly_vertices_hash.into_boxed_slice();
     // Build the list (removing duplicated) for all deltaDepth?
     let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, 10_000_usize);
     for root_hash in neigs { 
-      self.polygon_overlap_recur(&mut bmoc_builder, depth_start, root_hash, &poly, &sorted_poly_vertices_hash);
+      self.polygon_coverage_recur(&mut bmoc_builder, depth_start, root_hash, &poly, &sorted_poly_vertices_hash);
     }
     bmoc_builder.to_bmoc()
-    // return HealpixNestedBMOC.createUnsafe(this.depthMax, moc.a, moc.size());
-    // BMOC::create_unsafe(self.depth, Vec::with_capacity(0).into_boxed_slice())
   }
 
-  fn polygon_overlap_recur(&self, moc_builder: &mut BMOCBuilderUnsafe, depth: u8, hash: u64,
+  fn polygon_coverage_recur(&self, moc_builder: &mut BMOCBuilderUnsafe, depth: u8, hash: u64,
   poly: &Polygon, sorted_poly_vertices_hash: &[u64]) {
     if is_in_list(depth, hash, self.depth, sorted_poly_vertices_hash) {
       if depth == self.depth {
@@ -1084,10 +1110,10 @@ impl Layer {
       } else {
         let hash = hash << 2;
         let depth = depth + 1;
-        self.polygon_overlap_recur(moc_builder, depth, hash    , poly, sorted_poly_vertices_hash);
-        self.polygon_overlap_recur(moc_builder, depth, hash | 1, poly, sorted_poly_vertices_hash);
-        self.polygon_overlap_recur(moc_builder, depth, hash | 2, poly, sorted_poly_vertices_hash);
-        self.polygon_overlap_recur(moc_builder, depth, hash | 3, poly, sorted_poly_vertices_hash);
+        self.polygon_coverage_recur(moc_builder, depth, hash    , poly, sorted_poly_vertices_hash);
+        self.polygon_coverage_recur(moc_builder, depth, hash | 1, poly, sorted_poly_vertices_hash);
+        self.polygon_coverage_recur(moc_builder, depth, hash | 2, poly, sorted_poly_vertices_hash);
+        self.polygon_coverage_recur(moc_builder, depth, hash | 3, poly, sorted_poly_vertices_hash);
       }
     } else {
       let (n_vertices_in_poly, poly_vertices) = n_vertices_in_poly(depth, hash, poly);
@@ -1100,10 +1126,10 @@ impl Layer {
           // I known, I don't like this code repetition, TODO: see how to remove it
           let hash = hash << 2;
           let depth = depth + 1;
-          self.polygon_overlap_recur(moc_builder, depth, hash    , poly, sorted_poly_vertices_hash);
-          self.polygon_overlap_recur(moc_builder, depth, hash | 1, poly, sorted_poly_vertices_hash);
-          self.polygon_overlap_recur(moc_builder, depth, hash | 2, poly, sorted_poly_vertices_hash);
-          self.polygon_overlap_recur(moc_builder, depth, hash | 3, poly, sorted_poly_vertices_hash);
+          self.polygon_coverage_recur(moc_builder, depth, hash    , poly, sorted_poly_vertices_hash);
+          self.polygon_coverage_recur(moc_builder, depth, hash | 1, poly, sorted_poly_vertices_hash);
+          self.polygon_coverage_recur(moc_builder, depth, hash | 2, poly, sorted_poly_vertices_hash);
+          self.polygon_coverage_recur(moc_builder, depth, hash | 3, poly, sorted_poly_vertices_hash);
         }
       }
     }
@@ -1114,6 +1140,10 @@ impl Layer {
       .collect::<Vec<u64>>().into_boxed_slice()
   }
 
+  fn hashs_vec<T: LonLatT>(&self, poly_vertices: &[T]) -> Vec<u64> {
+    poly_vertices.iter().map(|coo| self.hash(coo.lon(), coo.lat()))
+      .collect::<Vec<u64>>()
+  }
 }
 
 fn is_in_list(depth: u8, hash: u64, depth_hashs: u8, sorted_hashs: &[u64]) -> bool {
@@ -1547,7 +1577,7 @@ mod tests {
   fn testok_cone_approx_bmoc() {
     // let res = cone_overlap_approx(5, 0.01, 0.02, 0.05);
     // let res = cone_overlap_approx(6, 160.771389_f64.to_radians(), 64.3813_f64.to_radians(), 0.8962_f64.to_radians());
-    let actual_res = cone_overlap_approx(3, 13.158329_f64.to_radians(), -72.80028_f64.to_radians(), 5.64323_f64.to_radians());
+    let actual_res = cone_coverage_approx(3, 13.158329_f64.to_radians(), -72.80028_f64.to_radians(), 5.64323_f64.to_radians());
     let expected_res: [u64; 10] = [512, 514, 515, 520, 521, 522, 544, 705, 708, 709];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1565,7 +1595,7 @@ mod tests {
   fn testok_cone_approx_custom_bmoc_2() {
     // let res = cone_overlap_approx(5, 0.01, 0.02, 0.05);
     // let res = cone_overlap_approx(6, 160.771389_f64.to_radians(), 64.3813_f64.to_radians(), 0.8962_f64.to_radians());
-    let actual_res = cone_overlap_approx_custom(3, 2,36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
+    let actual_res = cone_coverage_approx_custom(3, 2,36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
     let expected_res: [u64; 22] = [26, 27, 30, 36, 37, 38, 39, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57, 58, 59, 60];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1582,7 +1612,7 @@ mod tests {
   
   #[test]
   fn testok_cone_approx_custom_bmoc() {
-    let actual_res = cone_overlap_approx_custom(3, 2,13.158329_f64.to_radians(), -72.80028_f64.to_radians(), 5.64323_f64.to_radians());
+    let actual_res = cone_coverage_approx_custom(3, 2,13.158329_f64.to_radians(), -72.80028_f64.to_radians(), 5.64323_f64.to_radians());
     let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1594,8 +1624,27 @@ mod tests {
   }
 
   #[test]
+  fn testok_cone_approx_custom_bmoc_dbg() {
+    let actual_res = cone_coverage_approx_custom(2, 1,20_f64.to_radians(), 0.0_f64.to_radians(), 50.0_f64.to_radians());
+    /*let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }*/
+    println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
+    
+    /*let actual_res = cone_coverage_approx(2, 20_f64.to_radians(), 0.0_f64.to_radians(), 50.0_f64.to_radians());
+    println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
+  }
+
+  #[test]
   fn testok_polygone_approx() {
-    let actual_res = polygon_overlap_approx(3, &[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)]);
+    let actual_res = polygon_coverage(3, &[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
     /*let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1606,10 +1655,15 @@ mod tests {
     }
   }
 
-
+  /*#[test]
+  fn testok_polygone_exact() {
+    // Aladin: draw polygon(11: 37: 30.84, -35: 29: 44.1, 12: 21: 26.12, -24: 36: 06.8, 11: 51: 37.52, -23: 10: 44.4)
+    // draw polygon(11:37:30.84,-35:29:44.1, 12:21:26.12,-24:36:06.8, 11:51:37.52,-23:10:44.4)
+  }*/
+    
   #[test]
   fn testok_bmoc_not() {
-    let actual_res = cone_overlap_approx_custom(3, 4, 36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
+    let actual_res = cone_coverage_approx_custom(3, 4, 36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
     println!("@@@@@ HIERARCH VIEW");
     for cell in actual_res.into_iter() {
       println!("@@@@@ cell a: {:?}", cell);

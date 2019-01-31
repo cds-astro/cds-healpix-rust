@@ -14,6 +14,7 @@ extern crate test;
 use std::sync::Once;
 use std::f64::consts::{PI};
 
+const SQRT2: f64 = 1.41421356237309504880_f64;
 const SQRT6: f64 = 2.44948974278317809819_f64;
 const ONE_OVER_SQRT6: f64 = 0.40824829046386301636_f64;
 const HALF: f64 = 0.5_f64;
@@ -280,13 +281,13 @@ impl ConstantsC2V {
   }
 }
 
-/*#[inline]
+#[inline]
 fn haversine_dist(p1_lon: f64, p1_lat: f64, p2_lon: f64, p2_lat: f64) -> f64 {
   let shs = squared_half_segment(
     p2_lon - p1_lon, p2_lat - p1_lat, 
     p1_lat.cos(), p2_lat.cos());
   sphe_dist(shs)
-}*/
+}
 
 /// Returns the angular distance corresponding to the given squared half great-circle arc segment
 #[inline]
@@ -338,6 +339,8 @@ pub trait Customf64 {
   fn twice(self) -> f64;
   #[inline]
   fn half(self) -> f64;
+  #[inline]
+  fn div_eucl(self, rhs: f64) -> f64;
 }
 
 impl Customf64 for f64 {
@@ -355,6 +358,17 @@ impl Customf64 for f64 {
   #[inline]
   fn half(self) -> f64 {
     0.5 * self
+  }
+
+  /// [Duplicated code](https://doc.rust-lang.org/std/primitive.f64.html#method.div_euc), because
+  /// it is unstable so far.
+  #[inline]
+  fn div_eucl(self, rhs: f64) -> f64 {
+    let q = (self / rhs).trunc();
+    if self % rhs < 0.0 {
+      return if rhs > 0.0 { q - 1.0 } else { q + 1.0 }
+    }
+    q
   }
 }
 
@@ -929,7 +943,53 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// This projection is multi-purpose in the sense that if `lon` is in `[-pi, pi]`, then
 /// `x` is in `[-4, 4]` and if `lon` is in `[0, 2pi]`, then `x` is in `[0, 8]`.  
 /// It means that a same position on the sphere can lead to different positions in the projected 
-/// Euclidean plane.  
+/// Euclidean plane.
+/// 
+/// Simplified projection formulae are:
+///  - Equatorial region
+/// ```math
+/// \boxed{
+///   \left\{
+///     \begin{array}{lcl}
+///       X & = & \alpha \times \frac{4}{\pi} \\
+///       Y & = & \sin(\delta) \times \frac{3}{2}
+///     \end{array}
+///   \right.
+/// }
+/// \Rightarrow
+/// \left\{
+///   \begin{array}{lcl}
+///     \alpha \in [0, 2\pi] & \leadsto &  X \in [0, 8] \\
+///     \sin\delta \in [-\frac{2}{3}, \frac{2}{3}] & \leadsto & Y \in [-1, 1]
+///   \end{array}
+/// \right.
+/// ```
+///  - Polar caps:
+/// ```math
+/// \boxed{
+///   \left\{
+///     \begin{array}{lcl}
+///       t & = & \sqrt{3(1-\sin\delta)} \\
+///       X & = & (\alpha\frac{4}{\pi} - 1)t+1 \\
+///       Y & = & 2 - t
+///     \end{array}
+///   \right.
+/// }
+/// \Rightarrow
+/// \left\{
+///   \begin{array}{l}
+///     \alpha \in [0, \frac{\pi}{2}] \\
+///     \sin\delta \in ]\frac{2}{3}, 1]
+///   \end{array}
+/// \right.
+/// \leadsto
+/// \begin{array}{l}
+///    t \in [0, 1[  \\
+///    X \in ]0, 2[ \\
+///    Y \in ]1, 2]
+/// \end{array}
+/// ```
+/// 
 /// It is the responsibility of the caller to homogenize the result according to its needs.
 /// ![Proj](hpx_proj.png)
 ///
@@ -1374,8 +1434,9 @@ fn base_cell(i: u8, j: u8) -> u8 {
 /// Module containing NESTED scheme methods
 pub mod nested;
 
-/// No need to make it public!
+/// No need to make those public!
 mod sph_geom;
+mod special_points_finder;
 
 #[cfg(test)]
 mod tests {
@@ -1490,4 +1551,13 @@ mod tests {
     let ang_dist_2 = sphe_dist(shs);
     assert!((ang_dist - ang_dist_2).abs() < 1e-4);
   }
+  
+  #[test]
+  fn distance() {
+    println!("d: {}", haversine_dist(20.0_f64.to_radians(), 0.0, 0.0, 46.96145096_f64.to_radians()).to_degrees());
+    println!("d: {}", haversine_dist(20.0_f64.to_radians(), 0.0, 
+                                     359.61168163_f64.to_radians(), 46.76819719_f64.to_radians())
+      .to_degrees());
+  }
+  
 }

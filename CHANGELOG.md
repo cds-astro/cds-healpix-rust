@@ -4,9 +4,34 @@
 
 --------------------------------------------------------------------------------
 
+## 0.1.4
+
+Released 2019-01-31.
+
+### Bug correction
+
+* method `MOCBuilderUnsafe::to_lower_depth` in module `cdshealpix::nested::bmoc`: first cell was ignored when not part of a larger cell.
+
+### Added
+
+* first version of the exacy polygon algorithm
+* `flat iterator returning cells (containing flags) in  BMOC
+* posibility to add LaTeX formula in the documentation (using the crate [katex-doc](https://crates.io/crates/katex-doc)).
+
+### API changes
+
+* `(polygon|cone)_overlap.*` changed to `(polygon|cone)_coverage.*`
+* `polygon_coverage_approx` changed to `polygon_coverage` with a boolean to select approx / exact solution
+
+### WARNING
+
+* Exact polygon algo still to be tested, probably bugged so far!!
+
+--------------------------------------------------------------------------------
+
 ## 0.1.3
 
-Released 2019-xx-xx.
+Released 2019-01-27.
 
 ### Bug correction
 

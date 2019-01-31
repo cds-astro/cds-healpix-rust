@@ -13,6 +13,8 @@ const TWO_PI: f64 = 2.0f64 * PI;
 
 pub trait Vec3 {
   
+  fn new(x: f64, y: f64, z: f64) -> Self where Self: Sized;
+  
   #[inline]
   fn x(&self) -> f64;
   
@@ -46,8 +48,8 @@ pub trait Vec3 {
   }
 
   #[inline]
-  fn opposite(&self) -> Vect3 {
-    Vect3::new(-self.x(), -self.y(), -self.z())
+  fn opposite(&self) -> Self where Self: Sized{
+    Self::new(-self.x(), -self.y(), -self.z())
   }
 
   #[inline]
@@ -60,10 +62,34 @@ pub trait Vec3 {
     self.squared_euclidean_dist(other).sqrt()
   }
   
+  #[inline]
+  fn normalized(&self) -> UnitVect3 {
+    let norm = self.norm();
+    UnitVect3 {
+      x: self.x() / norm,
+      y: self.y() / norm,
+      z: self.z() / norm,
+     }
+  }
+
+  /*#[inline]
+  fn normalized_opposite(&self) -> UnitVect3 {
+    let norm = self.norm();
+    UnitVect3 {
+      x: -self.x() / norm,
+      y: -self.y() / norm,
+      z: -self.z() / norm,
+    }
+  }*/
 }
 
 // Apply to all references to a type that implements the Vec3 trait
 impl<'a, T> Vec3 for &'a T where T: Vec3 {
+  
+  fn new(_x: f64, _y: f64, _z: f64) -> Self { // Voir si ca marche en pratique
+    panic!("Method must be defined for each implementor!");
+  }
+  
   #[inline]
   fn x(&self) -> f64 { Vec3::x(*self) }
 
@@ -110,6 +136,10 @@ pub trait UnitVec3: Vec3 {
   fn to_struct(&self) -> UnitVect3 {
     UnitVect3{x: self.x(), y: self.y(), z: self.z() }
   }
+
+  /*fn to_opposite(&self) -> UnitVect3 {
+    UnitVect3{x: -self.x(), y: -self.y(), z: -self.z() }
+  }*/
 }
 
 #[inline]
@@ -208,13 +238,17 @@ pub struct Vect3 {
   z: f64,
 }
 
-impl Vect3 {
+/*impl Vect3 {
   pub fn new(x: f64, y: f64, z: f64) -> Vect3 {
     Vect3{ x, y, z }
   }
-}
+}*/
 
 impl Vec3 for Vect3 {
+  #[inline]
+  fn new(x: f64, y: f64, z: f64) -> Vect3 { // Self where Self: Sized;
+    Vect3{ x, y, z }
+  }
   #[inline]
   fn x(&self) -> f64 { self.x }
 
@@ -234,7 +268,7 @@ pub struct UnitVect3 {
 }
 
 impl UnitVect3 {
-  pub fn new(x: f64, y: f64, z: f64) -> UnitVect3 {
+  /*pub fn new(x: f64, y: f64, z: f64) -> UnitVect3 {
     let norm2 = squared_norm_of(x, y, z);
     if is_unit_from_squared_norm(norm2) {
       UnitVect3::new_unsafe(x, y, z)
@@ -243,7 +277,7 @@ impl UnitVect3 {
       UnitVect3::new_unsafe(x / norm, y / norm, z / norm)
     }
     
-  }
+  }*/
   
   #[inline]
   pub fn new_unsafe(x: f64, y: f64, z: f64) -> UnitVect3 {
@@ -262,6 +296,17 @@ impl UnitVect3 {
 }
 
 impl Vec3 for UnitVect3 {
+  
+  fn new(x: f64, y: f64, z: f64) -> UnitVect3 {
+    let norm2 = squared_norm_of(x, y, z);
+    if is_unit_from_squared_norm(norm2) {
+      UnitVect3::new_unsafe(x, y, z)
+    } else {
+      let norm = norm2.sqrt();
+      UnitVect3::new_unsafe(x / norm, y / norm, z / norm)
+    }
+  }
+  
   #[inline]
   fn x(&self) -> f64 { self.x }
 
@@ -347,11 +392,15 @@ pub struct Coo3D {
 
 impl Coo3D {
 
+  pub fn from<T: UnitVec3>(v: T) -> Coo3D {
+    Coo3D::from_vec3(v.x(), v.y(), v.z())
+  }
+  
   pub fn from_vec3(x: f64, y: f64, z: f64) -> Coo3D {
     let (lon, lat) = lonlat_of(x, y, z);
     Coo3D {x, y, z, lon, lat}
   }
-
+  
   /// lon and lat in radians
   pub fn from_sph_coo(lon: f64, lat: f64) -> Coo3D {
     let v = vec3_of(lon, lat);
@@ -369,6 +418,11 @@ impl LonLatT for Coo3D {
 }
 
 impl Vec3 for Coo3D {
+  
+  #[inline]
+  fn new(x: f64, y: f64, z: f64) -> Coo3D {
+    Coo3D::from_vec3(x, y, z)
+  }
   
   #[inline]
   fn x(&self) -> f64 { self.x }
