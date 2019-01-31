@@ -388,7 +388,7 @@ impl Customf64 for f64 {
 /// of this method (in blue).  
 /// WARNING: the units of `(lon, lat)` on the plot are *degrees*, while the distance is in *mas*  
 /// Credit: plot made using [TOPCAT](http://www.star.bris.ac.uk/~mbt/topcat/)
-/// ![CenterToVertexDist](d_center_vertex.png)
+/// ![CenterToVertexDist](https://raw.githubusercontent.com/cds-astro/cds-healpix-rust/master/resources/4doc/d_center_vertex.png)
 /// 
 pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
   // Specific case for depth 0
@@ -991,7 +991,7 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// ```
 /// 
 /// It is the responsibility of the caller to homogenize the result according to its needs.
-/// ![Proj](hpx_proj.png)
+/// ![Proj](https://raw.githubusercontent.com/cds-astro/cds-healpix-rust/master/resources/4doc/hpx_proj.png)
 ///
 /// # Inputs
 /// - `lon` longitude in radians, support positive and negative reasonably large values
