@@ -1074,7 +1074,7 @@ impl Layer {
     let neigs: Vec<u64> = if !has_best_starting_depth(bounding_cone.radius()) {
       (0..12).collect()
     } else {
-      depth_start = best_starting_depth(bounding_cone.radius());
+      depth_start = best_starting_depth(bounding_cone.radius()).min(self.depth);
       let root_layer = get_or_create(depth_start);
       let LonLat{lon, lat} = bounding_cone.center().lonlat();
       let center_hash = root_layer.hash(lon, lat);
@@ -1090,6 +1090,7 @@ impl Layer {
       let mut left= &vertices[vertices.len() - 1];
       for right in vertices {
         let special_lonlats = arc_special_points(left, right, 1.0e-14, 20);
+        // println!("special_lonlats: {:?}", &special_lonlats);
         sorted_poly_vertices_hash.append(&mut self.hashs_vec(&special_lonlats));
         left = right;
       }
@@ -1645,12 +1646,88 @@ mod tests {
     }
   }
 
-  /*#[test]
-  fn testok_polygone_exact() {
-    // Aladin: draw polygon(11: 37: 30.84, -35: 29: 44.1, 12: 21: 26.12, -24: 36: 06.8, 11: 51: 37.52, -23: 10: 44.4)
-    // draw polygon(11:37:30.84,-35:29:44.1, 12:21:26.12,-24:36:06.8, 11:51:37.52,-23:10:44.4)
-  }*/
+  #[test]
+  fn testok_polygone_exact_npc() {
+    // Aladin: draw polygon(65.11781779000003, 85.012424, 89.70533626000001, 87.06130188, 60.23667431000001, 85.609882)
+    let depth = 6;
+    let mut vertices = [(65.11781779000003, 85.012424), (89.70533626000001, 87.06130188), (60.23667431000001, 85.609882)];
+    let expected_res_approx: [u64; 2] = [4062, 4063];
+    let expected_res_exact: [u64; 4] = [4062, 4063, 4084, 4085];
+
+    to_radians(&mut vertices);
     
+    let actual_res_approx = polygon_coverage(depth, &vertices, false);
+    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
+    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
+      assert_eq!(h1, *h2);
+    }    
+    
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_polygone_exact_npc_2() {
+    // Aladin: draw polygon(359.70533626,+87.06130188, 330.23667431,+85.60988200, 335.11781779,+85.01242400)
+    let depth = 6;
+    let mut vertices = [(359.70533626, 87.06130188), (330.23667431, 85.60988200), (335.11781779, 85.01242400)];
+    let expected_res_approx: [u64; 2] = [16350, 16351];
+    let expected_res_exact: [u64; 4] = [16350, 16351, 16372, 16373];
+    
+    to_radians(&mut vertices);
+
+    let actual_res_approx = polygon_coverage(depth, &vertices, false);
+    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
+    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+  
+
+  #[test]
+  fn testok_polygone_exact_eqr() {
+    // In Aladin: draw polygon(180.08758393,-41.43289179, 191.00310758,-29.99207687, 181.59160475,-34.21976170)
+    let depth = 3;
+    let mut vertices = [(180.08758393,-41.43289179), (191.00310758,-29.99207687), (181.59160475,-34.219761700)];
+    let expected_res_approx: [u64; 2] = [384, 385];
+    let expected_res_exact: [u64; 4] = [384, 385, 682, 683];
+
+    to_radians(&mut vertices);
+
+    let actual_res_approx = polygon_coverage(depth, &vertices, false);
+    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
+    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+  
+  fn to_radians(lonlats: &mut [(f64, f64)]) {
+    for (lon, lat) in lonlats.iter_mut() {
+      *lon = lon.to_radians();
+      *lat = lat.to_radians();
+    }
+  }
+  
+  /*fn test_polygone(depth: u8, lonlats: &[(f64, f64)]) {
+    let bmoc = polygon_coverage(depth, lonlats, true);
+    
+  }*/
+  
   #[test]
   fn testok_bmoc_not() {
     let actual_res = cone_coverage_approx_custom(3, 4, 36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());

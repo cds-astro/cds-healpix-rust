@@ -22,35 +22,35 @@ pub fn arc_special_points<'a>(mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f
   // Ensure p1.z() < p2.z()
   if p1.z() > p2.z() {
     let tmp = p1;
-    p2 = p1;
-    p1 = tmp;
+    p1 = p2;
+    p2 = tmp;
   }
   if TRANSITION_Z <= p1.z() || p2.z() <= -TRANSITION_Z { // NPC only or SPC only
-    match great_circle_arc_special_point_in_pc(p1, p2, z_eps_max, n_iter_max) {
+    match arc_special_point_in_pc(p1, p2, z_eps_max, n_iter_max) {
       Some(lonlat) => Box::new([lonlat; 1]),
       None => Vec::new().into_boxed_slice(),
     }
   } else if -TRANSITION_Z <= p1.z() && p2.z() <= TRANSITION_Z { // EQR only
-    match great_circle_arc_special_point_in_eqr(p1, p2, &cross_product(p1, p2), z_eps_max, n_iter_max) {
+    match arc_special_point_in_eqr(p1, p2, z_eps_max, n_iter_max) {
       Some(lonlat) => Box::new([lonlat; 1]),
       None => Vec::new().into_boxed_slice(), 
     }
   } else if p1.z() < -TRANSITION_Z { // SPC, EQR (and maybe NPC)
     let mut res: Vec<LonLat> = Vec::with_capacity(3);
     let v_eqr_south = Coo3D::from(intersect_with_transition_lat_spc(p1, p2).unwrap());
-    if let Some(lonlat) = great_circle_arc_special_point_in_pc(p1, &v_eqr_south, z_eps_max, n_iter_max) {
+    if let Some(lonlat) = arc_special_point_in_pc(p1, &v_eqr_south, z_eps_max, n_iter_max) {
       res.push(lonlat);
     }
     if p2.z() <= TRANSITION_Z {
-      if let Some(lonlat) = great_circle_arc_special_point_in_eqr(&v_eqr_south, p2, &cross_product(&v_eqr_south, p2) ,z_eps_max, n_iter_max) {
+      if let Some(lonlat) = arc_special_point_in_eqr(&v_eqr_south, p2, z_eps_max, n_iter_max) {
         res.push(lonlat);
       }
     } else {
       let v_eqr_north = Coo3D::from(intersect_with_transition_lat_npc(p1, p2).unwrap());
-      if let Some(lonlat) = great_circle_arc_special_point_in_eqr(&v_eqr_south, &v_eqr_north, &cross_product(&v_eqr_south, &v_eqr_north), z_eps_max, n_iter_max) {
+      if let Some(lonlat) = arc_special_point_in_eqr(&v_eqr_south, &v_eqr_north, z_eps_max, n_iter_max) {
         res.push(lonlat);
       }
-      if let Some(lonlat) = great_circle_arc_special_point_in_pc(&v_eqr_north, p2, z_eps_max, n_iter_max) {
+      if let Some(lonlat) = arc_special_point_in_pc(&v_eqr_north, p2, z_eps_max, n_iter_max) {
         res.push(lonlat);
       }
     }
@@ -58,10 +58,10 @@ pub fn arc_special_points<'a>(mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f
   } else { // both EQR and NPC
     let mut res: Vec<LonLat> = Vec::with_capacity(2);
     let v_eqr_north = Coo3D::from(intersect_with_transition_lat_npc(p1, p2).unwrap());
-    if let Some(lonlat) = great_circle_arc_special_point_in_eqr(p1, &v_eqr_north, &cross_product(&p1, &v_eqr_north), z_eps_max, n_iter_max) {
+    if let Some(lonlat) = arc_special_point_in_eqr(p1, &v_eqr_north, z_eps_max, n_iter_max) {
       res.push(lonlat);
     }
-    if let Some(lonlat) = great_circle_arc_special_point_in_pc(&v_eqr_north, p2, z_eps_max, n_iter_max) {
+    if let Some(lonlat) = arc_special_point_in_pc(&v_eqr_north, p2, z_eps_max, n_iter_max) {
       res.push(lonlat);
     }
     res.into_boxed_slice()
@@ -173,10 +173,9 @@ pub fn cone_special_point_in_eqr(mut z: f64, z0: f64, eucl_cone_radius: f64, nor
 ///   arc (if it exists) has a slope equals to `+-1`.
 /// - `None` if the arc do not contains a tangent line of slope '+-1', or if the result
 ///   if not in the equatorial region.
-pub fn great_circle_arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, p1_cross_p2: &Vect3,
-                                 z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
-  // const EUCL_CONE_RADIUS: f64 = SQRT2;
-  let cone_center = p1_cross_p2.normalized();
+pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, 
+                                             z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
+  let mut cone_center = cross_product(&p1, &p2).normalized();
   let z0 = cone_center.z();
   let z1 = p1.z();
   let z2 = p2.z();
@@ -187,12 +186,12 @@ pub fn great_circle_arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, p1_cross_p2
   } else {
     ONE_OVER_TRANSITION_Z * PI_OVER_FOUR
   };
+  // Remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
   let w0 = 1.0 - z0.pow2();
-  let r = 0.5_f64; //1.0 - EUCL_CONE_RADIUS.pow2().half();
   let twice_z0 = z0.twice();
-  // Test if we start the method or not
-  let d1 = f_eqr(z1, z0, w0, cte, r);
-  let d2 = f_eqr(z2, z0, w0, cte, r);
+  // Test if we start the method or not.
+  let d1 = f_eqr(z1, z0, w0, cte, 0.0);
+  let d2 = f_eqr(z2, z0, w0, cte, 0.0);
   if have_same_sign(d1, d2) {
     return None;
   }
@@ -202,7 +201,7 @@ pub fn great_circle_arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, p1_cross_p2
   let mut z_eps = 1.0_f64;
   let mut n_iter = 0_u8;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_eqr(z, z0, twice_z0, w0, cte, r);
+    z_eps = f_over_df_eqr(z, z0, twice_z0, w0, cte, 0.0);
     z -= z_eps;
     n_iter += 1;
   }
@@ -215,17 +214,6 @@ pub fn great_circle_arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, p1_cross_p2
     None
   }
 }
-
-/* NOT NEEDED ANY MORE: SIMPLY LOOK AT z0 SIGN
-#[inline]
-fn slope_sign_eqr(v1: &Coo3D, v2: &Coo3D) -> bool {
-  let cross_lon_origin = (v2.lon() - v1.lon()).abs() > PI;
-  let v2lon_higher_v1lon = v2.lon() > v1.lon();
-  let v2_east_of_v1 = cross_lon_origin ^ v2lon_higher_v1lon;
-  // let v2_north_of_v1 = v2.lat() > v.lat();
-  // v2_east_of_v1 => z_cone_center > 0
-  v2_east_of_v1
-}*/
 
 /// Computes dX / dY in the equatorial region
 #[inline]
@@ -283,11 +271,7 @@ fn f_over_df_eqr(z: f64, z0: f64, twice_z0: f64, w0: f64, cte: f64, r: f64) -> f
 /// - `Some(z)` the sine of the latitude of the point such that the tangent line to the cone
 ///       on the projection plane has a slope equals to `+-1`.
 /// - `None` if the computed latitude is out of the North Polar Cap
-/// 
-// # Info
-// - To obtain the result in the South polar cap (i.e. z < 0).
-//   - provide -z, -z0, !north_value
-//   - get the opposite of the output
+///
 /// 
 /// # Warning
 /// - if the longitude computed from the returned `z` is
@@ -333,13 +317,13 @@ pub fn cone_special_point_in_pc(mut z: f64, cone_center_lon_mod_half_pi: f64,
 }
 
 // check_multi_base_cells: must be set to true at first call!!
-pub fn great_circle_arc_special_point_in_pc<'a>(
+pub fn arc_special_point_in_pc<'a>(
   mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
   // Ensure p1.lon() < p2.lon()
   if p1.lon() > p2.lon() {
     let tmp = p1;
-    p2 = p1;
-    p1 = tmp;
+    p1 = p2;
+    p2 = tmp;
   }
   // Check if great-circle arc overlap several base cells
   debug_assert!(p1.lon() % HALF_PI >= 0.0);
@@ -364,14 +348,14 @@ pub fn great_circle_arc_special_point_in_pc<'a>(
         let n2_y = lon2_div_half_pi & 1;
         let n2 = Coo3D::from_vec3((n2_y ^ 1) as f64, n2_y as f64, 0.0);
         let intersect2 = Coo3D::from(intersect_point_pc(&p1, p2, &p2p1_n, &n2));
-        res_z2 = great_circle_arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
+        res_z2 = arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
       }
       // Second quarter [(p1.lon % PI/2) * PI/2, p1.lon]
       debug_assert!(lon1_div_half_pi < 3);
       let n1_y = lon1_div_half_pi & 1;
       let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
       let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p2p1_n, &n1));
-      res_z1 = great_circle_arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
+      res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
     } else {
       let p1p2_n = cross_product(p1, p2).normalized();
       if p1.lon() % HALF_PI > p1.lon() { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
@@ -379,14 +363,14 @@ pub fn great_circle_arc_special_point_in_pc<'a>(
         let n1_y = lon1_div_half_pi & 1;
         let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
         let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n1));
-        res_z1 = great_circle_arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
+        res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
       }
       // Last quarter [(p2.lon % PI/2) * PI/2, p2.lon]
       debug_assert!(lon2_div_half_pi > 0);
       let n2_x = lon2_div_half_pi & 1;
       let n2 = Coo3D::from_vec3(n2_x as f64, (n2_x ^ 1) as f64, 0.0);
       let intersect2 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n2));
-      res_z2 = great_circle_arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
+      res_z2 = arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
     }
     if res_z1.is_some() {
       res_z1
@@ -394,25 +378,27 @@ pub fn great_circle_arc_special_point_in_pc<'a>(
       res_z2
     }
   } else { // Same quarter
-    great_circle_arc_special_point_in_pc_same_quarter(p1, p2, z_eps_max, n_iter_max)
+    arc_special_point_in_pc_same_quarter(p1, p2, z_eps_max, n_iter_max)
   }
 }
 
 // Here we assume that the great-circle arc is in a same quarter
 // (i.e. (p1.lon % pi/2) == (p2.lon % pi/2) (except if one of the two point is on a border n * pi/2)  
-fn great_circle_arc_special_point_in_pc_same_quarter( 
+fn arc_special_point_in_pc_same_quarter( 
   p1: &Coo3D, p2: &Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
-  const EUCL_CONE_RADIUS: f64 = SQRT2;
-  let p1 = Coo3D::from_sph_coo(p1.lon() % HALF_PI, p1.lat());
-  let p2 = Coo3D::from_sph_coo(p2.lon() % HALF_PI, p2.lat());
-  let cone_center = cross_product(&p1, &p2).normalized();
+  let v1 = Coo3D::from_sph_coo(p1.lon() % HALF_PI, p1.lat());
+  let v2 = Coo3D::from_sph_coo(p2.lon() % HALF_PI, p2.lat());
+  let mut cone_center = cross_product(&v1, &v2).normalized();
+  if have_same_sign(p1.z(),cone_center.z()) {
+    cone_center = cone_center.opposite();
+  }
   let cone_center_lon = cone_center.lonlat().lon();
   let mut z0 = cone_center.z();
-  let mut z1 = p1.z();
-  let mut z2 = p2.z();
+  let mut z1 = v1.z();
+  let mut z2 = v2.z();
   let mut north_value = z0 < 0.0;
   // ( here we could have but do not use the fact that we previously ensure that p1.lon() < p2.lon() )
-  let east_value = ((p1.lat() > p2.lat()) ^ (p1.lon() > p2.lon())) ^ !north_value;
+  let east_value = ((v1.lat() > v2.lat()) ^ (v1.lon() > v2.lon())) ^ !north_value;
   // Deal with NPC / SPC
   let mut  z = (z1 + z2).half(); // mean of z1 and z2
   let spc =  z < 0.0;   // south polar cap
@@ -424,46 +410,45 @@ fn great_circle_arc_special_point_in_pc_same_quarter(
     north_value = !north_value;
   }
   // Compute constants
+  //  - remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
   let twice_z0 = z0.twice();
   let cte = if north_value { -PI_OVER_FOUR.half() } else { PI_OVER_FOUR.half() };
   let w0 = 1.0 - z0.pow2();
-  let r = 0.5_f64; //1.0 - EUCL_CONE_RADIUS.pow2().half();
   let direction = if east_value { 1.0 } else { -1.0 };
   // Test if we start the method or not
-  let d1 = f_npc(z1, cone_center_lon, z0, w0, cte, direction, r);
-  let d2 = f_npc(z2, cone_center_lon, z0, w0, cte, direction, r);
+  let d1 = f_npc(z1, cone_center_lon, z0, w0, cte, direction, 0.0);
+  let d2 = f_npc(z2, cone_center_lon, z0, w0, cte, direction, 0.0);
   if have_same_sign(d1, d2) {
     return None;
   }
   // Newton-Raphson method
-  let z_eps_max = z_eps_max.min(0.2e-1 * EUCL_CONE_RADIUS).max(1.0e-15);
+  let z_eps_max = z_eps_max.min(0.2e-1 * (z2 - z1).abs()).max(1.0e-15);
   let mut n_iter = 0_u8;
   let mut z_eps = 1.0_f64;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_npc(z, cone_center_lon, z0, twice_z0, w0, cte, direction, r);
+    z_eps = f_over_df_npc(z, cone_center_lon, z0, twice_z0, w0, cte, direction, 0.0);
     z -= z_eps;
     n_iter += 1;
   }
   // Return result if seems correct
   if z.is_finite() && z > TRANSITION_Z && ((z1 < z && z < z2) || (z2 < z && z < z1)) {
     if spc {
-      let v = intersect_small_circle(&p1, &p2, -z).unwrap();
+      let v = intersect_small_circle(p1, p2, -z).unwrap();
       Some(v.lonlat())
     } else {
-      let v = intersect_small_circle(&p1, &p2, z).unwrap();
+      let v = intersect_small_circle(p1, p2, z).unwrap();
       Some(v.lonlat())
     }
-    // Some(if spc { -z } else { z })
   } else {
     None
   }
 }
 
-// Returns the intersection point between the given arc (of given normal vector)
-// and the plane of given normal vector
-// WARNING: only valid in polar caps since we use 'z' to determine if we have to take the 
-// result of (p1 x p2) x n or its complements (here we have the guarantee that 
-// sign(p1.z) = sign(p2.z) must be = sign(res.z)
+/// Returns the intersection point between the given arc (of given normal vector)
+/// and the plane of given normal vector
+/// WARNING: only valid in polar caps since we use 'z' to determine if we have to take the 
+/// result of (p1 x p2) x n or its complements (here we have the guarantee that 
+/// sign(p1.z) = sign(p2.z) must be = sign(res.z)
 #[inline]
 fn intersect_point_pc(p1: &Coo3D, p2: &Coo3D, p1_x_p2: &UnitVect3, n: &Coo3D) -> UnitVect3 {
   debug_assert!(p1.z().abs() >= TRANSITION_Z  && p2.z().abs() >= TRANSITION_Z);
@@ -518,19 +503,8 @@ fn have_same_sign(d1: f64, d2: f64) -> bool {
   d1 == 0.0 || d2 == 0.0 || ((d1 > 0.0) == (d2 > 0.0))
 }
 
-// Returns, if exists the point at the intersection of the given great-circle arc with 
-// the small circle of HEALPix transition latitude (z = 2/3)
-// WARNING: do not handle the case in which
-/*fn interesct_with_transition_lat(mut p1: &Coo3D, mut p2: &Coo3D) -> Option<UnitVect3> {
-  // Ensure p2.lat > p1.lat
-  if   (p1.z() > TRANSITION_Z && p2.z() < TRANSITION_Z) 
-    || (p2.z() > TRANSITION_Z && p1.z() < TRANSITION_Z) {
-    debug_assert!(p1.z() > -TRANSITION_Z)
-  }
-}*/
-
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance 
-/// between the two given points) and the small circle of given z and equation $`z=cte`$
+/// between the two given points) and the small circle of given z (equation $`z=cte`$).
 /// Let's use the following notations:
 /// - Coordinates of $`\vec{a}\times\vec{b} = (x_0, y_0, z_0)`$
 /// - Coordinates of the points we are looking for $`\vec{i} = (x, y, z=cte)`$ 
@@ -548,7 +522,7 @@ fn have_same_sign(d1: f64, d2: f64) -> bool {
 /// ```math
 /// \left\{
 ///   \begin{array}{rcl}
-///     y & = & - \left(x\frac{x_0}{y_0} + \frac{zz_0}{y_0}\right) \\
+///     y & = & - \left(x\frac{x_0}{y_0} - \frac{zz_0}{y_0}\right) \\
 ///     0 & = & x^2(1+\frac{x_0^2}{y_0^2}) + x\frac{2x_0zz_0}{y_0^2} + (\frac{zz_0}{y_0})^2 - (x_0^2 + y_0^2)
 ///   \end{array}
 /// \right.
@@ -572,7 +546,7 @@ fn have_same_sign(d1: f64, d2: f64) -> bool {
 ///   \end{array}
 /// \right.
 /// ```
-/// In both cases, two solution are availabls.
+/// In both cases, two solutions are available.
 /// We select the pair $`(x, y)`$ such that both scalar products with the two great-circle arc 
 /// points are higher than the two points scalar product.
 pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVect3>
@@ -580,7 +554,7 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
   debug_assert!(-1.0 <= z && z <= 1.0);
   if  (p1.z() < z && z < p2.z()) || (p2.z() < z && z < p1.z()) {
     let p1_dot_p2 = dot_product(p1, p2);
-    let p1_x_p2 = cross_product(p1, p2);
+    let p1_x_p2 = cross_product(p1, p2).normalized();
     let x0= p1_x_p2.x();
     let y0= p1_x_p2.y();
     let z0= p1_x_p2.z();
@@ -588,11 +562,11 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
       let x = -(z * z0) / x0;
       let y1 = (1.0 - (x.pow2() + z.pow2())).sqrt();
       let y2 = -y1;
-      if   p1.x() * x + p1.y() * y1 + p1.z() * z <= p1_dot_p2
-        && p2.x() * x + p2.y() * y1 + p2.z() * z <= p1_dot_p2 {
+      if p1.x() * x + p1.y() * y1 + p1.z() * z >= p1_dot_p2
+        && p2.x() * x + p2.y() * y1 + p2.z() * z >= p1_dot_p2 {
         return Some(UnitVect3::new_unsafe(x, y1, z));
-      } else if p1.x() * x + p1.y() * y2 + p1.z() * z <= p1_dot_p2
-             && p2.x() * x + p2.y() * y2 + p2.z() * z <= p1_dot_p2 {
+      } else if p1.x() * x + p1.y() * y2 + p1.z() * z >= p1_dot_p2
+             && p2.x() * x + p2.y() * y2 + p2.z() * z >= p1_dot_p2 {
         return Some(UnitVect3::new_unsafe(x, y2, z));
       } else {
         unreachable!();
@@ -602,17 +576,17 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
       let zz0_y0 = z * z0 / y0;
       let a = 1.0 + x0_y0.pow2();
       let b = 2.0 * x0_y0 * zz0_y0;
-      let c = zz0_y0.pow2() - (x0.pow2() + y0.pow2());
+      let c = zz0_y0.pow2() + z.pow2() - 1.0;
       let sqrt_delta = (b.pow2() - 4.0 * a * c).sqrt();
       let x1 = (-b + sqrt_delta) / a.twice();
       let y1 = -x1 * x0_y0 - zz0_y0;
       let x2 = (-b - sqrt_delta) / a.twice();
       let y2 = -x2 * x0_y0 - zz0_y0;
-      if   p1.x() * x1 + p1.y() * y1 + p1.z() * z <= p1_dot_p2
-        && p2.x() * x1 + p2.y() * y1 + p2.z() * z <= p1_dot_p2 {
+      if   p1.x() * x1 + p1.y() * y1 + p1.z() * z >= p1_dot_p2
+        && p2.x() * x1 + p2.y() * y1 + p2.z() * z >= p1_dot_p2 {
         return Some(UnitVect3::new_unsafe(x1, y1, z));
-      } else if p1.x() * x2 + p1.y() * y2 + p1.z() * z <= p1_dot_p2
-             && p2.x() * x2 + p2.y() * y2 + p2.z() * z <= p1_dot_p2 {
+      } else if p1.x() * x2 + p1.y() * y2 + p1.z() * z >= p1_dot_p2
+             && p2.x() * x2 + p2.y() * y2 + p2.z() * z >= p1_dot_p2 {
         return Some(UnitVect3::new_unsafe(x2, y2, z));
       } else {
         unreachable!();
@@ -623,114 +597,22 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
   }
 }
 
-
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance 
-/// between the two given points) and the small circle of equation $`z=2/3`$
-/// Let's use the following notations:
-/// - Coordinates of $`\vec{a}\times\vec{b} = (x_0, y_0, z_0)`$
-/// - Coordinates of the points we are looking for $`\vec{i} = (x, y, z=2/3)`$ 
-/// We look for `x` and `y` solving 
-/// ```math
-/// \left\{
-///   \begin{array}{rcl}
-///     z & = & \frac{2}{3} \\
-///     x^2 + y^2 + z^2 & = & 1 \\
-///     xx_0 + yy_0 + zz_0 & = & 0 \\
-///     (x - x_0)^2 + (y - y_0)^2 + (z - z_0)^2 & = & 2 \mathrm(unused)
-///   \end{array}
-/// \right.
-/// ```
-/// It leads to
-/// ```math
-/// \left\{
-///   \begin{array}{rcl}
-///     y & = & - \left(x\frac{x_0}{y_0} + \frac{2z_0}{3y_0}\right) \\
-///     0 & = & x^2(1+\frac{x_0^2}{y_0^2}) + x\frac{4x_0z_0}{3y_0^2} + (\frac{2z_0}{3y_0})^2 - (x_0^2 + y_0^2)
-///   \end{array}
-/// \right.
-/// ```
-/// We solve the quadratic equation
-/// ```math
-/// \left\{
-///   \begin{array}{rcl}
-///     ax^2 + bx + c & = & 0 \\
-///     \Delta & = & b^2 - 4ac \\
-///     x & = & \frac{-b\pm \sqrt{\Delta}}{2a} 
-///   \end{array}
-/// \right.
-/// ```
-/// If $`y_0 = 0`$, we directly derive the result:
-/// ```math
-/// \left\{
-///   \begin{array}{rcl}
-///     z & = & \frac{2}{3} \\
-///     x & = & -\frac{2z_0}{3x_0} \\
-///     y & = & \pm\frac{1}{3}\sqrt{5 - 4\frac{z_0}{x_0}}
-///   \end{array}
-/// \right.
-/// ```
-/// In both cases, two solution are availabls.
-/// We select the pair $`(x, y)`$ such that both scalar products with the two great-circle arc 
-/// points are higher than the two points scalar product.
-pub fn intersect_with_transition_lat_npc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
+/// between the two given points) and the small circle of equation $`z=2/3`$.
+/// (Internally, we simply call [intersect_small_circle](fn.intersect_small_circle.html) with
+/// z = 2/3).
+#[inline]
+fn intersect_with_transition_lat_npc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
   where T1: UnitVec3, T2: UnitVec3 {
-  /*if   (p1.z() < TRANSITION_Z && TRANSITION_Z < p2.z())
-    || (p2.z() < TRANSITION_Z && TRANSITION_Z < p1.z()) {
-    let p1_dot_p2 = dot_product(p1, p2);
-    let p1_x_p2 = cross_product(p1, p2);
-    if p1_x_p2.y().abs() <= 1e-14 {
-      let x = -TRANSITION_Z * p1_x_p2.z() / p1_x_p2.x();
-      let y1 = (5.0 - 4.0 * p1_x_p2.z() / p1_x_p2.x()).sqrt() / 3.0;
-      let y2 = -y1;
-      if p1.x() * x + p1.y() * y1 + p1.z() * TRANSITION_Z <= p1_dot_p2
-        && p2.x() * x + p2.y() * y1 + p2.z() * TRANSITION_Z <= p1_dot_p2 {
-        return UnitVect3::new_unsafe(x, y1, TRANSITION_Z);
-      } else if p1.x() * x + p1.y() * y2 + p1.z() * TRANSITION_Z <= p1_dot_p2
-        && p2.x() * x + p2.y() * y2 + p2.z() * TRANSITION_Z <= p1_dot_p2 {
-        return UnitVect3::new_unsafe(x, y2, TRANSITION_Z);
-      } else {
-        unreachable!();
-      }
-    } else {
-      let x0_y0 = p1_x_p2.x() / p1_x_p2.y();
-      let zz0_y0 = TRANSITION_Z * p1_x_p2.z() / p1_x_p2.y();
-      let a = 1.0 + x0_y0.pow2();
-      let b = 2.0 * x0_y0 * zz0_y0;
-      let c = zz0_y0.pow2() - (p1_x_p2.x().pow2() + p1_x_p2.y().pow2());
-      let sqrt_delta = (b.pow2() - 4.0 * a * c).sqrt();
-      let x1 = (-b + sqrt_delta) / a.twice();
-      let y1 = -x1 * x0_y0 - zz0_y0;
-      let x2 = (-b - sqrt_delta) / a.twice();
-      let y2 = -x2 * x0_y0 - zz0_y0;
-      if p1.x() * x1 + p1.y() * y1 + p1.z() * TRANSITION_Z <= p1_dot_p2
-        && p2.x() * x1 + p2.y() * y1 + p2.z() * TRANSITION_Z <= p1_dot_p2 {
-        return UnitVect3::new_unsafe(x1, y1, TRANSITION_Z);
-      } else if p1.x() * x2 + p1.y() * y2 + p1.z() * TRANSITION_Z <= p1_dot_p2
-        && p2.x() * x2 + p2.y() * y2 + p2.z() * TRANSITION_Z <= p1_dot_p2 {
-        return UnitVect3::new_unsafe(x2, y2, TRANSITION_Z);
-      } else {
-        unreachable!();
-      }
-    }
-  } else {
-    None
-  }*/
   intersect_small_circle(p1, p2, TRANSITION_Z)
 }
 
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance 
 /// between the two given points) and the small circle of equation $`z=-2/3`$.
-/// (Internally, we solve the symmetric problem with 
-/// [interesct_with_transition_lat_npc](fn.interesct_with_transition_lat_npc.html)).
-/// See [interesct_with_transition_lat_npc](fn.interesct_with_transition_lat_npc.html)
-/// for more details.
-pub fn intersect_with_transition_lat_spc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
+/// (Internally, we simply call [intersect_small_circle](fn.intersect_small_circle.html) with
+/// z = -2/3).
+#[inline]
+fn intersect_with_transition_lat_spc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
   where T1: UnitVec3, T2: UnitVec3 {
-  /*match interesct_with_transition_lat_npc(
-    &UnitVect3::new(p1.x(), p1.y(), -p1.z()),
-    &UnitVect3::new(p2.x(), p2.y(), -p2.z())) {
-    Some(vec) => UnitVect3::new(v.x(), v.y(), -v.z()),
-    None => None,  
-  }*/
   intersect_small_circle(p1, p2, -TRANSITION_Z)
 }

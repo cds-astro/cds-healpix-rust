@@ -363,6 +363,7 @@ pub fn vec3_of(lon: f64, lat: f64) -> UnitVect3 {
   }
 } 
 
+#[derive(Debug)]
 pub struct LonLat {
   pub lon: f64, 
   pub lat: f64,
