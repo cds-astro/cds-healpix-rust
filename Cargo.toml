@@ -17,10 +17,7 @@ exclude = [
 
 
 [package.metadata.docs.rs]
-rustdoc-args = [
-    "--html-in-header",
-    ".cargo/registry/src/github.com-1ecc6299db9ec823/katex-doc-0.1.0/katex.html",
-]
+rustdoc-args = ["--html-in-header", "katex.html"]
 
 [lib]
 name = "cdshealpix"
