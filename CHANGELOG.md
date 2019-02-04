@@ -1,6 +1,20 @@
 # `cdshealpix` Change Log
 
 
+## 0.1.4
+
+Released 2019-04-01.
+
+### Bug correction
+
+* fix documentation error with katex on doc.rs
+* first debug of the exact solution of `query_polygon`
+
+## WARNING
+
+* BMOC logical operators still to be tested with `is_full` flags possibly set to `false`
+* More test are needed on the exact polygon algo
+
 --------------------------------------------------------------------------------
 
 ## 0.1.3

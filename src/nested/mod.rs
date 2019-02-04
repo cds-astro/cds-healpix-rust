@@ -1691,7 +1691,58 @@ mod tests {
       assert_eq!(h1, *h2);
     }
   }
-  
+
+  #[test]
+  fn testok_polygone_exact_npc_3() {
+    // Aladin:  draw polygon(224.86211710,+78.10924662, 176.91129363 +83.92878811, 135.81578643,+78.24840426, 200.73574863,+73.58038790)
+    let depth = 3;
+    let mut vertices = [(224.86211710, 78.10924662), (176.91129363, 83.92878811), (135.81578643, 78.24840426), (200.73574863, 73.58038790)];
+    let expected_res_approx: [u64; 5] = [119, 125, 187, 188, 190];
+    let expected_res_exact: [u64; 7] =  [119, 125, 127, 187, 188, 190, 191];
+
+    // Pb pour cell 127:
+    // from (180, +83) --> (224, +78)=> 191
+    // from (135, +78) --> (176, +83) => 127
+    
+    to_radians(&mut vertices);
+
+    let actual_res_approx = polygon_coverage(depth, &vertices, false);
+    println!("draw moc 3/ {:?}", actual_res_approx.to_flat_array());
+    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
+    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    println!("draw moc 3/ {:?}", actual_res_exact.to_flat_array());
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_polygone_exact_spc() {
+    // Aladin: draw polygon(359.70533626,-87.06130188, 330.23667431,-85.60988200, 335.11781779,-85.01242400)
+    let depth = 6;
+    let mut vertices = [(359.70533626, -87.06130188), (330.23667431, -85.60988200), (335.11781779, -85.01242400)];
+    let expected_res_approx: [u64; 2] = [45072, 45074];
+    let expected_res_exact: [u64; 4] = [45061, 45063, 45072, 45074];
+
+    to_radians(&mut vertices);
+
+    let actual_res_approx = polygon_coverage(depth, &vertices, false);
+    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
+    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
 
   #[test]
   fn testok_polygone_exact_eqr() {

@@ -12,26 +12,29 @@
 About
 -----
 
+This library is an implementation in Rust of the HEALPix tesselation.
+This implementation has been made by the Strasbourg astronomical Data Centre (*Centre de Données astronomique de Strasbourg*, [CDS](http://cdsweb.u-strasbg.fr)).
+
+Initially, it is a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java),
+but improvement have been added while porting the code.
+
 For informations on HEALPix in general, see:
  * The [official web site](https://healpix.jpl.nasa.gov/)
  * The [Wikipedia page](https://en.wikipedia.org/wiki/HEALPix)
- * The two main related papers: [Gorsky (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G) and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
+ * The two main reference papers: [Gorsky (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G) and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
 
-See also the [official page](https://healpix.sourceforge.io/) containing GPL v2 codes in Fortran, C++, Java, IDL, Python, ...
+Official implementations, are available [here](https://healpix.sourceforge.io/). It contains GPL v2 codes in Fortran, C++, Java, IDL, Python, ...
 
-Other HEALPix implementations:
+Other independant HEALPix implementations:
  * [Astropy-healpix](https://github.com/astropy/astropy-healpix) python wrapper using a C code (C code by Dustin Lang)
  * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
  * ... (Help me to add links to other HEALPix resources and codes).
-
-Initially, this library is a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java),
-but changes have been added while porting the code.
 
 Features
 --------
 
  * Supports the **HEALix Nested scheme**
- * Supports approximated `cone` and `polygon` queries
+ * Supports approximated `cone` and exact `polygon` queries
  * Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
  * Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
 
@@ -43,7 +46,7 @@ Missing Features
    * Spherical Harmonics computations
    * (Help me fill this)
  * Not yet implemented
-   * Exact cone and polygon solution
+   * Exact cone solution
 
 Examples
 --------

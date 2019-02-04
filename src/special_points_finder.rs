@@ -133,13 +133,12 @@ pub fn cone_special_point_in_eqr(mut z: f64, z0: f64, eucl_cone_radius: f64, nor
   };
   let w0 = 1.0 - z0.pow2();
   let r = 1.0 - eucl_cone_radius.pow2().half();
-  let twice_z0 = z0.twice();
   //  Newton-Raphson method
   let z_eps_max = z_eps_max.min(0.2e-1 * eucl_cone_radius).max(1.0e-15);
   let mut z_eps = 1.0_f64;
   let mut n_iter = 0_u8;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_eqr(z, z0, twice_z0, w0, cte, r);
+    z_eps = f_over_df_eqr(z, z0, w0, cte, r);
     z -= z_eps;
     n_iter += 1;
   }
@@ -188,7 +187,6 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
   };
   // Remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
   let w0 = 1.0 - z0.pow2();
-  let twice_z0 = z0.twice();
   // Test if we start the method or not.
   let d1 = f_eqr(z1, z0, w0, cte, 0.0);
   let d2 = f_eqr(z2, z0, w0, cte, 0.0);
@@ -201,7 +199,7 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
   let mut z_eps = 1.0_f64;
   let mut n_iter = 0_u8;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_eqr(z, z0, twice_z0, w0, cte, 0.0);
+    z_eps = f_over_df_eqr(z, z0, w0, cte, 0.0);
     z -= z_eps;
     n_iter += 1;
   }
@@ -226,7 +224,7 @@ fn f_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
 
 /// Computes the ratio (dX / dY) / (d^2X / dY^2) in the equatorial region
 #[inline]
-fn f_over_df_eqr(z: f64, z0: f64, twice_z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
+fn f_over_df_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
   let w = 1.0 - z.pow2();
   let q = z / w;
   let n = r - z * z0;
@@ -234,7 +232,7 @@ fn f_over_df_eqr(z: f64, z0: f64, twice_z0: f64, w0: f64, cte: f64, r: f64) -> f
   let qn = q * n;
   let dalphadz = (z0 - qn) / sqrt_d2_minus_n2;
   let f = dalphadz - cte;
-  let df = (q * (twice_z0 - 3.0 * qn) - n * (1.0 / w + dalphadz.pow2())) / sqrt_d2_minus_n2;
+  let df = (q * (z0.twice() - 3.0 * qn) - n * (1.0 / w + dalphadz.pow2())) / sqrt_d2_minus_n2;
   f / df
 }
 
@@ -294,7 +292,6 @@ pub fn cone_special_point_in_pc(mut z: f64, cone_center_lon_mod_half_pi: f64,
     north_value = !north_value;
   }
   // Compute constants
-  let twice_z0 = z0.twice();
   let cte = if north_value { -PI_OVER_FOUR.half() } else { PI_OVER_FOUR.half() };
   let  w0 = 1.0 - z0.pow2();
   let r = 1.0 - eucl_cone_radius.pow2().half();
@@ -304,7 +301,7 @@ pub fn cone_special_point_in_pc(mut z: f64, cone_center_lon_mod_half_pi: f64,
   let mut n_iter = 0_u8;
   let mut z_eps = 1.0_f64;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_npc(z, cone_center_lon_mod_half_pi, z0, twice_z0, w0, cte, direction, r);
+    z_eps = f_over_df_npc(z, cone_center_lon_mod_half_pi, z0, w0, cte, direction, r);
     z -= z_eps;
     n_iter += 1;
   }
@@ -343,11 +340,12 @@ pub fn arc_special_point_in_pc<'a>(
     if p2.lon() - p1.lon() > PI {
       // Cross lon = 0
       let p2p1_n = cross_product(p2, p1).normalized();
-      if p2.lon() % HALF_PI > p2.lon() { // First quarter, [p2.lon, ((p2.lon % PI/2) + 1) * PI/2]
+      if p2.lon() % HALF_PI > 0.0 { // First quarter, [p2.lon, ((p2.lon % PI/2) + 1) * PI/2]
         debug_assert!(lon2_div_half_pi > 0);
         let n2_y = lon2_div_half_pi & 1;
         let n2 = Coo3D::from_vec3((n2_y ^ 1) as f64, n2_y as f64, 0.0);
         let intersect2 = Coo3D::from(intersect_point_pc(&p1, p2, &p2p1_n, &n2));
+        debug_assert!(p2.lon() < intersect2.lon());
         res_z2 = arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
       }
       // Second quarter [(p1.lon % PI/2) * PI/2, p1.lon]
@@ -355,14 +353,16 @@ pub fn arc_special_point_in_pc<'a>(
       let n1_y = lon1_div_half_pi & 1;
       let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
       let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p2p1_n, &n1));
+      debug_assert!(p1.lon() < intersect1.lon());
       res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
     } else {
       let p1p2_n = cross_product(p1, p2).normalized();
-      if p1.lon() % HALF_PI > p1.lon() { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
+      if p1.lon() % HALF_PI > 0.0 { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
         debug_assert!(lon1_div_half_pi < 3);
         let n1_y = lon1_div_half_pi & 1;
         let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
         let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n1));
+        debug_assert!(p1.lon() < intersect1.lon());
         res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
       }
       // Last quarter [(p2.lon % PI/2) * PI/2, p2.lon]
@@ -370,7 +370,8 @@ pub fn arc_special_point_in_pc<'a>(
       let n2_x = lon2_div_half_pi & 1;
       let n2 = Coo3D::from_vec3(n2_x as f64, (n2_x ^ 1) as f64, 0.0);
       let intersect2 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n2));
-      res_z2 = arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
+      debug_assert!(intersect2.lon() < p2.lon());
+      res_z2 = arc_special_point_in_pc_same_quarter(&intersect2,  p2, z_eps_max, n_iter_max);
     }
     if res_z1.is_some() {
       res_z1
@@ -386,13 +387,25 @@ pub fn arc_special_point_in_pc<'a>(
 // (i.e. (p1.lon % pi/2) == (p2.lon % pi/2) (except if one of the two point is on a border n * pi/2)  
 fn arc_special_point_in_pc_same_quarter( 
   p1: &Coo3D, p2: &Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
+  debug_assert!(p1.lon() < p2.lon());
+  let p1_div_half_pi = (p1.lon() / HALF_PI) as u8;
+  let mut p2_mod_half_pi = p2.lon() % HALF_PI;
+  if p2_mod_half_pi == 0.0 {
+    p2_mod_half_pi = HALF_PI;
+  }
   let v1 = Coo3D::from_sph_coo(p1.lon() % HALF_PI, p1.lat());
-  let v2 = Coo3D::from_sph_coo(p2.lon() % HALF_PI, p2.lat());
+  let v2 = Coo3D::from_sph_coo(p2_mod_half_pi, p2.lat());
   let mut cone_center = cross_product(&v1, &v2).normalized();
-  if have_same_sign(p1.z(),cone_center.z()) {
+  /*if have_same_sign(p1.z(),cone_center.z()) {
+    cone_center = cone_center.opposite();
+  }*/
+  let lonlat = cone_center.lonlat();
+  if lonlat.lon() > PI {
     cone_center = cone_center.opposite();
   }
-  let cone_center_lon = cone_center.lonlat().lon();
+  
+  let mut cone_center_lon = cone_center.lonlat().lon();
+  //debug_assert!(0 <= cone_center_lon && cone_center_lon <= );
   let mut z0 = cone_center.z();
   let mut z1 = v1.z();
   let mut z2 = v2.z();
@@ -400,7 +413,7 @@ fn arc_special_point_in_pc_same_quarter(
   // ( here we could have but do not use the fact that we previously ensure that p1.lon() < p2.lon() )
   let east_value = ((v1.lat() > v2.lat()) ^ (v1.lon() > v2.lon())) ^ !north_value;
   // Deal with NPC / SPC
-  let mut  z = (z1 + z2).half(); // mean of z1 and z2
+  let mut  z = (z1 + z2).half(); // (0.1 * z1 + 0.9 * z2); //(z1 + z2).half(); // mean of z1 and z2
   let spc =  z < 0.0;   // south polar cap
   if spc {
     z = -z;
@@ -411,7 +424,6 @@ fn arc_special_point_in_pc_same_quarter(
   }
   // Compute constants
   //  - remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
-  let twice_z0 = z0.twice();
   let cte = if north_value { -PI_OVER_FOUR.half() } else { PI_OVER_FOUR.half() };
   let w0 = 1.0 - z0.pow2();
   let direction = if east_value { 1.0 } else { -1.0 };
@@ -421,12 +433,21 @@ fn arc_special_point_in_pc_same_quarter(
   if have_same_sign(d1, d2) {
     return None;
   }
+  // Choose an initial value
+  let mut dz = f_over_df_npc(z, cone_center_lon, z0, w0, cte, direction, 0.0);
+  z -= dz;
+  if !((z1 < z && z < z2) || (z2 < z && z < z1)) {
+    z = z2 - f_over_df_npc(z2, cone_center_lon, z0, w0, cte, direction, 0.0);
+    if !((z1 < z && z < z2) || (z2 < z && z < z1)) {
+      z = z1 - f_over_df_npc(z1, cone_center_lon, z0, w0, cte, direction, 0.0);
+    }
+  }
   // Newton-Raphson method
   let z_eps_max = z_eps_max.min(0.2e-1 * (z2 - z1).abs()).max(1.0e-15);
   let mut n_iter = 0_u8;
   let mut z_eps = 1.0_f64;
   while n_iter < n_iter_max && z_eps.abs() > z_eps_max {
-    z_eps = f_over_df_npc(z, cone_center_lon, z0, twice_z0, w0, cte, direction, 0.0);
+    z_eps = f_over_df_npc(z, cone_center_lon, z0, w0, cte, direction, 0.0);
     z -= z_eps;
     n_iter += 1;
   }
@@ -480,7 +501,7 @@ fn f_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, d
 
 /// Computes the ratio (dX / dY) / (d^2X / dY^2) in the north polar cap
 #[inline]
-fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, twice_z0: f64, w0: f64, cte: f64, direction: f64, r: f64) -> f64 {
+fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, direction: f64, r: f64) -> f64 {
   let w = 1.0 - z ;
   let w2 = 1.0 - z.pow2();
   let q = z / w2;
@@ -494,7 +515,7 @@ fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, twice_z0: f6
     - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - PI_OVER_FOUR) + cte;
   let df = -ONE_OVER_TRANSITION_Z * direction * dalphadz
     + (direction * w / sqrt_d2_minus_n2)
-    * (q * (twice_z0 - 3.0 * qn) - n * (1.0 / w2 + dalphadz.pow2()));
+    * (q * (z0.twice() - 3.0 * qn) - n * (1.0 / w2 + dalphadz.pow2()));
   f / df
 }
 
