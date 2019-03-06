@@ -1,6 +1,23 @@
 # `cdshealpix` Change Log
 
 
+## 0.1.5
+
+Released 2019-03-06.
+
+
+### Bug correction
+
+* Now ensures that lon in [0, 2pi[ and lat in [-pi/2, +pi/2] in Coo3D
+
+### Added
+
+* add support to elliptical cones
+
+
+--------------------------------------------------------------------------------
+
+
 ## 0.1.4
 
 Released 2019-04-01.

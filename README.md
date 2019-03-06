@@ -34,7 +34,7 @@ Features
 --------
 
  * Supports the **HEALix Nested scheme**
- * Supports approximated `cone` and exact `polygon` queries
+ * Supports approximated `cone` and `elliptical cone` and exact `polygon` queries
  * Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
  * Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
 
@@ -46,7 +46,7 @@ Missing Features
    * Spherical Harmonics computations
    * (Help me fill this)
  * Not yet implemented
-   * Exact cone solution
+   * Exact cone and ellipse solution (but using the `custom` approx methods, one can handle the rate of false positives)  
 
 Examples
 --------

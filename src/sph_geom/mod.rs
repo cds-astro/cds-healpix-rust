@@ -3,10 +3,12 @@
 
 pub(super) mod coo3d;
 pub(super) mod cone;
+pub(super) mod elliptical_cone;
+pub(super) mod proj;
 
 use std::f64::consts::{PI};
-// const HALF_PI: f64 = 0.5_f64 * PI;
-const TWO_PI: f64 = 2.0_f64 * PI;
+use super::TWICE_PI;
+
 
 
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
@@ -46,9 +48,9 @@ impl ContainsSouthPoleComputer for Basic {
       if abs_delta_lon <= PI {
         sum_delta_lon += delta_lon;
       } else if delta_lon > 0.0 {
-        sum_delta_lon -= TWO_PI - abs_delta_lon;
+        sum_delta_lon -= TWICE_PI - abs_delta_lon;
       } else {
-        sum_delta_lon += TWO_PI - abs_delta_lon;
+        sum_delta_lon += TWICE_PI - abs_delta_lon;
       }
       if vertices[i].lat() < 0.0 {
         n_vertices_in_south_hemisphere += 1;

@@ -4,7 +4,8 @@ use std::f64::consts::{PI};
 
 use super::super::Customf64;
 
-const TWO_PI: f64 = 2.0f64 * PI;
+const TWO_PI: f64 = 2.0 * PI;
+const HALF_PI: f64 = 0.5 * PI;
 
 // see https://www.nalgebra.org/
 
@@ -405,8 +406,14 @@ impl Coo3D {
   /// lon and lat in radians
   pub fn from_sph_coo(lon: f64, lat: f64) -> Coo3D {
     let v = vec3_of(lon, lat);
-    Coo3D {x: v.x(), y: v.y(), z: v.z(), lon, lat}
+    if lon < 0.0 || TWO_PI <= lon || lat < -HALF_PI || HALF_PI < lat {
+      let (lon, lat) = lonlat_of(v.x(), v.y(), v.z());
+      Coo3D {x: v.x(), y: v.y(), z: v.z(), lon, lat}
+    } else {
+      Coo3D {x: v.x(), y: v.y(), z: v.z(), lon, lat}
+    }
   }
+  
 }
 
 impl LonLatT for Coo3D {

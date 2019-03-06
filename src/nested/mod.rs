@@ -97,6 +97,20 @@ pub fn cone_coverage_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, co
   get_or_create(depth).cone_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
 }
 
+/// Conveniency function simply calling the [elliptical_cone_coverage](struct.Layer.html#method.elliptical_cone_coverage) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn elliptical_cone_coverage(depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+  get_or_create(depth).elliptical_cone_coverage( lon, lat, a, b, pa)
+}
+
+/// Conveniency function simply calling the [elliptical_cone_coverage_custom](struct.Layer.html#method.elliptical_cone_coverage_custom) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn elliptical_cone_coverage_custom(depth: u8, delta_depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+  get_or_create(depth).elliptical_cone_coverage_custom(delta_depth, lon, lat, a, b, pa)
+}
+
 /// Conveniency function simply calling the [polygon_coverage_approx](struct.Layer.html#method.polygon_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
@@ -112,11 +126,12 @@ use self::bmoc::*;
 use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon};
 use super::sph_geom::cone::{Cone};
-use super::sph_geom::coo3d::LonLat;
+use super::sph_geom::elliptical_cone::EllipticalCone;
 use super::{proj};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
 use super::special_points_finder::{arc_special_points};
+
 
 /// Defines an HEALPix layer in the NESTED scheme.
 /// A layer is simply an utility structure containing all constants and methods related
@@ -516,7 +531,6 @@ impl Layer {
     let mut result_map = MainWindMap::new();
     if include_center {
       result_map.put(C, hash);
-      result_map.get(C);
     }
     let h_bits: HashBits = self.pull_bits_appart(hash);
     if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
@@ -824,9 +838,7 @@ impl Layer {
   fn cone_coverage_approx_internal(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOCBuilderUnsafe {
     // Special case: the full sky is covered
     if cone_radius >= PI {
-      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, 12);
-      bmoc_builder.push_all(0_u8, 0_u64, 12_u64, true);
-      return bmoc_builder; //.to_bmoc();
+      return self.allsky_bmoc_builder();
     }
     // Common variable
     let cos_cone_lat = cone_lat.cos();
@@ -1017,6 +1029,163 @@ impl Layer {
   }
 
 
+  /// Returns a hierarchical view of the list of cells overlapped by the given elliptical cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the elliptical cone.
+  /// The algorithm is approximated: it may return false positive, 
+  /// i.e. cells which are near from the elliptical cone but do not overlap it.
+  /// To control the approximation, see the method 
+  /// [cone_coverage_approx_custom](#method.elliptical_cone_coverage_custom)
+  /// 
+  /// # Input
+  /// - `lon` the longitude of the center of the elliptical cone, in radians
+  /// - `lat` the latitude of the center of the elliptical cone, in radians
+  /// - `a` the semi-major axis of the elliptical cone, in radians
+  /// - `b` the semi-minor axis of the elliptical cone, in radians
+  /// - `pa` the position angle (i.e. the angle between the north and the semi-major axis, east-of-north), in radians
+  /// 
+  /// # Output
+  /// - the list of cells overlapped by the given elliptical cone, in a BMOC 
+  ///   (hierarchical view also telling if a cell is fully or partially covered).
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 3_u8;
+  /// let nested3 = get_or_create(depth);
+  ///
+  /// let lon = 36.80105218_f64.to_radians();
+  /// let lat = 56.78028536_f64.to_radians();
+  /// let a = 14.93_f64.to_radians();
+  /// let b = 4.93_f64.to_radians();
+  /// let pa = 75.0_f64.to_radians();
+  /// 
+  /// let actual_res = nested3.elliptical_cone_coverage(lon, lat, a, b, pa);
+  /// let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///     assert_eq!(h1, *h2);
+  /// }
+  /// ```
+  pub fn elliptical_cone_coverage(&self, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+    self.elliptical_cone_coverage_internal(lon, lat, a, b, pa).to_bmoc_packing()
+  }
+  
+  /// Returns a hierarchical view of the list of cells overlapped by the given elliptical cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the elliptical cone.
+  /// The algorithm is approximated: it may return false positive, 
+  /// i.e. cells which are near from the cone but do not overlap it.
+  /// To control the approximation, you can choose to perform the computations at a deeper depth
+  /// using the `delta_depth` parameter.
+  /// 
+  /// # Input
+  /// - `delta_depth` the difference between this Layer depth and the depth at which the computations
+  ///   are made (should remain quite small).
+  /// - `lon` the longitude of the center of the elliptical cone, in radians
+  /// - `lat` the latitude of the center of the elliptical cone, in radians
+  /// - `a` the semi-major axis of the elliptical cone, in radians
+  /// - `b` the semi-minor axis of the elliptical cone, in radians
+  /// - `pa` the position angle (i.e. the angle between the north and the semi-major axis, east-of-north), in radians
+  /// 
+  /// # Output
+  /// - the list of cells overlapped by the given elliptical cone, in a BMOC 
+  ///   (hierarchical view also telling if a cell is fully or partially covered).
+  ///
+  /// # Panics
+  /// If this layer depth + `delta_depth` > the max depth (i.e. 29)
+  ///
+  pub fn elliptical_cone_coverage_custom(&self, delta_depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+    if delta_depth == 0 {
+      self.elliptical_cone_coverage(lon, lat, a, b, pa)
+    } else {
+      // TODO: change the algo not to put all cell in the MOC and pruning it
+      get_or_create(self.depth + delta_depth)
+        .elliptical_cone_coverage_internal(lon, lat, a, b, pa)
+        .to_lower_depth_bmoc_packing(self.depth)
+    }
+  }
+
+  pub fn elliptical_cone_coverage_internal(&self, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOCBuilderUnsafe {
+    // Special case: the full sky is covered
+    if b >= PI {
+      return self.allsky_bmoc_builder();
+    }
+    // Common variable
+    let sph_ellipse = EllipticalCone::new(lon, lat, a, b, pa);
+    // Special case of very large radius: test the 12 base cells
+    if !has_best_starting_depth(a) {
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
+      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
+        0, self.depth + 1, lon, lat, a);
+      for h in 0..12 {
+        self.elliptical_cone_coverage_recur(0, h ,&sph_ellipse, &distances, 0, &mut bmoc_builder);
+      }
+      return bmoc_builder;
+    }
+    // Normal case
+    let depth_start = best_starting_depth(a);
+    let root_layer = get_or_create(depth_start);
+    let root_center_hash = root_layer.hash(lon, lat);
+    // Small ellipse case
+    if depth_start >= self.depth {
+      let distance = largest_center_to_vertex_distance_with_radius(depth_start, lon, lat, a);
+      let mut neigs: Vec<u64> = root_layer.neighbours(root_center_hash, true)
+        .values_vec()
+        .into_iter()
+        .filter(|h| {
+          let (l, b) = root_layer.center(*h);
+          sph_ellipse.overlap_cone(l, b, distance)
+        })
+        .map(|h| h >> ((depth_start - &self.depth) << 1)) // h_to_lower_depth
+        .collect();
+      neigs.sort_unstable(); // sort the array (unstable is ok since we remove duplicates)
+      neigs.dedup();         // remove duplicates (vector must be sorted first)
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, neigs.len());
+      for neig in neigs {
+        bmoc_builder.push(self.depth,neig, false);
+      }
+      return bmoc_builder;
+    } else {
+      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
+        depth_start, self.depth + 1, lon, lat, a);
+      let neigs = root_layer.neighbours(root_center_hash, true);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
+      for &root_hash in neigs.sorted_values().into_iter() {
+        self.elliptical_cone_coverage_recur(depth_start, root_hash, &sph_ellipse, &distances, 0, &mut bmoc_builder);
+      }
+      return bmoc_builder;
+    }
+  }
+  
+  fn elliptical_cone_coverage_recur(&self, depth: u8, hash: u64, 
+                                       ellipse: &EllipticalCone, distances: &[f64],
+                                       recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe) {
+    let (lon, lat) = get_or_create(depth).center(hash);
+    let distance = distances[recur_depth as usize];
+    /*println!("d: {}; h: {}; lon: {}, lat: {}; dist: {}; contains: {}; overlap: {}", 
+             &depth, &hash, &lon.to_degrees(), &lat.to_degrees(), &distance.to_degrees(),
+             &ellipse.contains_cone(lon, lat, distance),
+             &ellipse.overlap_cone(lon, lat, distance));*/
+    if ellipse.contains_cone(lon, lat, distance) {
+      bmoc_builder.push(depth, hash, true);
+    } else if ellipse.overlap_cone(lon, lat, distance) {
+      if depth == self.depth {
+        let mut is_full = true;
+        for (lon, lat) in self.vertices(hash).into_iter() {
+          is_full &= ellipse.contains(*lon, *lat); // Not sure computation not done if is_full==false, to be verfied
+        }
+        bmoc_builder.push(depth, hash, is_full);
+      } else {
+        let hash = hash << 2;
+        let depth = depth + 1;
+        let recur_depth = recur_depth + 1;
+        self.elliptical_cone_coverage_recur(depth,      hash        , ellipse, distances, recur_depth, bmoc_builder);
+        self.elliptical_cone_coverage_recur(depth, hash | 1_u64, ellipse, distances, recur_depth, bmoc_builder);
+        self.elliptical_cone_coverage_recur(depth, hash | 2_u64, ellipse, distances, recur_depth, bmoc_builder);
+        self.elliptical_cone_coverage_recur(depth, hash | 3_u64, ellipse, distances, recur_depth, bmoc_builder);
+      }
+    }
+  }
+  
   /// Returns a hierarchical view of the list of cells overlapped by the given polygon.
   /// Self intersecting polygons are supported.
   /// The BMOC also tells if the cell if fully or partially overlapped by the polygon.
@@ -1148,6 +1317,16 @@ impl Layer {
   fn hashs_vec<T: LonLatT>(&self, poly_vertices: &[T]) -> Vec<u64> {
     poly_vertices.iter().map(|coo| self.hash(coo.lon(), coo.lat()))
       .collect::<Vec<u64>>()
+  }
+  
+  fn allsky_bmoc(&self) -> BMOC {
+    self.allsky_bmoc_builder().to_bmoc()
+  }
+
+  fn allsky_bmoc_builder(&self) -> BMOCBuilderUnsafe {
+    let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, 12);
+    bmoc_builder.push_all(0_u8, 0_u64, 12_u64, true);
+    bmoc_builder
   }
 }
 
@@ -1630,6 +1809,37 @@ mod tests {
     let expected_res: [u64; 50] = [0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 49, 52, 53, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 82, 88, 89, 90, 91, 94, 131, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 181, 183, 189];
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
+    }
+  }
+  
+  
+  #[test]
+  fn testok_elliptical_cone() {
+    let lon = 36.80105218_f64.to_radians();
+    let lat = 56.78028536_f64.to_radians();
+    let a = 14.93_f64.to_radians();
+    let b = 4.93_f64.to_radians();
+    let pa = 75.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
+    let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
+    /*println!("@@@@@ FLAT VIEW");
+    for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
+    to_aladin_moc(&actual_res);
+    println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) { 
+      assert_eq!(h1, *h2);
+    }
+  }
+  
+  fn to_aladin_moc(bmoc: &BMOC) {
+    print!("draw moc {}/", bmoc.get_depth_max());
+    for cell in bmoc.flat_iter() {
+      print!("{},", cell);
     }
   }
   

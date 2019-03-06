@@ -31,6 +31,15 @@ const EPS_POLE: f64 = 1e-13_f64;
 /// ```
 pub const HALF_PI: f64 = HALF * PI;
 
+/// Constant = pi/2.
+/// 
+/// ```rust
+/// use cdshealpix::{TWICE_PI};
+/// use std::f64::consts::PI;
+/// assert_eq!(2f64 * PI, TWICE_PI);
+/// ```
+pub const TWICE_PI: f64 = 2.0 * PI;
+
 /// Constant = 4/pi.
 /// 
 /// ```rust
@@ -1435,6 +1444,7 @@ fn base_cell(i: u8, j: u8) -> u8 {
 pub mod nested;
 
 /// No need to make those public!
+mod xy_geom;
 mod sph_geom;
 mod special_points_finder;
 

@@ -519,11 +519,6 @@ fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte
   f / df
 }
 
-#[inline]
-fn have_same_sign(d1: f64, d2: f64) -> bool {
-  d1 == 0.0 || d2 == 0.0 || ((d1 > 0.0) == (d2 > 0.0))
-}
-
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance 
 /// between the two given points) and the small circle of given z (equation $`z=cte`$).
 /// Let's use the following notations:
@@ -616,6 +611,11 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
   } else {
     None
   }
+}
+
+#[inline]
+fn have_same_sign(d1: f64, d2: f64) -> bool {
+  d1 == 0.0 || d2 == 0.0 || ((d1 > 0.0) == (d2 > 0.0))
 }
 
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance 
