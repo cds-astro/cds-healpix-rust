@@ -227,9 +227,11 @@ pub fn lonlat_of(x: f64, y: f64, z: f64) -> (f64, f64) {
   let mut lon = y.atan2(x);
   if lon < 0.0_f64 {
     lon += TWO_PI;
+  } else if lon == TWO_PI {
+    lon = 0.0;
   }
   let lat = z.atan2((x.pow2() + y.pow2()).sqrt());
-  debug_assert!(0.0 <= lon && lon < TWO_PI);
+  debug_assert!(0.0 <= lon && lon <= TWO_PI);
   debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
   (lon, lat)
 }
