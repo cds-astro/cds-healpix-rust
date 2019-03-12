@@ -1154,7 +1154,7 @@ impl Layer {
         println!("d = {} deg", d.to_degrees());
       }*/
       
-      let neigs = root_layer.neighbours(root_center_hash, true);
+      let neigs = dbg!(root_layer.neighbours(root_center_hash, true));
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
       for &root_hash in neigs.sorted_values().into_iter() {
         self.elliptical_cone_coverage_recur(depth_start, root_hash, &sph_ellipse, &distances, 0, &mut bmoc_builder);
@@ -1168,7 +1168,7 @@ impl Layer {
                                        recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe) {
     let (lon, lat) = get_or_create(depth).center(hash);
     let distance = distances[recur_depth as usize];
-    /*println!("d: {}; h: {}; lon: {}, lat: {}; dist: {}; contains: {}; overlap: {}", 
+    /*eprintln!("d: {}; h: {}; lon: {}, lat: {}; dist: {}; contains: {}; overlap: {}", 
              &depth, &hash, &lon.to_degrees(), &lat.to_degrees(), &distance.to_degrees(),
              &ellipse.contains_cone(lon, lat, distance),
              &ellipse.overlap_cone(lon, lat, distance));*/
@@ -1829,6 +1829,7 @@ mod tests {
     let pa = 75.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
     let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
+    // to_aladin_moc(&actual_res);
     /*println!("@@@@@ FLAT VIEW");
     for cell in actual_res.flat_iter() {
       println!("@@@@@ cell a: {:?}", cell);
@@ -1841,6 +1842,7 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) { 
       assert_eq!(h1, *h2);
     }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
 
   #[test]
@@ -1857,9 +1859,11 @@ mod tests {
       1171, 1172, 1173, 1174, 1175, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 
       1228, 1229, 1231, 1232, 1233, 1234, 1235, 1236, 1238, 1239, 1240, 1241, 1242, 1243, 1244,
       1245, 1246, 1247, 2935, 2941];
+    // to_aladin_moc(&actual_res);
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
   
   #[test]
@@ -1874,17 +1878,45 @@ mod tests {
       270, 271, 280, 282, 283, 286, 289, 292, 293, 295, 304, 305, 306, 307, 308, 309, 310, 311, 317,
       727, 729, 731, 732, 733, 734, 735];
     // to_aladin_moc(&actual_res);
-    /*println!("@@@@@ FLAT VIEW");
-    for cell in actual_res.flat_iter() {
-      println!("@@@@@ cell a: {:?}", cell);
-    }
-    println!("@@@@@ HIERARCH VIEW");
-    for cell in actual_res.into_iter() {
-      println!("@@@@@ cell a: {:?}", cell);
-    }*/
-    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
-    }*/
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
+  }
+
+  #[test]
+  fn testok_elliptical_cone_4() {
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let a = 50.0_f64.to_radians();
+    let b = 5.0_f64.to_radians();
+    let pa = 20.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
+    // to_aladin_moc(&actual_res);
+    let expected_res: [u64; 40] = [34, 35, 38, 40, 41, 44, 258, 259, 262, 264, 265, 266, 267, 268, 
+      269, 270, 271, 280, 282, 283, 292, 293, 295, 304, 305, 306, 307, 308, 309, 310, 311, 313, 
+      316, 317, 723, 726, 727, 729, 732, 733];
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
+  }
+
+  #[test]
+  fn testok_elliptical_cone_5() {
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let a = 42.0_f64.to_radians();
+    let b = 10.0_f64.to_radians();
+    let pa = 20.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(2, lon, lat, a, b, pa);
+    let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
+      181 ,182 ,183];
+    // to_aladin_moc(&actual_res);
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
   
   fn to_aladin_moc(bmoc: &BMOC) {

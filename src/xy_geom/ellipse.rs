@@ -50,9 +50,7 @@ impl Ellipse {
     }
   }
   
-  pub fn from_cov_matrix(sig_x: f64, sig_y: f64, rho_sigx_sigy: f64) -> Ellipse {
-    let sigx2 = sig_x * sig_x;
-    let sigy2 = sig_y * sig_y;
+  pub fn from_cov_matrix(sigx2: f64, sigy2: f64, rho_sigx_sigy: f64) -> Ellipse {
     let det = sigx2 * sigy2 - rho_sigx_sigy.pow2();
     Ellipse {
       sigx2,

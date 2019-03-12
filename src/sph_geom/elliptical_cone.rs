@@ -74,6 +74,9 @@ impl EllipticalCone {
       }
     } else {
       let ((x, y), ang_dist, top_hemisphere) =  self.center.forced_proj_and_distance(lon, lat);
+      if ang_dist > self.a + radius {
+        return false;
+      }
       // The projection of a cone on a plane is an ellipse
       let proj_d_min = (ang_dist - radius).sin();
       let proj_d_max = (ang_dist + radius).sin();
@@ -93,10 +96,12 @@ impl EllipticalCone {
       } else {
         (-cos_phi, sin_phi)
       };
+      // eprintln!("a: {}; b: {}; theta: {}", proj_a, proj_b, sin_cos_angle.0.atan2(sin_cos_angle.1).to_degrees());
       let proj_ell = Ellipse::from_oriented(proj_a, proj_b, sin_cos_angle);
       let proj_ell_dist = 0.5 * (proj_d_max + proj_d_min); // distance from (0, 0) to ellipse center
       let proj_ell_x = proj_ell_dist * cos_phi;
       let proj_ell_y = proj_ell_dist * sin_phi;
+      // eprintln!("proj_ell_x: {}; proj_ell_y: {}", proj_ell_x, proj_ell_y);
       if top_hemisphere {
         self.ellipse.overlap(proj_ell_x, proj_ell_y, &proj_ell)
       } else {
