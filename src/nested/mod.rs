@@ -1847,12 +1847,33 @@ mod tests {
   fn testok_elliptical_cone_2() {
     let lon = 0.0_f64.to_radians();
     let lat = 0.0_f64.to_radians();
+    let a = 30.0_f64.to_radians();
+    let b = 5.0_f64.to_radians();
+    let pa = 30.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
+    let expected_res: [u64; 76] = [130, 136, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064,
+      1065, 1067, 1068, 1069, 1070, 1071, 1072, 1074, 1075, 1078, 1079, 1080, 1081, 1082, 1083, 
+      1084, 1085, 1086, 1087, 1128, 1129, 1130, 1131, 1132, 1134, 1135, 1146, 1157, 1168, 1169,
+      1171, 1172, 1173, 1174, 1175, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 
+      1228, 1229, 1231, 1232, 1233, 1234, 1235, 1236, 1238, 1239, 1240, 1241, 1242, 1243, 1244,
+      1245, 1246, 1247, 2935, 2941];
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+  
+  #[test]
+  fn testok_elliptical_cone_3() {
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
     let a = 50.0_f64.to_radians();
     let b = 5.0_f64.to_radians();
     let pa = 30.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
-    //let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
-    to_aladin_moc(&actual_res);
+    let expected_res: [u64; 40] = [32, 33, 34, 35, 36, 38, 40, 258, 264, 265, 266, 267, 268, 269,
+      270, 271, 280, 282, 283, 286, 289, 292, 293, 295, 304, 305, 306, 307, 308, 309, 310, 311, 317,
+      727, 729, 731, 732, 733, 734, 735];
+    // to_aladin_moc(&actual_res);
     /*println!("@@@@@ FLAT VIEW");
     for cell in actual_res.flat_iter() {
       println!("@@@@@ cell a: {:?}", cell);

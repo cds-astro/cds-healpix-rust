@@ -81,10 +81,13 @@ impl EllipticalCone {
       let proj_b = 0.5 * (proj_d_max - proj_d_min).abs(); // projected ellipse semi-minor axis
       // ellipse theta angle = tan(t + pi/2) = cos(t) / (-sin(t)) = x / -y
       // let angle = (x / -y).atan(); //
-      let norm = (x.pow2() + y.pow2()).sqrt(); // distance from (0.0) the cone projected center (!= ellipse center)
+      let one_over_norm = 1.0 / (x.pow2() + y.pow2()).sqrt(); // distance from (0.0) the cone projected center (!= ellipse center)
+      if !one_over_norm.is_finite() {
+        return true;
+      }
       // phi = angle of the (x, y) position in the euclidean plane
-      let cos_phi = x / norm;
-      let sin_phi = y / norm;
+      let cos_phi = x * one_over_norm;
+      let sin_phi = y * one_over_norm;
       let sin_cos_angle = if x >= 0.0 {
         (cos_phi, -sin_phi)
       } else {
