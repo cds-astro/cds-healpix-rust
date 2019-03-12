@@ -1,6 +1,19 @@
 # `cdshealpix` Change Log
 
 
+## 0.1.6
+
+Released 2019-03-12.
+
+
+### Bug correction
+
+* Elliptical cone: fix SIN projection conditions
+* Elliptical cone: better handle large ellipses (when ellipse semi-major axis + bounding cone radius > PI/2)
+
+--------------------------------------------------------------------------------
+
+
 ## 0.1.5
 
 Released 2019-03-06.

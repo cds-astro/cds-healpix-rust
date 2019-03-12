@@ -1,4 +1,5 @@
 
+use std::f64::consts::{PI};
 use super::super::HALF_PI;
 use super::super::TWICE_PI;
 use super::super::Customf64;
@@ -56,8 +57,8 @@ pub struct ProjSIN {
   center_lon: f64,
   center_lat: f64,
   // derived quantities
-  cos_center_lat: f64,
-  sin_center_lat: f64,
+  pub cos_center_lat: f64,
+  pub sin_center_lat: f64,
 }
 
 impl ProjSIN {
@@ -71,6 +72,22 @@ impl ProjSIN {
     let mut proj: ProjSIN = Default::default();
     proj.set_center(lon, lat);
     proj
+  }
+  
+  /// Returns the (x, y) projected position, even if the source is in the opposite hemisphere.
+  /// Also returns the angular distance (computed for large values, not using the Haversine formula).
+  /// The boolean tells is the projected point is in the visible hemisphere.
+  pub fn forced_proj_and_distance(&self, lon: f64, lat: f64) -> ((f64, f64), f64, bool) {
+    let (sin_lat, cos_lat) = lat.sin_cos();
+    let dlon = lon - self.center_lon;
+    let (sin_dlon, cos_dlon) = dlon.sin_cos();
+    ((
+      cos_lat * sin_dlon,
+      self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon
+    ), 
+     (self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon).acos(),
+     self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon > 0.0
+    )
   }
 }
 
@@ -103,8 +120,16 @@ impl Proj for ProjSIN {
   
   fn proj(&self, lon: f64, lat: f64) -> Option<(f64, f64)> {
     let (sin_lat, cos_lat) = lat.sin_cos();
-    let (sin_dlon, cos_dlon) = (lon - self.center_lon).sin_cos();
-    if self.sin_center_lat * sin_lat - self.cos_center_lat * cos_lat * cos_dlon > 0.0 {
+    let dlon = lon - self.center_lon;
+    /*
+     let mut dlon = lon - self.center_lon;
+    if dlon < -PI {
+      dlon += TWICE_PI;
+    } else if dlon > PI {
+      dlon -= TWICE_PI;
+    }*/
+    let (sin_dlon, cos_dlon) = dlon.sin_cos();
+    if self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon > 0.0 {
       Some((
         cos_lat * sin_dlon,
         self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon

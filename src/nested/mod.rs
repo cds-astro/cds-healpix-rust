@@ -1105,6 +1105,9 @@ impl Layer {
   }
 
   pub fn elliptical_cone_coverage_internal(&self, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOCBuilderUnsafe {
+    if a >= HALF_PI {
+      panic!("Unable to handle ellipses with a semi-major axis > PI/2");
+    }
     // Special case: the full sky is covered
     if b >= PI {
       return self.allsky_bmoc_builder();
@@ -1147,6 +1150,10 @@ impl Layer {
     } else {
       let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
         depth_start, self.depth + 1, lon, lat, a);
+      /*for d in distances.iter() {
+        println!("d = {} deg", d.to_degrees());
+      }*/
+      
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
       for &root_hash in neigs.sorted_values().into_iter() {
@@ -1834,6 +1841,29 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) { 
       assert_eq!(h1, *h2);
     }
+  }
+
+  #[test]
+  fn testok_elliptical_cone_2() {
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let a = 50.0_f64.to_radians();
+    let b = 5.0_f64.to_radians();
+    let pa = 30.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
+    //let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
+    to_aladin_moc(&actual_res);
+    /*println!("@@@@@ FLAT VIEW");
+    for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
+    println!("@@@@@ HIERARCH VIEW");
+    for cell in actual_res.into_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
+    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }*/
   }
   
   fn to_aladin_moc(bmoc: &BMOC) {

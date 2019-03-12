@@ -224,11 +224,13 @@ pub fn lonlat_of(mut x: f64, mut y: f64, mut z: f64) -> (f64, f64) {
 
 #[inline]
 pub fn lonlat_of(x: f64, y: f64, z: f64) -> (f64, f64) {
-  let mut lon = f64::atan2(y, x);
+  let mut lon = y.atan2(x);
   if lon < 0.0_f64 {
     lon += TWO_PI;
   }
-  let lat = f64::atan2(z, (x.pow2() + y.pow2()).sqrt());
+  let lat = z.atan2((x.pow2() + y.pow2()).sqrt());
+  debug_assert!(0.0 <= lon && lon < TWO_PI);
+  debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
   (lon, lat)
 }
 
@@ -407,8 +409,8 @@ impl Coo3D {
   pub fn from_sph_coo(lon: f64, lat: f64) -> Coo3D {
     let v = vec3_of(lon, lat);
     if lon < 0.0 || TWO_PI <= lon || lat < -HALF_PI || HALF_PI < lat {
-      let (lon, lat) = lonlat_of(v.x(), v.y(), v.z());
-      Coo3D {x: v.x(), y: v.y(), z: v.z(), lon, lat}
+      let (new_lon, new_lat) = lonlat_of(v.x(), v.y(), v.z());
+      Coo3D {x: v.x(), y: v.y(), z: v.z(), lon: new_lon, lat: new_lat}
     } else {
       Coo3D {x: v.x(), y: v.y(), z: v.z(), lon, lat}
     }

@@ -6,11 +6,9 @@ pub struct Ellipse {
   // Derived quantities to speed up computations
   sigx2: f64,
   sigy2: f64,
-  rho: f64,
-  // Derived quantities
   rho_sigx_sigy: f64,
+  // Derived quantities
   one_over_det: f64,
-  
 }
 
 impl Ellipse {
@@ -30,35 +28,55 @@ impl Ellipse {
     let sigx2 = a2 * cos2_t + b2 * sin2_t;
     let sigy2 = a2 * sin2_t + b2 * cos2_t;
     let rho_sigx_sigy = cos_t * sin_t * (a2 - b2);
-    let sigx2_sigy2 = sigx2 * sigy2;
-    let rho2 = rho_sigx_sigy.pow2() / sigx2_sigy2;
-    let det = sigx2_sigy2 * (1.0 - rho2);
+    let det = sigx2 * sigy2 - rho_sigx_sigy.pow2();
     Ellipse {
       sigx2,
       sigy2,
-      rho: rho2.sqrt(),
       rho_sigx_sigy,
       one_over_det: 1.0 / det,
     }
   }
-  
-  pub fn from_cov_matrix(sig_x: f64, sig_y: f64, rho: f64) -> Ellipse {
+
+  pub fn from_cor_matrix(sig_x: f64, sig_y: f64, rho: f64) -> Ellipse {
     let sigx2 = sig_x * sig_x;
     let sigy2 = sig_y * sig_y;
     let rho_sigx_sigy = rho * sig_x * sig_y;
-    let det = sigx2 * sigy2 * (1.0 - rho * rho);
+    let det = sigx2 * sigy2 - rho_sigx_sigy.pow2();
     Ellipse {
       sigx2,
       sigy2,
-      rho,
       rho_sigx_sigy,
       one_over_det: 1.0 / det,
     }
   }
   
-  /*fn extended(sig: f64) -> Ellipse {
-    
-  }*/
+  pub fn from_cov_matrix(sig_x: f64, sig_y: f64, rho_sigx_sigy: f64) -> Ellipse {
+    let sigx2 = sig_x * sig_x;
+    let sigy2 = sig_y * sig_y;
+    let det = sigx2 * sigy2 - rho_sigx_sigy.pow2();
+    Ellipse {
+      sigx2,
+      sigy2,
+      rho_sigx_sigy,
+      one_over_det: 1.0 / det,
+    }
+  }
+  
+  fn extended_by_circle(&self, sig: f64) -> Ellipse {
+    Ellipse::from_cov_matrix(
+      self.sigx2 + sig.pow2(),
+      self.sigy2 + sig.pow2(),
+      self.rho_sigx_sigy,
+    )
+  }
+  
+  fn extended(&self, other: &Ellipse) -> Ellipse {
+    Ellipse::from_cov_matrix(
+      self.sigx2 + other.sigx2,
+      self.sigy2 + other.sigy2,
+      self.rho_sigx_sigy + other.rho_sigx_sigy,
+    )
+  }
   
   pub fn mahalanobis_distance(&self, x: f64, y: f64) -> f64 {
     let x2 = x.pow2();
@@ -70,6 +88,9 @@ impl Ellipse {
     self.mahalanobis_distance(x, y) <= 1.0
   }
   
+  pub fn overlap(&self, x: f64, y: f64, other: &Ellipse) -> bool {
+    self.extended(other).contains(x, y)
+  }
   
   pub fn path_along_edge(a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
     let step = (2.0 * a) / (half_num_points as f64);
