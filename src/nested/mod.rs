@@ -1918,6 +1918,42 @@ mod tests {
     }
     assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
+
+  #[test]
+  fn testok_elliptical_cone_6() {
+    let lon = 360.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let a = 50.0_f64.to_radians();
+    let b = 5.0_f64.to_radians();
+    let pa = 0.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
+    //let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
+    //  181 ,182 ,183];
+    to_aladin_moc(&actual_res);
+    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());*/
+    assert!(false);
+  }
+
+  #[test]
+  fn testok_elliptical_cone_7() {
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let a = 50.0_f64.to_radians();
+    let b = 5.0_f64.to_radians();
+    let pa = 90.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
+    //let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
+    //  181 ,182 ,183];
+    to_aladin_moc(&actual_res);
+    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());*/
+    assert!(false);
+  }
   
   fn to_aladin_moc(bmoc: &BMOC) {
     print!("draw moc {}/", bmoc.get_depth_max());

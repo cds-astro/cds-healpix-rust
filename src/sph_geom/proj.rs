@@ -38,8 +38,8 @@ pub trait Proj: Default {
 /// WARNING: the normalization (without a priori) is time consuming and should be avoided as much as possible
 fn normalize_lonlat(lon: &mut f64, lat: &mut f64) {
   if *lon < 0.0 || TWICE_PI <= *lon || *lat < -HALF_PI || HALF_PI < *lat {
-    let (cos_l, sin_l) = (*lon).sin_cos();
-    let (cos_b, sin_b) = (*lat).sin_cos();
+    let (sin_l, cos_l) = (*lon).sin_cos();
+    let (sin_b, cos_b) = (*lat).sin_cos();
     let x = cos_b * cos_l;
     let y = cos_b * sin_l;
     let z = sin_b;
@@ -108,8 +108,8 @@ impl Proj for ProjSIN {
   fn set_center(&mut self, lon: f64, lat :f64) {
     // I put assert tests here because the normalization is time consuming and I would like to
     // avoid it as much as possible
-    debug_assert!(0.0 <= lon && lon < TWICE_PI);
-    debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
+//    debug_assert!(0.0 <= lon && lon < TWICE_PI);
+//    debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
     self.center_lon = lon;
     self.center_lat = lat;
     normalize_lonlat(&mut self.center_lon, &mut self.center_lat);
