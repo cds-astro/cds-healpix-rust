@@ -3,8 +3,7 @@
 
 ## 0.1.6
 
-Released 2019-03-12.
-
+Released 2019-03-14.
 
 ### Bug correction
 
