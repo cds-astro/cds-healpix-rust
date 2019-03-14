@@ -98,8 +98,7 @@ impl Ellipse {
   fn extended_geom(&self, other: &Ellipse) -> Ellipse {
     let sigx = self.sigx2.sqrt() + other.sigx2.sqrt();
     let sigy = self.sigy2.sqrt() + other.sigy2.sqrt();
-    // APPROXIMATION (USED WHEN a + r > PI/2)
-    // NOT SURE AT ALL FOR rho_sigx_sigy!!
+    // Formula on rho_sigx_sigy to be verified!
     Ellipse::from_cov_matrix(
       sigx.pow2(),
       sigy.pow2(),
@@ -118,12 +117,6 @@ impl Ellipse {
   }
   
   pub fn overlap(&self, x: f64, y: f64, other: &Ellipse) -> bool {
-    /*let ell = self.extended_v2(other);
-    let abt = ell.to_a_b_theta();
-    eprintln!("a: {}, b: {}, theta: {}, x: {}, y: {}", abt.0, abt.1, abt.2.to_degrees(), x, y);
-    eprintln!("sigx: {}, sigy: {}, rho_sigx_sigy: {}", ell.sigx2.sqrt(), ell.sigy2.sqrt(), ell.rho_sigx_sigy);
-    eprintln!("rho*sigx: {}; rho*sigy: {}", ell.rho_sigx_sigy / ell.sigy2.sqrt(), ell.rho_sigx_sigy / ell.sigx2.sqrt());
-    ell.contains(x, y)*/
     self.extended_geom(other).contains(x, y)
   }
   

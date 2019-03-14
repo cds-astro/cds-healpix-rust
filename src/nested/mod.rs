@@ -913,89 +913,6 @@ impl Layer {
       }
     }
   }
-  /*
-  /// Returns the list of cells overlapping the given cone
-  /// REPLACE THIS BY cone_overlap_approx AND CALLING A METHOD ON THE RESULTING BMOC
-  pub fn cone_overlap_flat(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
-    // Special case: the full sky is covered
-    if cone_radius >= PI {
-      let v: Vec<u64> = (0..self.n_hash).collect();
-      return v.into_boxed_slice();
-    }
-    // Common variable
-    let cos_cone_lat = cone_lat.cos();
-    // Special case of very large radius: test the 12 base cells
-    if !has_best_starting_depth(cone_radius) {
-      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
-        0, self.depth + 1, cone_lon, cone_lat, cone_radius);
-      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, distances);
-      let mut res: Vec<u64> = Vec::with_capacity(self.ncell_in_cone_upper_bound(cone_radius));
-      for h in 0..12 {
-        self.cone_overlap_recur(0, h, 
-                                &shs_computer(cone_lon, cone_lat, cos_cone_lat), 
-                                &minmax_array, 0, &mut res);
-      }
-      return res.into_boxed_slice();
-    }
-    // Normal case
-    let depth_start = best_starting_depth(cone_radius);
-    if depth_start >= self.depth {
-      let shs_max = to_squared_half_segment(cone_radius 
-        + largest_center_to_vertex_distance_with_radius(depth_start, cone_lon, cone_lat, cone_radius));
-      let root_layer = get_or_create(depth_start);
-      let mut neigs: Vec<u64> = root_layer.neighbours(root_layer.hash(cone_lon, cone_lat), true)
-        .values_vec().iter()
-        .map(h_to_h_and_shs(cone_lon, cone_lat, cos_cone_lat, root_layer))
-        .filter(shs_lower_than(shs_max))
-        .map(self.h_and_shs_to_lower_h(depth_start))
-        .collect();
-      neigs.sort_unstable(); // sort the array (unstable is ok since we remove duplicates)
-      neigs.dedup();         // remove duplicates (vector must be sorted first)
-      return neigs.into_boxed_slice();
-    } else {
-      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
-        depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius);
-      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, distances);
-      let root_layer = get_or_create(depth_start);
-      let root_center_hash = root_layer.hash(cone_lon, cone_lat);
-      let neigs = root_layer.neighbours(root_center_hash, true);
-      let mut res: Vec<u64> = Vec::with_capacity(self.ncell_in_cone_upper_bound(cone_radius));
-      for &root_hash in neigs.sorted_values().into_iter() {
-        self.cone_overlap_recur(depth_start, root_hash, 
-                                &shs_computer(cone_lon, cone_lat, cos_cone_lat), 
-                                &minmax_array, 0, &mut res);
-      }
-      return res.into_boxed_slice();
-    }
-  }
-  
-  fn cone_overlap_recur<F>(&self, depth: u8, hash: u64, shs_computer: &F, shs_minmax: &[MinMax], 
-                           recur_depth: u8, result: &mut Vec<u64>)
-  where F: Fn((f64, f64)) -> f64  {
-    let shs = shs_computer(get_or_create(depth).center(hash));
-    let MinMax{min, max} = shs_minmax[recur_depth as usize];
-    if shs <= min {
-      let twice_depth_diff = (self.depth - depth) << 1;
-      let h_min = hash << twice_depth_diff;
-      let h_max = (hash + 1) << twice_depth_diff;
-      // result.extend((h_min..h_max).into_iter()); // do not work in webassembly??
-      for h in (h_min..h_max).into_iter() {
-        result.push(h);
-      }
-    } else if shs <= max {
-      if depth == self.depth {
-        result.push(hash);
-      } else {
-        let deeper_hash = hash << 2;
-        let depth = depth + 1;
-        let recur_depth = recur_depth + 1;
-        self.cone_overlap_recur(depth, deeper_hash, shs_computer, shs_minmax, recur_depth, result);
-        self.cone_overlap_recur(depth, deeper_hash | 1_u64, shs_computer, shs_minmax, recur_depth, result);
-        self.cone_overlap_recur(depth, deeper_hash | 2_u64, shs_computer, shs_minmax, recur_depth, result);
-        self.cone_overlap_recur(depth, deeper_hash | 3_u64, shs_computer, shs_minmax, recur_depth, result);
-      }
-    }
-  }*/
   
   /// cone_radius in radians
   /// TODO: find a better function!!
@@ -1140,7 +1057,7 @@ impl Layer {
         .into_iter()
         .filter(|h| {
           let (l, b) = root_layer.center(*h);
-          sph_ellipse.overlap_cone(l, b, distance)
+          sph_ellipse.contains(l, b) || sph_ellipse.overlap_cone(l, b, distance)
         })
         .map(|h| h >> ((depth_start - &self.depth) << 1)) // h_to_lower_depth
         .collect();
@@ -1154,10 +1071,6 @@ impl Layer {
     } else {
       let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
         depth_start, self.depth + 1, lon, lat, a);
-      /*for d in distances.iter() {
-        println!("d = {} deg", d.to_degrees());
-      }*/
-      
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
       for &root_hash in neigs.sorted_values().into_iter() {
@@ -1178,7 +1091,7 @@ impl Layer {
              &ellipse.overlap_cone(lon, lat, distance));*/
     if ellipse.contains_cone(lon, lat, distance) {
       bmoc_builder.push(depth, hash, true);
-    } else if ellipse.overlap_cone(lon, lat, distance) {
+    } else if ellipse.contains(lon, lat) || ellipse.overlap_cone(lon, lat, distance) {
       if depth == self.depth {
         let mut is_full = true;
         for (lon, lat) in self.vertices(hash).into_iter() {
@@ -1857,12 +1770,20 @@ mod tests {
     let b = 5.0_f64.to_radians();
     let pa = 30.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
-    let expected_res: [u64; 76] = [130, 136, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064,
+    let expected_res: [u64; 112] = [130, 136, 138, 1035, 1038, 1039, 1050, 1051, 1056, 1057, 1058,
+      1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 
+      1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1120,
+      1122, 1123, 1126, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1144, 1146, 1147, 1150,
+      1153, 1156, 1157, 1159, 1168, 1169, 1170, 1171, 1172, 1173, 1174, 1175, 1177 ,1180, 1181,
+      1183, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225 ,1226, 1227 ,1228 ,1229,
+      1230, 1231, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244,
+      1245, 1246, 1247, 1252, 1253, 1264, 1265, 1268, 2933, 2935, 2941];
+    /*76 [130, 136, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064,
       1065, 1067, 1068, 1069, 1070, 1071, 1072, 1074, 1075, 1078, 1079, 1080, 1081, 1082, 1083, 
       1084, 1085, 1086, 1087, 1128, 1129, 1130, 1131, 1132, 1134, 1135, 1146, 1157, 1168, 1169,
       1171, 1172, 1173, 1174, 1175, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1224, 1225, 
       1228, 1229, 1231, 1232, 1233, 1234, 1235, 1236, 1238, 1239, 1240, 1241, 1242, 1243, 1244,
-      1245, 1246, 1247, 2935, 2941];
+      1245, 1246, 1247, 2935, 2941];*/
     // to_aladin_moc(&actual_res);
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1878,9 +1799,13 @@ mod tests {
     let b = 5.0_f64.to_radians();
     let pa = 30.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
-    let expected_res: [u64; 40] = [32, 33, 34, 35, 36, 38, 40, 258, 264, 265, 266, 267, 268, 269,
+    let expected_res: [u64; 70] = [10, 11, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 256, 257, 258,
+      259, 260, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 274, 280, 281, 282, 283, 284, 
+      286, 287, 288, 289, 291, 292, 293, 294, 295, 301, 304, 305, 306, 307, 308, 309, 310, 311, 312,
+      313, 315, 316, 317, 318, 319, 726, 727, 728, 729, 730, 731, 732, 733, 734, 735, 756, 757];
+    /*40 [32, 33, 34, 35, 36, 38, 40, 258, 264, 265, 266, 267, 268, 269,
       270, 271, 280, 282, 283, 286, 289, 292, 293, 295, 304, 305, 306, 307, 308, 309, 310, 311, 317,
-      727, 729, 731, 732, 733, 734, 735];
+      727, 729, 731, 732, 733, 734, 735];*/
     // to_aladin_moc(&actual_res);
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
@@ -1896,10 +1821,14 @@ mod tests {
     let b = 5.0_f64.to_radians();
     let pa = 20.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
-    // to_aladin_moc(&actual_res);
-    let expected_res: [u64; 40] = [34, 35, 38, 40, 41, 44, 258, 259, 262, 264, 265, 266, 267, 268, 
+    let expected_res: [u64; 62] = [32, 34, 35, 38, 40, 41, 42, 43, 44, 256, 257, 258, 259, 260,
+      262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 274, 280, 281, 282, 283, 286, 287, 288, 289,
+      292, 293, 294, 295, 301, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 315, 316 ,317, 318,
+      319, 723, 724, 725, 726, 727, 729, 732, 733, 735];
+    /*40 [34, 35, 38, 40, 41, 44, 258, 259, 262, 264, 265, 266, 267, 268, 
       269, 270, 271, 280, 282, 283, 292, 293, 295, 304, 305, 306, 307, 308, 309, 310, 311, 313, 
-      316, 317, 723, 726, 727, 729, 732, 733];
+      316, 317, 723, 726, 727, 729, 732, 733];*/
+    // to_aladin_moc(&actual_res);
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
@@ -1914,9 +1843,11 @@ mod tests {
     let b = 10.0_f64.to_radians();
     let pa = 20.0_f64.to_radians();
     let actual_res = elliptical_cone_coverage(2, lon, lat, a, b, pa);
-    let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
-      181 ,182 ,183];
-    // to_aladin_moc(&actual_res);
+    let expected_res: [u64; 26] = [8, 9, 10, 11, 52, 53, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 
+      76, 77, 78, 79, 138, 139, 180, 181, 182, 183];
+    /*20 [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
+      181 ,182 ,183];*/
+    to_aladin_moc(&actual_res);
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
@@ -1956,6 +1887,24 @@ mod tests {
       assert_eq!(h1, *h2);
     }
     assert_eq!(expected_res.len(), actual_res.flat_iter().count());
+  }
+
+  #[test]
+  fn testok_elliptical_cone_8() {
+    let lon = 50.0_f64.to_radians();
+    let lat = 50.0_f64.to_radians();
+    let a = 60.0_f64.to_radians();
+    let b = 2.0_f64.to_radians();
+    let pa = 35.0_f64.to_radians();
+    let actual_res = elliptical_cone_coverage(6, lon, lat, a, b, pa);
+    /*let expected_res: [u64; 40] = [0, 192, 269, 270, 271, 273, 274, 275, 276, 277, 278, 279, 280,
+      281, 282, 283, 284, 285, 286, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301,
+      302, 304, 305, 306, 362, 469, 575, 767];*/
+    to_aladin_moc(&actual_res);
+    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());*/
   }
   
   fn to_aladin_moc(bmoc: &BMOC) {
