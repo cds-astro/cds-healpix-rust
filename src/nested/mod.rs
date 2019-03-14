@@ -1047,6 +1047,9 @@ impl Layer {
   /// - the list of cells overlapped by the given elliptical cone, in a BMOC 
   ///   (hierarchical view also telling if a cell is fully or partially covered).
   ///
+  /// # Panics
+  /// - if the semi-major axis is > PI/2
+  /// 
   /// # Example
   /// ```rust
   /// use cdshealpix::nested::{get_or_create, Layer};
@@ -1091,7 +1094,8 @@ impl Layer {
   ///   (hierarchical view also telling if a cell is fully or partially covered).
   ///
   /// # Panics
-  /// If this layer depth + `delta_depth` > the max depth (i.e. 29)
+  /// - if the semi-major axis is > PI/2
+  /// - if this layer depth + `delta_depth` > the max depth (i.e. 29)
   ///
   pub fn elliptical_cone_coverage_custom(&self, delta_depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
     if delta_depth == 0 {
@@ -1154,7 +1158,7 @@ impl Layer {
         println!("d = {} deg", d.to_degrees());
       }*/
       
-      let neigs = dbg!(root_layer.neighbours(root_center_hash, true));
+      let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
       for &root_hash in neigs.sorted_values().into_iter() {
         self.elliptical_cone_coverage_recur(depth_start, root_hash, &sph_ellipse, &distances, 0, &mut bmoc_builder);
@@ -1926,15 +1930,14 @@ mod tests {
     let a = 50.0_f64.to_radians();
     let b = 5.0_f64.to_radians();
     let pa = 0.0_f64.to_radians();
-    let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
-    //let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
-    //  181 ,182 ,183];
-    to_aladin_moc(&actual_res);
-    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+    let actual_res = elliptical_cone_coverage(2, lon, lat, a, b, pa);
+    let expected_res: [u64; 18] = [10, 11, 53, 55, 64, 65, 66, 67, 70, 73, 76, 77, 78, 79, 136, 
+      138, 180, 181];
+    // to_aladin_moc(&actual_res);
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
-    assert_eq!(expected_res.len(), actual_res.flat_iter().count());*/
-    assert!(false);
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
 
   #[test]
@@ -1944,15 +1947,15 @@ mod tests {
     let a = 50.0_f64.to_radians();
     let b = 5.0_f64.to_radians();
     let pa = 90.0_f64.to_radians();
-    let actual_res = elliptical_cone_coverage(4, lon, lat, a, b, pa);
-    //let expected_res: [u64; 20] = [8, 9, 10, 64, 65, 66, 67, 68, 70, 71, 72, 73, 75, 76, 77, 78, 79,
-    //  181 ,182 ,183];
-    to_aladin_moc(&actual_res);
-    /*for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+    let actual_res = elliptical_cone_coverage(3, lon, lat, a, b, pa);
+    let expected_res: [u64; 40] = [0, 192, 269, 270, 271, 273, 274, 275, 276, 277, 278, 279, 280, 
+      281, 282, 283, 284, 285, 286, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301,
+      302, 304, 305, 306, 362, 469, 575, 767];
+    // to_aladin_moc(&actual_res);
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
-    assert_eq!(expected_res.len(), actual_res.flat_iter().count());*/
-    assert!(false);
+    assert_eq!(expected_res.len(), actual_res.flat_iter().count());
   }
   
   fn to_aladin_moc(bmoc: &BMOC) {

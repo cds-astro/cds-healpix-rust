@@ -74,7 +74,8 @@ impl EllipticalCone {
       }
     } else {
       let ((x, y), ang_dist, top_hemisphere) =  self.center.forced_proj_and_distance(lon, lat);
-      if ang_dist > self.a + radius {
+      if radius < 0.0 ||  self.a + radius < ang_dist {
+        // radius < 0.0 => we are testing for inclusion (contains_cone)
         return false;
       }
       // The projection of a cone on a plane is an ellipse
@@ -86,22 +87,24 @@ impl EllipticalCone {
       // let angle = (x / -y).atan(); //
       let one_over_norm = 1.0 / (x.pow2() + y.pow2()).sqrt(); // distance from (0.0) the cone projected center (!= ellipse center)
       if !one_over_norm.is_finite() {
-        return true;
+        // Special case: the center of the HEALPix cell is the center of the ellipse
+        return radius >= 0.0 || radius.abs() < self.b;
       }
       // phi = angle of the (x, y) position in the euclidean plane
       let cos_phi = x * one_over_norm;
       let sin_phi = y * one_over_norm;
-      let sin_cos_angle = if x >= 0.0 {
-        (cos_phi, -sin_phi)
-      } else {
+      let sin_cos_angle = if sin_phi >= 0.0 {
         (-cos_phi, sin_phi)
+      } else {
+        (cos_phi, -sin_phi)
       };
-      // eprintln!("a: {}; b: {}; theta: {}", proj_a, proj_b, sin_cos_angle.0.atan2(sin_cos_angle.1).to_degrees());
+      // eprintln!("Self a: {}; b: {}; theta: {}", self.a, self.b, self.theta_sin_cos.0.atan2(self.theta_sin_cos.1).to_degrees());
+      // eprintln!("Othe a: {}; b: {}; theta: {}", proj_a, proj_b, sin_cos_angle.0.atan2(sin_cos_angle.1).to_degrees());
       let proj_ell = Ellipse::from_oriented(proj_a, proj_b, sin_cos_angle);
       let proj_ell_dist = 0.5 * (proj_d_max + proj_d_min); // distance from (0, 0) to ellipse center
       let proj_ell_x = proj_ell_dist * cos_phi;
       let proj_ell_y = proj_ell_dist * sin_phi;
-      // eprintln!("proj_ell_x: {}; proj_ell_y: {}", proj_ell_x, proj_ell_y);
+      //eprintln!("proj_ell_x: {}; proj_ell_y: {}", proj_ell_x, proj_ell_y);
       if top_hemisphere {
         self.ellipse.overlap(proj_ell_x, proj_ell_y, &proj_ell)
       } else {

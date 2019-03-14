@@ -60,7 +60,16 @@ impl Ellipse {
     }
   }
   
-  fn extended_by_circle(&self, sig: f64) -> Ellipse {
+  pub fn to_a_b_theta(&self) -> (f64, f64, f64) {
+    let val_sqrt = ((self.sigx2 - self.sigy2).pow2() + self.rho_sigx_sigy.twice().pow2()).sqrt();
+    let a2 = 0.5 * (self.sigx2 + self.sigy2 + val_sqrt);
+    let b2 = 0.5 * (self.sigx2 + self.sigy2 - val_sqrt);
+    let theta = self.rho_sigx_sigy.atan2(a2 - self.sigy2);
+    // let theta =  (a2 - self.sigx2).atan2(self.rho_sigx_sigy);
+    (a2.sqrt(), b2.sqrt(), theta)
+  }
+  
+  fn extended_stat_by_circle(&self, sig: f64) -> Ellipse {
     Ellipse::from_cov_matrix(
       self.sigx2 + sig.pow2(),
       self.sigy2 + sig.pow2(),
@@ -68,7 +77,7 @@ impl Ellipse {
     )
   }
   
-  fn extended(&self, other: &Ellipse) -> Ellipse {
+  fn extended_stat(&self, other: &Ellipse) -> Ellipse {
     Ellipse::from_cov_matrix(
       self.sigx2 + other.sigx2,
       self.sigy2 + other.sigy2,
@@ -76,18 +85,46 @@ impl Ellipse {
     )
   }
   
-  pub fn mahalanobis_distance(&self, x: f64, y: f64) -> f64 {
+  fn extended_geom_by_circle(&self, sig: f64) -> Ellipse {
+    let sigx = self.sigx2.sqrt() + sig;
+    let sigy = self.sigy2.sqrt() + sig;
+    Ellipse::from_cov_matrix(
+      sigx.pow2(),
+      sigy.pow2(),
+      self.rho_sigx_sigy,
+    )
+  }
+  
+  fn extended_geom(&self, other: &Ellipse) -> Ellipse {
+    let sigx = self.sigx2.sqrt() + other.sigx2.sqrt();
+    let sigy = self.sigy2.sqrt() + other.sigy2.sqrt();
+    // APPROXIMATION (USED WHEN a + r > PI/2)
+    // NOT SURE AT ALL FOR rho_sigx_sigy!!
+    Ellipse::from_cov_matrix(
+      sigx.pow2(),
+      sigy.pow2(),
+      self.rho_sigx_sigy + other.rho_sigx_sigy,
+    )
+  }
+  
+  pub fn squared_mahalanobis_distance(&self, x: f64, y: f64) -> f64 {
     let x2 = x.pow2();
     let y2 = y.pow2();
     self.one_over_det * (x2 * self.sigy2 - (self.rho_sigx_sigy * x * y).twice() + y2 * self.sigx2)
   }
   
   pub fn contains(&self, x: f64, y: f64) -> bool {
-    self.mahalanobis_distance(x, y) <= 1.0
+    self.squared_mahalanobis_distance(x, y) <= 1.0
   }
   
   pub fn overlap(&self, x: f64, y: f64, other: &Ellipse) -> bool {
-    self.extended(other).contains(x, y)
+    /*let ell = self.extended_v2(other);
+    let abt = ell.to_a_b_theta();
+    eprintln!("a: {}, b: {}, theta: {}, x: {}, y: {}", abt.0, abt.1, abt.2.to_degrees(), x, y);
+    eprintln!("sigx: {}, sigy: {}, rho_sigx_sigy: {}", ell.sigx2.sqrt(), ell.sigy2.sqrt(), ell.rho_sigx_sigy);
+    eprintln!("rho*sigx: {}; rho*sigy: {}", ell.rho_sigx_sigy / ell.sigy2.sqrt(), ell.rho_sigx_sigy / ell.sigx2.sqrt());
+    ell.contains(x, y)*/
+    self.extended_geom(other).contains(x, y)
   }
   
   pub fn path_along_edge(a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
