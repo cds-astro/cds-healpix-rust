@@ -276,7 +276,7 @@ impl Layer {
     match k {
       0 ... 2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
       -1 => {
-        if xy.0 - (i as f64) > xy.1 - (j as f64) {
+        if xy.0 - self.times_nside(i) >= xy.1 - self.times_nside(j) {
           ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask
         } else {
           ((((i + 2u8) & 3u8) as u64) << self.twice_depth) | self.x_mask
@@ -305,6 +305,10 @@ impl Layer {
                   k, self.depth, lon, lat, xy.0, xy.1),*/
       _ => panic!("Algorithm error: case k = {} not supported!"),
     }
+  }
+  
+  fn times_nside(&self, i: u8) -> f64 {
+    (i << self.depth) as f64
   }
   
   /// Compute the position on the unit sphere of the center (in the Euclidean projection plane)
@@ -2100,9 +2104,8 @@ mod tests {
     }*/
   }
   
-  
   #[test]
-  fn test_prec() {
+  fn test_prec_1() {
     let lon_deg = 179.99999999999997_f64;
     let lat_deg = 41.813964843754924_f64;
     /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
@@ -2118,6 +2121,23 @@ mod tests {
     println!("d0h_bits: {}", d0h_bits);*/
     let layer_0 = get_or_create(0);
     assert_eq!(1, layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+  }
+
+  #[test]
+  fn test_prec_2() {
+    let lon_deg = 359.99999999999994_f64;
+    let lat_deg = 41.81031502783791_f64;
+    /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
+    xy.0 = ensures_x_is_positive(xy.0);
+    let layer_1 = get_or_create(1);
+    layer_1.shift_rotate_scale(&mut xy);
+    println!("x: {}, y: {}", xy.0, xy.1);
+    let mut ij = discretize(xy);
+    println!("i: {}, j: {}", ij.0, ij.1);
+    let ij_d0c = layer_1.base_cell_coos(&ij);
+    println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);*/
+    let layer_1 = get_or_create(1);
+    assert_eq!(13, layer_1.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
   
   
