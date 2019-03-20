@@ -213,7 +213,7 @@ impl Layer {
     self.shift_rotate_scale(&mut xy);
     let mut ij = discretize(xy);
     let ij_d0c = self.base_cell_coos(&ij);
-    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij*/, xy/*, lon, lat*/);
+    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
     self.to_coos_in_base_cell(&mut ij);
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
@@ -267,7 +267,7 @@ impl Layer {
 
   ///
   #[inline]
-  fn depth0_bits(&self, i: u8, j: u8/*, ij: &mut (u64, u64)*/, xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
+  fn depth0_bits(&self, i: u8, j: u8, ij: (u64, u64), xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
     // self.base_hash_bits_lupt[i as usize][j as usize]
     // Useful for quick tests: https://play.rust-lang.org
     let k = 5_i8 - (i + j) as i8;
@@ -276,7 +276,7 @@ impl Layer {
     match k {
       0 ... 2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
       -1 => {
-        if xy.0 - self.times_nside(i) >= xy.1 - self.times_nside(j) {
+        if xy.0 - ij.0 as f64 > xy.1 - ij.1 as f64 {
           ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask
         } else {
           ((((i + 2u8) & 3u8) as u64) << self.twice_depth) | self.x_mask
@@ -2139,6 +2139,27 @@ mod tests {
     let layer_1 = get_or_create(1);
     assert_eq!(13, layer_1.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
-  
+
+  #[test]
+  fn test_prec_3() {
+    let lon_deg = 359.99999999999994_f64; //359.99999999999994_f64;
+    let lat_deg = 41.81031489577861_f64; //41.81031489577857_f64;
+
+    /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
+    xy.0 = ensures_x_is_positive(xy.0);
+    let layer_0 = get_or_create(6);
+    layer_0.shift_rotate_scale(&mut xy);
+    println!("x: {}, y: {}", xy.0, xy.1);
+    let mut ij = discretize(xy);
+    println!("i: {}, j: {}", ij.0, ij.1);
+    let ij_d0c = layer_0.base_cell_coos(&ij);
+    println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
+    let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
+    println!("d0h_bits: {}", d0h_bits);*/
+    println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));*/
+    
+    let layer_6 = get_or_create(6);
+    assert_eq!(13653, layer_6.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+  }
   
 }
