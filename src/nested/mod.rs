@@ -213,7 +213,7 @@ impl Layer {
     self.shift_rotate_scale(&mut xy);
     let mut ij = discretize(xy);
     let ij_d0c = self.base_cell_coos(&ij);
-    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
+    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij*/, xy/*, lon, lat*/);
     self.to_coos_in_base_cell(&mut ij);
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
@@ -267,15 +267,21 @@ impl Layer {
 
   ///
   #[inline]
-  fn depth0_bits(&self, i: u8, j: u8/*, ij: &mut (u64, u64)*, xy: (f64, f64), lon: f64, lat: f64*/) -> u64 {
+  fn depth0_bits(&self, i: u8, j: u8/*, ij: &mut (u64, u64)*/, xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
     // self.base_hash_bits_lupt[i as usize][j as usize]
     // Useful for quick tests: https://play.rust-lang.org
     let k = 5_i8 - (i + j) as i8;
-    // The two branches -1 and -2 are extremely rare (north pole, NPC cells upper border),
+    // The two branches -2 and -1 are extremely rare (north pole, NPC cells upper NE and NW borders),
     // so few risks of branch miss-prediction.
     match k {
       0 ... 2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
-      -1 => ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask,
+      -1 => {
+        if xy.0 - (i as f64) > xy.1 - (j as f64) {
+          ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask
+        } else {
+          ((((i + 2u8) & 3u8) as u64) << self.twice_depth) | self.x_mask
+        }
+      },
       -2 => (((i - 2u8) as u64) << self.twice_depth) | self.xy_mask,
       /* I wrote this code when I forget to handle negative longitude (and I found catalogues containing
          small negative longitudes).
@@ -633,7 +639,7 @@ impl Layer {
       self.build_hash_from_parts_opt(d0h, i, j)
     } else {
       let d0h_mod_4 = d0h & 3_u8;  // <=> base_cell modulo 4
-      match d0h >> 2 {
+      match div4_quotient(d0h) {
         // <=> base_cell / 4
         0 => self.ncp_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
         1 => self.eqr_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
@@ -684,7 +690,21 @@ impl Layer {
     }
   }
 
-  // Center of a cell, on the projection pace (i.e. in the Euclidean plane).
+  
+  /*pub fn to_ring(&self, hash: u64) -> u64 {
+    let (d0h, i, j) = decode_hash(hash);
+    let h = i + j;
+    let l = i - j;
+    let j_d0h = div4_quotient(d0h);
+    
+  }*/
+  
+  /*pub fn from_ring(&self, hash: u64) -> u64 {
+    
+  }*/
+  
+  
+  // Center of a cell, on the projection space (i.e. in the Euclidean plane).
   fn center_of_projected_cell(&self, hash: u64) -> (f64, f64) {
     self.check_hash(hash);
     let h_parts: HashParts = self.decode_hash(hash);
@@ -1304,7 +1324,7 @@ struct HashParts {
 struct HashBits {
   d0h: u64, // base cell number (depth 0 hash value) bits
   i: u64,   // in the base cell, z-order curve coordinate along the x-axis bits
-  j: u64,   // in the base cell, z-order curve coordinate along the x-axis bits
+  j: u64,   // in the base cell, z-order curve coordinate along the y-axis bits
 }
 
 #[inline]
@@ -1463,7 +1483,7 @@ mod tests {
     ]
   }
   
-  #[test]
+  /*#[test]
   fn testok_d0h_bits() {
     let depth = 0_u8;
     let layer = get_or_create(depth);
@@ -1477,9 +1497,9 @@ mod tests {
       (5_u8, 1_u8), (5_u8, 2_u8),
     ];
     for (i, j) in ijs.iter() {
-      assert_eq!(lupm[*i as usize][*j as usize], layer.depth0_bits(*i, *j/*, &mut (0_u64, 0_u64), (0.0, 0.0), 0.0, 0.0*/));
+      assert_eq!(lupm[*i as usize][*j as usize], layer.depth0_bits(*i, *j/*, &mut (0_u64, 0_u64)*/, (*i as f64, *j as f64 + 1e-14)/*, 0.0, 0.0*/));
     }
-  }
+  }*/
   
   #[test]
   fn testok_hash_d0() {
@@ -2079,5 +2099,26 @@ mod tests {
       println!("@@@@@ cell a: {:?}", cell);
     }*/
   }
+  
+  
+  #[test]
+  fn test_prec() {
+    let lon_deg = 179.99999999999997_f64;
+    let lat_deg = 41.813964843754924_f64;
+    /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
+    xy.0 = ensures_x_is_positive(xy.0);
+    let layer_0 = get_or_create(0);
+    layer_0.shift_rotate_scale(&mut xy);
+    println!("x: {}, y: {}", xy.0, xy.1);
+    let mut ij = discretize(xy);
+    println!("i: {}, j: {}", ij.0, ij.1);
+    let ij_d0c = layer_0.base_cell_coos(&ij);
+    println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);
+    let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
+    println!("d0h_bits: {}", d0h_bits);*/
+    let layer_0 = get_or_create(0);
+    assert_eq!(1, layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+  }
+  
   
 }

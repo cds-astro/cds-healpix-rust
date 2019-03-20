@@ -3,7 +3,6 @@ use super::super::Customf64;
 
 #[derive(Debug)]
 pub struct Ellipse {
-  // Derived quantities to speed up computations
   sigx2: f64,
   sigy2: f64,
   rho_sigx_sigy: f64,

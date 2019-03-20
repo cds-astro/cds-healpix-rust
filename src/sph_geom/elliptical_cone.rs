@@ -56,18 +56,37 @@ impl EllipticalCone {
   /// - `radius` cone radius, in radians
   /// 
   /// # Info
-  /// To properly adress the question, one should try to see if the following equations system has
+  /// To properly address the question, one should try to see if the following equations system has
   /// at least one solution:
   /// ```math
-  /// \frac{x^2}{\tan^2\alpha} + \frac{y^2}{\tan^2\beta} = z^2
+  /// \frac{x^2}{\tan^2a} + \frac{y^2}{\tan^2b} = z^2
   /// (x - x_0)^2 + (y - y_0)^2 + (z - z_0)^2  = 4\sin^2\frac{\theta}{2}
   /// x^2 + y^2 + z^2 = 0
+  /// ```
+  /// with `a` and `b` which are angles and
+  /// ```math
+  /// x = \cos\delta\cos\alpha
+  /// y = \cos\delta\sin\alpha
+  /// z = \sin\delta
+  /// ```
+  /// This system can be replaced by (the second equation being the angular distance formula):
+  /// ```math
+  /// \frac{\cos^2\alpha}{\tan^2a} + \frac{\sin^2\alpha}{\tan^2b} = \tan^2\delta
+  /// \sin\delta\sin\delta_0 + \cos\delta\cos\delta_0\cos(\alpha-\alpha_0) = \cos\theta
   /// ```
   /// - The first equation is the elliptical cone equation
   /// - The second is the classical cone equation
   /// - $(x_ 0, y_ 0, z_ 0)$ are obtained by rotation of the original cone center such that the 
   ///   elliptical cone is center is $(x = 0, y = 0, z = 1)$, and the x-axis is along the semi-major
-  ///axis. 
+  ///   axis.
+  /// 
+  /// # Info 2
+  /// Contrary to the above Info, another (the best?) approach is to compute the coordinates of the
+  /// two ellipse foci F0 and F1. The sum of the distances f0 and f1 to both foci is constant with:
+  /// ```math
+  /// f0 + f1 = 2a
+  /// ```
+  /// 
   pub fn overlap_cone(&self, lon: f64, lat: f64, radius: f64) -> bool {
     assert!(radius > 0.0);
     let ((x, y), ang_dist, top_hemisphere) =  self.center.forced_proj_and_distance(lon, lat);
@@ -120,7 +139,9 @@ impl EllipticalCone {
         Some((x, y)) => {
           let eucl_a = (self.a - radius).sin();
           let eucl_b = (self.b - radius).sin();
-          // WARNING: not sure this is a 100% reliable!
+          // WARNING: not sure this is a 100% reliable for large distances!
+          // A 100% reliable solution would be to compute the distance to both foci:
+          //   (f0 + f1)/2 <= a - r
           Ellipse::from_oriented(eucl_a, eucl_b, self.theta_sin_cos).contains(x, y)
         },
         None => false,

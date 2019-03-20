@@ -9,6 +9,7 @@ Released 2019-03-14.
 
 * Elliptical cone: fix SIN projection conditions
 * Elliptical cone: better handle large ellipses (when ellipse semi-major axis + bounding cone radius > PI/2)
+* WARNING: still bugged in crates.io, but fixed on github!
 
 --------------------------------------------------------------------------------
 

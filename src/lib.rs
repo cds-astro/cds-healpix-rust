@@ -380,10 +380,9 @@ impl Customf64 for f64 {
     q
   }
 }
-
-/// All types that implement `Write` get methods defined in `WriteBytesExt`
-/// for free.
+// All types that implement `f64` get methods defined in `Customf64` for free.
 // impl<F: f64> Customf64 for F {}*/
+
 
 /// Returns an upper limit on the distance between a cell center around the given position 
 /// and its furthest vertex.
@@ -1272,7 +1271,7 @@ fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
     let floor: u8 = x as u8;
     let odd_floor: u8 = floor | 1u8;
     OffsetAndPM1 {
-        offset: odd_floor & 7u8, // value modulo 7
+        offset: odd_floor & 7u8, // value modulo 8
         pm1: x - (odd_floor as f64),
     }
 }
@@ -1286,6 +1285,7 @@ fn proj_cea(xy: &mut (f64, f64)) {
 #[inline]
 fn deproj_cea(lonlat: &mut (f64, f64)) {
     let (_, ref mut lat) = *lonlat;
+    // Using asin is OK here since |lat*TRANSITION_Z| < 2/3, so not near from 1.
     *lat = f64::asin((*lat) * TRANSITION_Z);
 }
 
@@ -1306,6 +1306,7 @@ fn deproj_collignon(lonlat: &mut (f64, f64)) {
         deal_with_numerical_approx_in_edges(lon);
     } // in case of pole, lon = lat = 0 (we avoid NaN due to division by lat=0)
     *lat *= ONE_OVER_SQRT6;
+    // Using acos is OK here since lat < 1/sqrt(6), so not near from 1.
     *lat = 2f64 * f64::acos(*lat) - HALF_PI;
 }
 
