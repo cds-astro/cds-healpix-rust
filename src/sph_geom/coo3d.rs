@@ -113,10 +113,10 @@ pub trait UnitVec3: Vec3 {
     assert!(UnitVect3D::is_unit_from_squared_norm(self.squared_norm()));
   }*/
   
-  fn cross_prod_norm(&self) {
-    let nx = v1.y() * v2.z() - v1.z() * v2.y();
-    let ny = v1.z() * v2.x() - v1.x() * v2.z();
-    let nz = v1.x() * v2.y() - v1.y() * v2.x();
+  fn cross_prod_norm<T: Vec3 + UnitVec3>(&self, other: &T) -> f64 {
+    let nx = self.y() * other.z() - self.z() * other.y();
+    let ny = self.z() * other.x() - self.x() * other.z();
+    let nz = self.x() * other.y() - self.y() * other.x();
     (nx.pow2() + ny.pow2() + nz.pow2()).sqrt()
   }
   
