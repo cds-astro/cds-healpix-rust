@@ -2161,5 +2161,28 @@ mod tests {
     let layer_6 = get_or_create(6);
     assert_eq!(13653, layer_6.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
-  
+
+  #[test]
+  fn test_prec_4() {
+    let lon_deg = 292.49999999999994_f64; //359.99999999999994_f64;
+    let lat_deg = 41.810314895778546_f64; //41.81031489577857_f64;
+
+    let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
+    println!("proj_x: {:.17}, proj_y: {:.17}", xy.0, xy.1);
+    xy.0 = ensures_x_is_positive(xy.0);
+    let layer_0 = get_or_create(0);
+    layer_0.shift_rotate_scale(&mut xy);
+    println!("x: {}, y: {}", xy.0, xy.1);
+    let mut ij = discretize(xy);
+    println!("i: {}, j: {}", ij.0, ij.1);
+    let ij_d0c = layer_0.base_cell_coos(&ij);
+    println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
+    let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
+    println!("d0h_bits: {}", d0h_bits);*/
+    println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+
+    let layer_2 = get_or_create(2);
+    assert_eq!(56, layer_2.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+  }
+
 }
