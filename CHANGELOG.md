@@ -1,6 +1,23 @@
 # `cdshealpix` Change Log
 
 
+## 0.1.7
+
+Released 2019-XX-XX.
+
+### Info
+
+* We have started to run astropy-healpix tests on cdshealpix in the python wrapper project
+
+### Bug correction
+
+* Fix elliptical cone
+* Fix numerical precision of hash (cell number from coordinates) in NE border of North Polar Cap base cells 
+* Fix numerical precision of angular distances computation near from PI
+
+--------------------------------------------------------------------------------
+
+
 ## 0.1.6
 
 Released 2019-03-14.
@@ -26,7 +43,6 @@ Released 2019-03-06.
 ### Added
 
 * add support to elliptical cones
-
 
 --------------------------------------------------------------------------------
 

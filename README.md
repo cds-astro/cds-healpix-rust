@@ -21,13 +21,15 @@ but improvement have been added while porting the code.
 For informations on HEALPix in general, see:
  * The [official web site](https://healpix.jpl.nasa.gov/)
  * The [Wikipedia page](https://en.wikipedia.org/wiki/HEALPix)
- * The two main reference papers: [Gorsky (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G) and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
+ * The two main reference papers: [Gorski (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G) and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
 
 Official implementations, are available [here](https://healpix.sourceforge.io/). It contains GPL v2 codes in Fortran, C++, Java, IDL, Python, ...
 
 Other independant HEALPix implementations:
- * [Astropy-healpix](https://github.com/astropy/astropy-healpix) python wrapper using a C code (C code by Dustin Lang)
+ * [Astropy-healpix](https://github.com/astropy/astropy-healpix) python wrapper using a C code (C code by Dustin Lang, python wrapper by Thomas Robitaille and others)
  * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
+ * [Julia](https://github.com/ziotom78/Healpix.jl) implementation by Maurizio Tomasi
+ * [C](https://sourceforge.net/projects/healpix/files/healpix_bare_1.0/) "official" core functionalities implementation in BSD by Martin Reinecke
  * ... (Help me to add links to other HEALPix resources and codes).
 
 Features
