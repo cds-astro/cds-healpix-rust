@@ -113,9 +113,23 @@ pub trait UnitVec3: Vec3 {
     assert!(UnitVect3D::is_unit_from_squared_norm(self.squared_norm()));
   }*/
   
+  fn cross_prod_norm(&self) {
+    let nx = v1.y() * v2.z() - v1.z() * v2.y();
+    let ny = v1.z() * v2.x() - v1.x() * v2.z();
+    let nz = v1.x() * v2.y() - v1.y() * v2.x();
+    (nx.pow2() + ny.pow2() + nz.pow2()).sqrt()
+  }
+  
   /// Compute the angular distance between this vector and the other given vector
   fn ang_dist<T: Vec3 + UnitVec3>(&self, other: &T) -> f64 {
-    2.0 * (0.5 * self.euclidean_dist(other)).asin()
+    let cos = self.dot_product(other);
+    let sin = self.cross_prod_norm(other);
+    debug_assert!(sin >= 0.0);
+    sin.atan2(cos)
+    /* As noticed by M. Reinecke, the folowing formula is numerically unstable for angles near PI.
+    let half_eucl = 0.5 * self.euclidean_dist(other);
+    2.0 * half_eucl.asin()*/
+    // One can use also use the Vincenty formula from (lon_a, lat_a), (lon_b, lat_b)
   }
   
   /// Returns the angular
