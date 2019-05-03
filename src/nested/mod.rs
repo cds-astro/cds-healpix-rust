@@ -552,223 +552,6 @@ impl Layer {
     result_map
   }
   
-  /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
-  /// located in the corner of given direction in the given cell.
-  /// ```rust
-  /// use cdshealpix::compass_point::{Cardinal};
-  /// use cdshealpix::nested::{get_or_create, Layer};
-  ///
-  /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
-  /// let delta_depth = 1;
-  /// assert_eq!(0 , nested0.internal_corner(0, delta_depth, Cardinal::S));
-  /// assert_eq!(1 , nested0.internal_corner(0, delta_depth, Cardinal::E));
-  /// assert_eq!(2 , nested0.internal_corner(0, delta_depth, Cardinal::W));
-  /// assert_eq!(3 , nested0.internal_corner(0, delta_depth, Cardinal::N));
-  /// ```
-  pub fn internal_corner(&self, hash: u64, delta_depth: u8, direction: &Cardinal) -> u64 {
-    match *direction {
-      Cardinal::S => self.internal_corner_south(hash, delta_depth),
-      Cardinal::E => self.internal_corner_east(hash, delta_depth),
-      Cardinal::N => self.internal_corner_north(hash, delta_depth),
-      Cardinal::W => self.internal_corner_west(hash, delta_depth),
-    }
-  }
-  
-  /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
-  /// located in the north corner of the given cell.
-  pub fn internal_corner_north(&self, hash: u64, delta_depth: u8) -> u64 {
-    (hash << (delta_depth << 1)) | xy_mask(delta_depth)
-  }
-
-  /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
-  /// located in the south corner of the given cell.
-  pub fn internal_corner_south(&self, hash: u64, delta_depth: u8) -> u64 {
-    hash << (delta_depth << 1)
-  }
-
-  /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
-  /// located in the east corner of the given cell.
-  pub fn internal_corner_east(&self, hash: u64, delta_depth: u8) -> u64 {
-    (hash << (delta_depth << 1)) | y_mask(delta_depth)
-  }
-
-  /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
-  /// located in the west corner of the given cell.
-  pub fn internal_corner_west(&self, hash: u64, delta_depth: u8) -> u64 {
-    (hash << (delta_depth << 1)) | x_mask(delta_depth)
-  }
-
-
-  /// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
-  /// located in the internal edge of given direction in the given cell.
-  /// 
-  /// # Info
-  /// The returned vector is sorted.
-  /// 
-  /// ```rust
-  /// use cdshealpix::compass_point::{Cardinal};
-  /// use cdshealpix::nested::{get_or_create, Layer};
-  ///
-  /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
-  /// 
-  /// let delta_depth = 1;
-  /// assert_eq!(vec![0, 1] , nested0.internal_edge_part(0, delta_depth, Ordinal::SE));
-  /// assert_eq!(vec![0, 2] , nested0.internal_edge_part(0, delta_depth, Ordinal::SW));
-  /// assert_eq!(vec![1, 3] , nested0.internal_edge_part(0, delta_depth, Ordinal::NE));
-  /// assert_eq!(vec![2, 3] , nested0.internal_edge_part(0, delta_depth, Ordinal::NW));
-  /// 
-  /// let delta_depth = 2;
-  /// assert_eq!(vec![ 0,  1,  4,  5] , nested0.internal_edge_part(0, delta_depth, Ordinal::SE));
-  /// assert_eq!(vec![ 0,  2,  8, 10] , nested0.internal_edge_part(0, delta_depth, Ordinal::SW));
-  /// assert_eq!(vec![ 5,  7, 13, 15] , nested0.internal_edge_part(0, delta_depth, Ordinal::NE));
-  /// assert_eq!(vec![10, 11, 14, 15] , nested0.internal_edge_part(0, delta_depth, Ordinal::NW));
-  /// ```
-  pub fn internal_edge_part(&self, hash: u64, delta_depth: u8, direction: &Ordinal) -> Box<[u64]> {
-    match *direction {
-      Ordinal::SE => self.internal_edge_southeast(hash, delta_depth),
-      Ordinal::SW => self.internal_edge_southwest(hash, delta_depth),
-      Ordinal::NE => self.internal_edge_northeast(hash, delta_depth),
-      Ordinal::NW => self.internal_edge_northwest(hash, delta_depth),
-    }
-  }
-
-  /// Same as [internal_edge_part](#method.internal_edge_part) except that the result is appended
-  /// to the given vec.
-  pub fn append_internal_edge_part(&self, hash: u64, delta_depth: u8, direction: &Ordinal, result: &mut Vec<u64>) {
-    match *direction {
-      Ordinal::SE => self.append_internal_edge_southeast(hash, delta_depth, result),
-      Ordinal::SW => self.append_internal_edge_southwest(hash, delta_depth, result),
-      Ordinal::NE => self.append_internal_edge_northeast(hash, delta_depth, result),
-      Ordinal::NW => self.append_internal_edge_northwest(hash, delta_depth, result),
-    }
-  }
-  
-  /// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
-  /// located in the southeast internal edge of the given cell.
-  pub fn internal_edge_southeast(&self, mut hash: u64, delta_depth: u8) -> Box<[u64]> {
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
-    hash <<= delta_depth << 1;
-    for x in 0..nside {
-      v.push(hash | self.z_order_curve.i02h(x));
-    }
-    v.into_boxed_slice()
-  }
-
-  /// Same as [internal_edge_southeast](#method.internal_edge_southeast) except that
-  /// the result is appended to the given vec.
-  pub fn append_internal_edge_southeast(&self, mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-    hash <<= delta_depth << 1;
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    for x in 0..nside {
-      result.push(hash | self.z_order_curve.i02h(x));
-    }
-  }
-
-  /// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
-  /// located in the southwest internal edge of the given cell.
-  /// # Info
-  /// The returned vector is sorted.
-  pub fn internal_edge_southwest(&self, mut hash: u64, delta_depth: u8) -> Box<[u64]> {
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
-    hash <<= delta_depth << 1;
-    for y in 0..nside {
-      v.push(hash | self.z_order_curve.oj2h(y));
-    }
-    v.into_boxed_slice()
-  }
-
-  /// Same as [internal_edge_southwest](#method.internal_edge_southwest) except that
-  /// the result is appended to the given vec.
-  pub fn append_internal_edge_southwest(&self, mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-    hash <<= delta_depth << 1;
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    for y in 0..nside {
-      result.push(hash | self.z_order_curve.oj2h(y));
-    }
-  }
-
-  /// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
-  /// located in the northeast internal edge of the given cell.
-  /// # Info
-  /// The returned vector is sorted.
-  pub fn internal_edge_northeast(&self, mut hash: u64, delta_depth: u8) -> Box<[u64]> {
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
-    hash <<= delta_depth << 1;
-    let x_bits = self.z_order_curve.i02h(nside - 1);
-    for y in 0..nside {
-      v.push(hash | self.z_order_curve.oj2h(y) | x_bits);
-    }
-    v.into_boxed_slice()
-  }
-
-  /// Same as [internal_edge_northeast](#method.internal_edge_northeast) except that
-  /// the result is appended to the given vec.
-  pub fn append_internal_edge_northeast(&self, mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-    hash <<= delta_depth << 1;
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let x_bits = self.z_order_curve.i02h(nside - 1);
-    for y in 0..nside {
-      result.push(hash | self.z_order_curve.oj2h(y) | x_bits);
-    }
-  }
-  
-  /// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
-  /// located in the northwest internal edge of the given cell.
-  /// # Info
-  /// The returned vector is sorted.
-  pub fn internal_edge_northwest(&self, mut hash: u64, delta_depth: u8) -> Box<[u64]> {
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
-    hash <<= delta_depth << 1;
-    let y_bits = self.z_order_curve.oj2h(nside - 1);
-    for x in 0..nside {
-      v.push(hash | self.z_order_curve.i02h(x) | y_bits);
-    }
-    v.into_boxed_slice()
-  }
-
-  /// Same as [internal_edge_northwest](#method.internal_edge_northwest) except that
-  /// the result is appended to the given vec.
-  pub fn append_internal_edge_northwest(&self, mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-    hash <<= delta_depth << 1;
-    let nside = 1_u32 << delta_depth; // 2^deltaDepth
-    let y_bits = self.z_order_curve.oj2h(nside - 1);
-    for x in 0..nside {
-      result.push(hash | self.z_order_curve.i02h(x) | y_bits);
-    }
-  }
-  
-  /// # Panics
-  /// If the given Main Wind is the Center (i.e. is neither Ordinal nor Cardinal).
-  fn append_sorted_internal_edge_element(&self, hash: u64, delta_depth: u8, direction: MainWind, result: &mut Vec<u64>) {
-    if direction.is_cardinal() {
-      result.push(self.internal_corner(hash, delta_depth, &direction.to_cardinal()));
-    } else if direction.is_ordinal() {
-      self.append_internal_edge_part(hash, delta_depth, &direction.to_ordinal(), result);
-    } else {
-      panic!("Main wind {:?} is neither ordinal not cardinal", &direction);
-    }
-  }
-
-  /// # Panics
-  /// If the given Main Wind is the Center (i.e. is neither Ordinal nor Cardinal).
-  fn add_sorted_internal_edge_element(&self, hash: u64, delta_depth: u8, direction: MainWind, result: &mut ExternalEdge) {
-    if direction.is_cardinal() {
-      let cardinal = direction.to_cardinal();
-      result.set_corner(&cardinal, self.internal_corner(hash, delta_depth, &cardinal));
-    } else if direction.is_ordinal() {
-      let ordinal = direction.to_ordinal();
-      result.set_edge(&ordinal, self.internal_edge_part(hash, delta_depth, &ordinal));
-    } else {
-      panic!("Main wind {:?} is neither ordinal not cardinal", &direction);
-    }
-  }
-
   
   pub fn external_edge_struct(&self, hash: u64, delta_depth: u8) -> ExternalEdge {
     self.check_hash(hash);
@@ -781,7 +564,7 @@ impl Layer {
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
         let dir_from_neig = direction_from_neighbour(h_parts.d0h, direction);
-        self.add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
+        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
       }
     } else {
       // Easy: always use the opposite direction
@@ -789,7 +572,7 @@ impl Layer {
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
         let dir_from_neig = direction.opposite();
-        self.add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
+        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
       }
     }
     res
@@ -816,7 +599,7 @@ impl Layer {
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.drain(..) {
-        self.append_sorted_internal_edge_element(hash_value, delta_depth,
+        append_sorted_internal_edge_element(hash_value, delta_depth,
           direction_from_neighbour(h_parts.d0h, direction), &mut edge);
       }
     } else {
@@ -825,7 +608,7 @@ impl Layer {
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       for (direction, hash_value) in neighbours.drain(..) {
-        self.append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut edge);
+        append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut edge);
       }
     }
     edge
@@ -1558,6 +1341,226 @@ impl Layer {
   }
 }
 
+
+
+/// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
+/// located in the corner of given direction in the given cell.
+/// ```rust
+/// use cdshealpix::compass_point::{Cardinal};
+/// use cdshealpix::nested::{internal_corner};
+///
+/// let delta_depth = 1;
+/// assert_eq!(0 , internal_corner(0, delta_depth, &Cardinal::S));
+/// assert_eq!(1 , internal_corner(0, delta_depth, &Cardinal::E));
+/// assert_eq!(2 , internal_corner(0, delta_depth, &Cardinal::W));
+/// assert_eq!(3 , internal_corner(0, delta_depth, &Cardinal::N));
+/// ```
+pub fn internal_corner(hash: u64, delta_depth: u8, direction: &Cardinal) -> u64 {
+  match *direction {
+    Cardinal::S => internal_corner_south(hash, delta_depth),
+    Cardinal::E => internal_corner_east(hash, delta_depth),
+    Cardinal::N => internal_corner_north(hash, delta_depth),
+    Cardinal::W => internal_corner_west(hash, delta_depth),
+  }
+}
+
+/// Returns the hash value of the cell of depth the given hash depth + the given `delta_depth`
+/// located in the south corner of the given cell.
+pub fn internal_corner_south(hash: u64, delta_depth: u8) -> u64 {
+  hash << (delta_depth << 1)
+}
+
+/// Returns the hash value of the cell of depth the given hash depth + the given `delta_depth`
+/// located in the east corner of the given cell.
+pub fn internal_corner_east(hash: u64, delta_depth: u8) -> u64 {
+  (hash << (delta_depth << 1)) | x_mask(delta_depth)
+}
+
+/// Returns the hash value of the cell of depth the given hash depth + the given `delta_depth`
+/// located in the west corner of the given cell.
+pub fn internal_corner_west(hash: u64, delta_depth: u8) -> u64 {
+  (hash << (delta_depth << 1)) | y_mask(delta_depth)
+}
+
+/// Returns the hash value of the cell of depth the given hash depth + the given `delta_depth`
+/// located in the north corner of the given cell.
+pub fn internal_corner_north(hash: u64, delta_depth: u8) -> u64 {
+  (hash << (delta_depth << 1)) | xy_mask(delta_depth)
+}
+
+
+/// Returns the hash values of the cells of depth this layer depth + the given `delta_depth`
+/// located in the internal edge of given direction in the given cell.
+/// 
+/// # Info
+/// The returned vector is sorted.
+/// 
+/// ```rust
+/// use cdshealpix::compass_point::{Ordinal};
+/// use cdshealpix::nested::{internal_edge_part};
+///
+/// 
+/// let delta_depth = 1;
+/// assert_eq!(vec![0, 1].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::SE));
+/// assert_eq!(vec![0, 2].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::SW));
+/// assert_eq!(vec![1, 3].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::NE));
+/// assert_eq!(vec![2, 3].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::NW));
+/// 
+/// let delta_depth = 2;
+/// assert_eq!(vec![ 0,  1,  4,  5].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::SE));
+/// assert_eq!(vec![ 0,  2,  8, 10].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::SW));
+/// assert_eq!(vec![ 5,  7, 13, 15].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::NE));
+/// assert_eq!(vec![10, 11, 14, 15].into_boxed_slice() , internal_edge_part(0, delta_depth, &Ordinal::NW));
+/// ```
+pub fn internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal) -> Box<[u64]> {
+  match *direction {
+    Ordinal::SE => internal_edge_southeast(hash, delta_depth),
+    Ordinal::SW => internal_edge_southwest(hash, delta_depth),
+    Ordinal::NE => internal_edge_northeast(hash, delta_depth),
+    Ordinal::NW => internal_edge_northwest(hash, delta_depth),
+  }
+}
+
+/// Same as [internal_edge_part](#method.internal_edge_part) except that the result is appended
+/// to the given vec.
+pub fn append_internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal, result: &mut Vec<u64>) {
+  match *direction {
+    Ordinal::SE => append_internal_edge_southeast(hash, delta_depth, result),
+    Ordinal::SW => append_internal_edge_southwest(hash, delta_depth, result),
+    Ordinal::NE => append_internal_edge_northeast(hash, delta_depth, result),
+    Ordinal::NW => append_internal_edge_northwest(hash, delta_depth, result),
+  }
+}
+
+/// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
+/// located in the southeast internal edge of the given cell.
+pub fn internal_edge_southeast(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
+  hash <<= delta_depth << 1;
+  for x in 0..nside {
+    v.push(hash | get_zoc(delta_depth).i02h(x));
+  }
+  v.into_boxed_slice()
+}
+
+/// Same as [internal_edge_southeast](#method.internal_edge_southeast) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_southeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  for x in 0..nside {
+    result.push(hash | get_zoc(delta_depth).i02h(x));
+  }
+}
+
+/// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
+/// located in the southwest internal edge of the given cell.
+/// # Info
+/// The returned vector is sorted.
+pub fn internal_edge_southwest(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
+  hash <<= delta_depth << 1;
+  for y in 0..nside {
+    v.push(hash | get_zoc(delta_depth).oj2h(y));
+  }
+  v.into_boxed_slice()
+}
+
+/// Same as [internal_edge_southwest](#method.internal_edge_southwest) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_southwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  for y in 0..nside {
+    result.push(hash | get_zoc(delta_depth).oj2h(y));
+  }
+}
+
+/// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
+/// located in the northeast internal edge of the given cell.
+/// # Info
+/// The returned vector is sorted.
+pub fn internal_edge_northeast(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
+  hash <<= delta_depth << 1;
+  let x_bits = get_zoc(delta_depth).i02h(nside - 1);
+  for y in 0..nside {
+    v.push(hash | get_zoc(delta_depth).oj2h(y) | x_bits);
+  }
+  v.into_boxed_slice()
+}
+
+/// Same as [internal_edge_northeast](#method.internal_edge_northeast) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_northeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let x_bits = get_zoc(delta_depth).i02h(nside - 1);
+  for y in 0..nside {
+    result.push(hash | get_zoc(delta_depth).oj2h(y) | x_bits);
+  }
+}
+
+/// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
+/// located in the northwest internal edge of the given cell.
+/// # Info
+/// The returned vector is sorted.
+pub fn internal_edge_northwest(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
+  hash <<= delta_depth << 1;
+  let y_bits = get_zoc(delta_depth).oj2h(nside - 1);
+  for x in 0..nside {
+    v.push(hash | get_zoc(delta_depth).i02h(x) | y_bits);
+  }
+  v.into_boxed_slice()
+}
+
+/// Same as [internal_edge_northwest](#method.internal_edge_northwest) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_northwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let y_bits = get_zoc(delta_depth).oj2h(nside - 1);
+  for x in 0..nside {
+    result.push(hash | get_zoc(delta_depth).i02h(x) | y_bits);
+  }
+}
+
+
+/// # Panics
+/// If the given Main Wind is the Center (i.e. is neither Ordinal nor Cardinal).
+fn add_sorted_internal_edge_element(hash: u64, delta_depth: u8, direction: MainWind, result: &mut ExternalEdge) {
+  if direction.is_cardinal() {
+    let cardinal = direction.to_cardinal();
+    result.set_corner(&cardinal, internal_corner(hash, delta_depth, &cardinal));
+  } else if direction.is_ordinal() {
+    let ordinal = direction.to_ordinal();
+    result.set_edge(&ordinal, internal_edge_part(hash, delta_depth, &ordinal));
+  } else {
+    panic!("Main wind {:?} is neither ordinal not cardinal", &direction);
+  }
+}
+
+/// # Panics
+/// If the given Main Wind is the Center (i.e. is neither Ordinal nor Cardinal).
+fn append_sorted_internal_edge_element(hash: u64, delta_depth: u8, direction: MainWind, result: &mut Vec<u64>) {
+  if direction.is_cardinal() {
+    result.push(internal_corner(hash, delta_depth, &direction.to_cardinal()));
+  } else if direction.is_ordinal() {
+    append_internal_edge_part(hash, delta_depth, &direction.to_ordinal(), result);
+  } else {
+    panic!("Main wind {:?} is neither ordinal not cardinal", &direction);
+  }
+}
+
+
+
+
+
 fn is_in_list(depth: u8, hash: u64, depth_hashs: u8, sorted_hashs: &[u64]) -> bool {
   let twice_delta_depth = (depth_hashs - depth) << 1;
   let hash_at_depth_max = hash << twice_delta_depth;
@@ -1666,34 +1669,32 @@ fn div4_remainder(x: u8) -> u8 {
 /// mask ...010101
 /// ```rust
 /// use cdshealpix::nested::{x_mask};
-/// assert_eq!(x_mask(0), 0b00000000);
 /// assert_eq!(x_mask(3), 0b00010101);
 /// ```
 #[inline]
-fn x_mask(depth: u8) -> u64 {
+pub fn x_mask(depth: u8) -> u64 {
   0x5555555555555555_u64 >> (64 - (depth << 1))
 }
 
 /// mask ...101010
 /// ```rust
 /// use cdshealpix::nested::{y_mask};
-/// assert_eq!(y_mask(0), 0b00000000);
 /// assert_eq!(y_mask(3), 0b00101010);
 /// ```
 #[inline]
-fn y_mask(depth: u8) -> u64{
+pub fn y_mask(depth: u8) -> u64{
   0xAAAAAAAAAAAAAAAA_u64 >> (64 - (depth << 1))
 }
 
 /// mask ...111111
 /// ```rust
 /// use cdshealpix::nested::{xy_mask};
-/// assert_eq!(xy_mask(0), 0b00000000);
 /// assert_eq!(xy_mask(3), 0b00111111);
+/// let depth = 3_u8;
 /// assert_eq!(0xFFFFFFFFFFFFFFFF_u64 >> (64 - (depth << 1)), (1_u64 << (depth << 1)) - 1_u64);
 /// ```
 #[inline]
-fn xy_mask(depth: u8) -> u64 {
+pub fn xy_mask(depth: u8) -> u64 {
   0xFFFFFFFFFFFFFFFF_u64 >> (64 - (depth << 1))
 }
 

@@ -8,6 +8,7 @@
 /resources/gnuplot
 
 # Ignore files
+Notes.txt
 GIT_NOTICE.txt
 CRATESIO_NOTICE.txt
 Cargo.lock

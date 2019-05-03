@@ -396,15 +396,15 @@ impl MainWind {
   /// ```rust
   /// use cdshealpix::compass_point::{MainWind};
   /// 
-  /// assert_eq!(false, MainWind::S.is_cardinal());
-  /// assert_eq!(false, MainWind::E.is_cardinal());
-  /// assert_eq!(false, MainWind::N.is_cardinal());
-  /// assert_eq!(false, MainWind::W.is_cardinal());
-  /// assert_eq!(false, MainWind::C.is_cardinal());
-  /// assert_eq!(true, MainWind::SE.is_cardinal());
-  /// assert_eq!(true, MainWind::SW.is_cardinal());
-  /// assert_eq!(true, MainWind::NE.is_cardinal());
-  /// assert_eq!(true, MainWind::NW.is_cardinal());
+  /// assert_eq!(false, MainWind::S.is_ordinal());
+  /// assert_eq!(false, MainWind::E.is_ordinal());
+  /// assert_eq!(false, MainWind::N.is_ordinal());
+  /// assert_eq!(false, MainWind::W.is_ordinal());
+  /// assert_eq!(false, MainWind::C.is_ordinal());
+  /// assert_eq!(true, MainWind::SE.is_ordinal());
+  /// assert_eq!(true, MainWind::SW.is_ordinal());
+  /// assert_eq!(true, MainWind::NE.is_ordinal());
+  /// assert_eq!(true, MainWind::NW.is_ordinal());
   /// ```
   pub fn is_ordinal(&self) -> bool {
     match *self {
