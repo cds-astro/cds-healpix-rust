@@ -1,9 +1,6 @@
-
-use std::f64::consts::{PI};
 use super::super::HALF_PI;
 use super::super::TWICE_PI;
 use super::super::Customf64;
-
 
 /// Represents a spherical projection, i.e. the projection of spherical coordinates
 /// (on the unit sphere) on a two dimensional plane.
@@ -144,7 +141,7 @@ impl Proj for ProjSIN {
     if rho2 < 1.0 {
       let r = (1.0 - rho2).sqrt(); // = cos(arcsin(rho)) = rho / tan(arcsin(rho))
       let lat = (self.sin_center_lat * r + y * self.cos_center_lat).asin();
-      let lon = (self.cos_center_lat * r - y * self.sin_center_lat);
+      let lon = self.cos_center_lat * r - y * self.sin_center_lat;
       let lon = self.center_lon + x.atan2(lon);
       Some((
         if lon < 0.0 {

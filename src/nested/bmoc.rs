@@ -1203,12 +1203,13 @@ impl<'a> Iterator for BMOCFlatIterCell<'a> {
     if let Some(cell) = &self.curr_val {
       self.n_returned += 1;
       if cell.hash < self.curr_val_max {
-        self.curr_val.replace(Cell {
+        let new_cell = Cell {
           raw_value: cell.raw_value,
           depth: self.depth_max,
           hash: cell.hash + 1,
           is_full: cell.is_full,
-        })
+        };
+        self.curr_val.replace(new_cell)
       } else {
         self.next_cell()
       }

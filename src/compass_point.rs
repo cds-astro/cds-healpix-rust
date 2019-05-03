@@ -52,7 +52,7 @@ impl Cardinal {
     }
   }
 
-  fn index(&self) -> u8 {
+  pub(crate) fn index(&self) -> u8 {
     match *self {
       Cardinal::S => 0,
       Cardinal::E => 1,
@@ -211,6 +211,71 @@ impl<V: Copy> CardinalMap<V> {
   }
 }
 
+/////////////
+// Ordinal //
+/////////////
+
+/// Cardinal points 
+#[derive(Debug, PartialEq)]
+pub enum Ordinal {
+  /// Southeast direction
+  SE,
+  /// Southwest direction
+  SW,
+  /// Northeast direction
+  NE,
+  /// Northwest direction
+  NW
+}
+
+impl Ordinal {
+  pub(crate) fn index( & self ) -> u8 {
+    match * self {
+      Ordinal::SE => 0,
+      Ordinal::SW => 1,
+      Ordinal::NE => 2,
+      Ordinal::NW => 3,
+    }
+  }
+}
+
+/// Equivalent of a Java EnumMap for ordinal directions.
+/// We require T to implement the Copy trait since internally we use an array stored on the stack.
+pub struct OrdinalMap<T: Copy> {
+  array: [Option<T>; 4],
+}
+
+/// Equivalent of a Java EnumMap for the cardinal points.
+/// We require T to implement the Copy trait since internally we use an array stored on the stack.
+impl<V: Copy> OrdinalMap<V> {
+
+  /// Creates a new empty map.
+  pub fn new() ->  OrdinalMap<V> {
+    OrdinalMap {
+      array: [Option::None; 4],
+    }
+  }
+
+  /// Associate the given value with the given direction
+  pub fn put(&mut self, key: Ordinal, value: V) -> Option<V> {
+    mem::replace(&mut self.array[key.index() as usize], Some(value))
+  }
+
+  /// Get a pointer to the value associated with the given direction
+  pub fn get(&self, key: Ordinal) -> Option<&V> {
+    match self.array[key.index() as usize] {
+      Some(ref v) => Some(v),
+      None => None,
+    }
+  }
+
+  /// Replace all values by None
+  pub fn clear(&mut self) {
+    for i in 0..4 {
+      self.array[i] = None;
+    }
+  }
+}
 
 ///////////////
 // MAIN WIND //
@@ -292,6 +357,106 @@ impl MainWind {
     }
   }
 
+  /// Returns `true` is the Main Wind is more particularly a Cardinal point.
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// 
+  /// assert_eq!(true, MainWind::S.is_cardinal());
+  /// assert_eq!(true, MainWind::E.is_cardinal());
+  /// assert_eq!(true, MainWind::N.is_cardinal());
+  /// assert_eq!(true, MainWind::W.is_cardinal());
+  /// assert_eq!(false, MainWind::C.is_cardinal());
+  /// assert_eq!(false, MainWind::SE.is_cardinal());
+  /// assert_eq!(false, MainWind::SW.is_cardinal());
+  /// assert_eq!(false, MainWind::NE.is_cardinal());
+  /// assert_eq!(false, MainWind::NW.is_cardinal());
+  /// ```
+  pub fn is_cardinal(&self) -> bool {
+    match *self {
+      MainWind::S | MainWind::E | MainWind::N | MainWind::W => true,
+      _ => false,
+    }
+  }
+
+  /// Convert this main wind into a Cardinal point.
+  /// # Panics
+  /// If the maind wind is not a cardinal point
+  pub fn to_cardinal(&self) -> Cardinal {
+    // use self::Cardinal;
+    match *self {
+      MainWind::S => Cardinal::S,
+      MainWind::E => Cardinal::E,
+      MainWind::N => Cardinal::N,
+      MainWind::W => Cardinal::W,
+      _ => panic!(format!("Main wind '{:?}' can't be converted to cardinal!", &self)),
+    }
+  }
+
+  /// Returns `true` is the Main Wind is more particularly an Ordinal point.
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// 
+  /// assert_eq!(false, MainWind::S.is_cardinal());
+  /// assert_eq!(false, MainWind::E.is_cardinal());
+  /// assert_eq!(false, MainWind::N.is_cardinal());
+  /// assert_eq!(false, MainWind::W.is_cardinal());
+  /// assert_eq!(false, MainWind::C.is_cardinal());
+  /// assert_eq!(true, MainWind::SE.is_cardinal());
+  /// assert_eq!(true, MainWind::SW.is_cardinal());
+  /// assert_eq!(true, MainWind::NE.is_cardinal());
+  /// assert_eq!(true, MainWind::NW.is_cardinal());
+  /// ```
+  pub fn is_ordinal(&self) -> bool {
+    match *self {
+      MainWind::SE | MainWind::SW | MainWind::NE | MainWind::NW => true,
+      _ => false,
+    }
+  }
+
+  /// Convert this main wind into an Ordinal point.
+  /// # Panics
+  /// If the maind wind is not an orinal point
+  pub fn to_ordinal(&self) -> Ordinal {
+    match *self {
+      MainWind::SE => Ordinal::SE,
+      MainWind::SW => Ordinal::SW,
+      MainWind::NE => Ordinal::NE,
+      MainWind::NW => Ordinal::NW,
+      _ => panic!(format!("Main wind '{:?}' can't be converted to ordinal!", &self)),
+    }
+  }
+  
+  /// Returns the given main wind opposite direction.
+  /// 
+  /// # Example
+  /// 
+  /// ```rust
+  /// use cdshealpix::compass_point::{MainWind};
+  /// 
+  /// assert_eq!(MainWind::S.opposite(),  MainWind::N);
+  /// assert_eq!(MainWind::SE.opposite(), MainWind::NW);
+  /// assert_eq!(MainWind::E.opposite(),  MainWind::W);
+  /// assert_eq!(MainWind::SW.opposite(), MainWind::NE);
+  /// assert_eq!(MainWind::C.opposite(),  MainWind::C);
+  /// assert_eq!(MainWind::NE.opposite(), MainWind::SW);
+  /// assert_eq!(MainWind::W.opposite(),  MainWind::E);
+  /// assert_eq!(MainWind::NW.opposite(), MainWind::SE);
+  /// assert_eq!(MainWind::N.opposite(),  MainWind::S);
+  /// ```
+  pub fn opposite(&self) -> MainWind {
+    match *self {
+        MainWind::S  => MainWind::N,
+        MainWind::SE => MainWind::NW,
+        MainWind::E  => MainWind::W,
+        MainWind::SW => MainWind::NE,
+        MainWind::C  => MainWind::C,
+        MainWind::NE => MainWind::SW,
+        MainWind::W  => MainWind::E,
+        MainWind::NW => MainWind::SE,
+        MainWind::N  => MainWind::S,
+    }
+  }
+  
   /// Returns the given Main Wind direction according to the given offsets.
   /// - `offset_se must` be in `[-1, 1]`
   /// - `offset_sw must` be in `[-1, 1]`
@@ -428,15 +593,26 @@ impl<V: Copy> MainWindMap<V> {
     self.array.into_iter().filter_map(|&o| o).collect::<Vec<V>>()
   }
   
+  pub fn entries(&self) -> Box<[(MainWind, V)]> {
+    self.entries_vec().into_boxed_slice()
+  }
+
+  pub fn entries_vec(&self) -> Vec<(MainWind, V)> {
+    self.array.into_iter().enumerate()
+      .filter_map(|(i, &o)| o.map(|v| (MainWind::from_index(i as u8), v)))
+      .collect::<Vec<(MainWind, V)>>()
+  }
+  
 }
 
 impl<V: Copy + Ord> MainWindMap<V> {
   
   /// Returns the values contained in the map, ordered in their natural order in a fixed length array
   pub fn sorted_values(&self) -> Box<[V]> {
-    let mut values = self.values_vec().into_boxed_slice();
-    values.sort_unstable();
-    values
+    //let mut values = self.values_vec().into_boxed_slice();
+    //values.sort_unstable();
+    //values
+    self.sorted_values_vec().into_boxed_slice()
   }
 
   /// Returns the values contained in the map, ordered in their natural order in a growable array
@@ -444,6 +620,16 @@ impl<V: Copy + Ord> MainWindMap<V> {
     let mut values: Vec<V> = self.values_vec();
     values.sort_unstable();
     values
+  }
+
+  pub fn sorted_entries(&self) -> Box<([(MainWind, V)])> {
+    self.sorted_entries_vec().into_boxed_slice()
+  }
+  
+  pub fn sorted_entries_vec(&self) -> Vec<(MainWind, V)> {
+    let mut entries = self.entries_vec();
+    entries.sort_unstable_by(|(_, v1), (_, v2)| v1.partial_cmp(v2).unwrap());
+    entries
   }
 }
 

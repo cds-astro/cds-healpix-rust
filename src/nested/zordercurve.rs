@@ -1,5 +1,5 @@
 //! 2D Morton code implementation.
-//! For BMI 2.0 referecnes, see:
+//! For BMI 2.0 references, see:
 //! - [here](https://github.com/gnzlbg/bitwise/blob/master/src/word/morton.rs) to use BMI 2.0 pdep/pext instructions.
 //! - [here](https://stackoverflow.com/questions/4909263/how-to-efficiently-de-interleave-bits-inverse-morton) another example with BMI2.0 instructions 
 //! - [here](https://docs.rs/bitintr/0.2.0/src/bitintr/pdep.rs.html#68-87) code using BMI 2.0 and Rust macro 
@@ -20,8 +20,6 @@
 //  outY = _pext_u32(code, 0x12492492);
 //  outZ = _pext_u32(code, 0x24924924);
 use std::mem;
-
-
 
 static LUPT_TO_HASH: [u16; 256] = [
   0x0000, 0x0001, 0x0004, 0x0005, 0x0010, 0x0011, 0x0014, 0x0015, 0x0040, 0x0041, 0x0044,
@@ -147,10 +145,13 @@ static LUPT_TO_IJ_INT: [u64; 256] = [
 pub trait ZOrderCurve: Sync + Send {
 
   fn ij2h(&self, i: u32, j: u32) -> u64 {
-    (self.i02h(j) << 1) | self.i02h(i)
+    self.i02h(i) | self.oj2h(j)
   }
 
   fn i02h(&self, i: u32) -> u64;
+  fn oj2h(&self, j: u32) -> u64 {
+    self.i02h(j) << 1
+  }
   fn h2ij(&self, h: u64) -> u64;
 
   fn h2i0(&self, h: u64) -> u64 {
@@ -425,6 +426,15 @@ impl ZOrderCurve for SmallZOCbmi {
       _pdep_u32(i, 0x00005555u32) as u64
     }
   }
+  fn oj2h(&self, i: u32) -> u64 {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::_pdep_u32;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::_pdep_u32;
+    unsafe {
+      _pdep_u32(i, 0x0000AAAAu32) as u64
+    }
+  }
   fn h2ij(&self, h: u64) -> u64 {
     #[cfg(target_arch = "x86")]
     use std::arch::x86::_pext_u32;
@@ -470,6 +480,15 @@ impl ZOrderCurve for MediuZOCbmi {
     use std::arch::x86_64::_pdep_u32;
     unsafe {
       _pdep_u32(i, 0x55555555u32) as u64
+    }
+  }
+  fn oj2h(&self, i: u32) -> u64 {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::_pdep_u32;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::_pdep_u32;
+    unsafe {
+      _pdep_u32(i, 0xAAAAAAAAu32) as u64
     }
   }
   fn h2ij(&self, h: u64) -> u64 {
@@ -530,6 +549,21 @@ impl ZOrderCurve for LargeZOCbmi {
     unsafe {
       _pdep_u64(i as u64, 0x5555555555555555u64)
     }
+  }
+  fn oj2h(&self, i: u32) -> u64 {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::_pdep_u32;
+    #[cfg(target_arch = "x86")]
+    unsafe {
+      (_pdep_u32(i & 0x0000FFFFu32, 0xAAAAAAAAu32) as u64)
+        | (_pdep_u32(i >> 16, 0xAAAAAAAAu32) as u64) << 32
+    }
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::_pdep_u64;
+    #[cfg(target_arch = "x86_64")]
+      unsafe {
+        _pdep_u64(i as u64, 0xAAAAAAAAAAAAAAAAu64)
+      }
   }
   fn h2ij(&self, h: u64) -> u64 {
     #[cfg(target_arch = "x86")]

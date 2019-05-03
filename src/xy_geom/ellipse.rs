@@ -120,19 +120,27 @@ impl Ellipse {
   }
   
   pub fn path_along_edge(a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
+    
     let step = (2.0 * a) / (half_num_points as f64);
     let (sin_t, cos_t) = theta.sin_cos();
     let mut v = Vec::<(f64, f64)>::with_capacity(half_num_points << 1);
     for i in 0..half_num_points {
       let x = a - (i as f64) * step;
       let y = b * (1.0 - (x / a).pow2()).sqrt();
-      v.push((x, y));
+      v.push(rotate(x, y, cos_t, sin_t));
     }
     for i in 0..half_num_points {
       let (x, y) = v[i];
-      v.push((-x, -y));
+      v.push(rotate(-x, -y, cos_t, sin_t));
     }
     v.into_boxed_slice()
   }
-  
+}
+
+// TODO: verify the rotation (angle may be the opposite)!
+fn rotate(x: f64, y: f64, cost: f64, sint: f64) -> (f64, f64) {
+  (
+    x * cost - y * sint,
+    x * sint + y * cost
+  )
 }

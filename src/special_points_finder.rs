@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use super::{Customf64, SQRT2, HALF_PI, PI_OVER_FOUR, TRANSITION_Z, ONE_OVER_TRANSITION_Z};
+use super::{Customf64, HALF_PI, PI_OVER_FOUR, TRANSITION_Z, ONE_OVER_TRANSITION_Z};
 use super::sph_geom::coo3d::*;
 // use super::sph_geom::{Polygon};
 
@@ -174,7 +174,7 @@ pub fn cone_special_point_in_eqr(mut z: f64, z0: f64, eucl_cone_radius: f64, nor
 ///   if not in the equatorial region.
 pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D, 
                                              z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
-  let mut cone_center = cross_product(&p1, &p2).normalized();
+  let cone_center = cross_product(&p1, &p2).normalized();
   let z0 = cone_center.z();
   let z1 = p1.z();
   let z2 = p2.z();
@@ -388,7 +388,6 @@ pub fn arc_special_point_in_pc<'a>(
 fn arc_special_point_in_pc_same_quarter( 
   p1: &Coo3D, p2: &Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
   debug_assert!(p1.lon() < p2.lon());
-  let p1_div_half_pi = (p1.lon() / HALF_PI) as u8;
   let mut p2_mod_half_pi = p2.lon() % HALF_PI;
   if p2_mod_half_pi == 0.0 {
     p2_mod_half_pi = HALF_PI;
@@ -396,15 +395,11 @@ fn arc_special_point_in_pc_same_quarter(
   let v1 = Coo3D::from_sph_coo(p1.lon() % HALF_PI, p1.lat());
   let v2 = Coo3D::from_sph_coo(p2_mod_half_pi, p2.lat());
   let mut cone_center = cross_product(&v1, &v2).normalized();
-  /*if have_same_sign(p1.z(),cone_center.z()) {
-    cone_center = cone_center.opposite();
-  }*/
   let lonlat = cone_center.lonlat();
   if lonlat.lon() > PI {
     cone_center = cone_center.opposite();
   }
-  
-  let mut cone_center_lon = cone_center.lonlat().lon();
+  let cone_center_lon = cone_center.lonlat().lon();
   //debug_assert!(0 <= cone_center_lon && cone_center_lon <= );
   let mut z0 = cone_center.z();
   let mut z1 = v1.z();
@@ -434,7 +429,7 @@ fn arc_special_point_in_pc_same_quarter(
     return None;
   }
   // Choose an initial value
-  let mut dz = f_over_df_npc(z, cone_center_lon, z0, w0, cte, direction, 0.0);
+  let dz = f_over_df_npc(z, cone_center_lon, z0, w0, cte, direction, 0.0);
   z -= dz;
   if !((z1 < z && z < z2) || (z2 < z && z < z1)) {
     z = z2 - f_over_df_npc(z2, cone_center_lon, z0, w0, cte, direction, 0.0);

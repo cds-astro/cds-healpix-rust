@@ -1,7 +1,5 @@
-
 use std::f64::NAN;
 
-use super::coo3d::*;
 use super::proj::*;
 use super::super::HALF_PI;
 use super::super::xy_geom::ellipse::*;
