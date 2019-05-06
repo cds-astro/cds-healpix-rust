@@ -77,6 +77,41 @@ pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64
   get_or_create(depth).neighbours(hash, include_center)
 }
 
+/// Conveniency function simply calling the [internal_edge](struct.Layer.html#method.internal_edge) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn internal_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  Layer::internal_edge(hash, delta_depth)
+}
+
+/// Conveniency function simply calling the [internal_edge_sorted](struct.Layer.html#method.internal_edge_sorted) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn internal_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  Layer::internal_edge_sorted(hash, delta_depth)
+}
+
+/// Conveniency function simply calling the [external_edge_struct](struct.Layer.html#method.external_edge_struct) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn external_edge_struct(depth: u8, hash: u64, delta_depth: u8) -> ExternalEdge {
+  get_or_create(depth).external_edge_struct(hash, delta_depth)
+}
+
+/// Conveniency function simply calling the [external_edge](struct.Layer.html#method.external_edge) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn external_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  get_or_create(depth).external_edge(hash, delta_depth)
+}
+
+/// Conveniency function simply calling the [external_edge_sorted](struct.Layer.html#method.external_edge_sorted) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn external_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  get_or_create(depth).external_edge_sorted(hash, delta_depth)
+}
+
 /// Conveniency function simply calling the [cone_coverage_approx](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -114,9 +149,11 @@ pub fn elliptical_cone_coverage_custom(depth: u8, delta_depth: u8, lon: f64, lat
 
 /// Conveniency function simply calling the [polygon_coverage_approx](struct.Layer.html#method.polygon_coverage_approx) method
 /// of the [Layer] of the given *depth*.
+#[inline]
 pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
   get_or_create(depth).polygon_coverage(vertices, exact_solution)
 }
+
 
 
 pub mod bmoc;
@@ -552,7 +589,137 @@ impl Layer {
     result_map
   }
   
+  /// Returns the hash values corresponding to the internal bounds of the given `hash` at 
+  /// the hash depth + the given `delta_depth`:
+  /// - the first quarter contains the southeast border (the z-order curve x-axis with y = 0); 
+  /// - the second quarter contains the northeast border (the z-order y-axis with x = xmax - 1);
+  /// - the third quarter contains the northwest border (the z-order curve x-axis with y = ymax - 1); 
+  /// - the forth quarter contains the southwest border (the y-axis with x = 0).
+  /// 
+  /// The hashes are ordered consecutively, starting from the south (x=0, y=0) cell in the 
+  /// anti-clokwise direction.
+  /// 
+  /// # Input
+  /// - `hash ` the hash for which we look for the internal bounds
+  /// - `delta_depth` difference between the depth of the edge cells and the depth of the given cell  
+  ///
+  /// # Output
+  /// - the cell numbers (hash values) of the given hash inner edge ordered consecutively, 
+  /// starting from the south (x=0, y=0) cell in the anti-clokwise direction.
+  /// 
+  /// 
+  pub fn internal_edge(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+    // Compute the x and y part masks for deltaDepth.
+    let zoc = get_zoc(delta_depth);
+    let twice_dd = delta_depth << 1;
+    let x_max_bits = x_mask(delta_depth);
+    let y_max_bits = x_max_bits << 1;
+    // Prepare hashes of depth of (self.depth + delta_depth), switching hash bits of 2 delta_depth to the left.
+    hash <<= twice_dd;
+    // Prepare filling the result.
+    // am1 stands for a - 1, i.e. nSide - 1, i.e. the index of the last cell along the x or y-axis
+    let am1 = (1_u32 << delta_depth) - 1; // 2^deltaDepth - 1
+    let mut res: Vec<u64> = Vec::with_capacity((am1 << 2) as usize);
+    // Southeast axis
+    res.push(hash);
+    for k in 1..am1 {
+      let x_bits = zoc.i02h(k);
+      res.push(hash | x_bits);
+    }
+    // Northeast axis
+    res.push(hash | x_max_bits);
+    for k in 1..am1 {
+      res.push(hash | zoc.oj2h(k) | x_max_bits);
+    }
+    // Northwest axis
+    res.push(hash | y_max_bits | x_max_bits);
+    for k in 1..am1 {
+      res.push(hash | y_max_bits | zoc.i02h(am1 - k));
+    }
+    // Southwest axis
+    res.push(hash | y_max_bits);
+    for k in 1..am1 {
+      res.push(hash | zoc.oj2h(am1 - k));
+    }
+    res.into_boxed_slice()
+  }
+
+  /// Same as method `internal_edge` except that the returned array is sorted.
+  pub fn internal_edge_sorted(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+    // Compute the x and y part masks for deltaDepth.
+    let zoc = get_zoc(delta_depth);
+    let twice_dd = delta_depth << 1;
+    let x_max_bits = x_mask(delta_depth);
+    let y_max_bits = x_max_bits << 1;
+    // Prepare hashes of depth of (self.depth + delta_depth), switching hash bits of 2 delta_depth to the left.
+    hash <<= twice_dd;
+    // Set grid size (nSide inside the cell of depth this.depth)
+    let nside = 1 << delta_depth;
+    let am1 = nside - 1;
+    let n_half_side = nside >> 1;
+    // South sub-square (dividing in 4 sub-squares)
+    let mut x = 1_u32;
+    let mut lim = 2_u32;
+    let mut k0 = 1_usize; 
+    let mut k1 = 2_usize;
+    let mut k2 = (am1 + n_half_side) as usize;
+    let mut k3 = ((am1 << 1) + n_half_side) as usize;
+    let size = (am1 << 2) as usize;
+    let mut result = vec![0_u64; size];
+    // Set South corner (first element)
+    result[0] = hash;
+    // Set east corner
+    result[k2 - 1] = hash | x_max_bits;
+    // Set west corner 
+    result[k3 - 1] = hash | y_max_bits;
+    // Set north corner (last element)
+    result[size - k0] = hash | y_max_bits | x_max_bits;
+    while x < n_half_side { // while (k < nHalfSize)
+      x += 1;
+      let xn = zoc.ij2h(x, nside - x); // x shuffled
+      let xs = xn & x_max_bits;
+      let xn = xn & y_max_bits;
+      // South square, south east part
+      result[k0] = hash | xs;
+      k0 += 1;
+      // South square, south west part
+      result[k1] = hash | (xs << 1);
+      k1 += 1;
+      // East square, north east part
+      result[k2] = hash | (xs << 1) | x_max_bits;
+      k2 += 1;
+      // West square, north west part
+      result[k3] = hash | y_max_bits | xs;
+      k3 += 1;
+      // North square, north west
+      result[size - k0] = hash | y_max_bits | (xn >> 1);
+      // North square, north east
+      result[size - k1] = hash | xn | x_max_bits;
+      // West square, north west part
+      result[size - k2] = hash | xn;
+      // East square, nort east part
+      result[size - k3] = hash | (xn >> 1);
+      // Change k0, k1 and limit if x== limit.
+      // The following lines of code are equivalent to:
+      /* if (x == lim) {
+              k0 = k1;
+              k1 += lim; // +2 +4 +8
+              lim <<= 1; // 4 8 16 32 ...
+          } */
+      // To be tested if they are faster (since no risk of branch miss-prediction):
+      // probably true for small deltaDepth but not for large deltaDepth.
+      let mut tmp = x & lim;  debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == x));
+      k0 += (tmp >> 1) as usize;
+      k1 += tmp as usize;
+      tmp -= x;           debug_assert!((x < lim && tmp <  0) || (x == lim && tmp == 0));
+      tmp = 1 >> tmp;     debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == 1));
+      lim <<= tmp;
+    }
+    result.into_boxed_slice()
+  }
   
+  /// Similar to [external_edge](#method.external_edge) except that the returned structure allow
+  /// to access each elements of the external edge: the 4 corners plus the 4 edges.
   pub fn external_edge_struct(&self, hash: u64, delta_depth: u8) -> ExternalEdge {
     self.check_hash(hash);
     let mut res = ExternalEdge::new_empty();
@@ -563,8 +730,13 @@ impl Layer {
       self.edge_cell_neighbours(hash, &mut neighbours);
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
-        let dir_from_neig = direction_from_neighbour(h_parts.d0h, direction);
-        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
+        let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
+          direction.opposite()
+        } else {
+          direction_from_neighbour(h_parts.d0h, &direction)
+        };
+        println!("{:?}, {}, {:?}", &direction, &hash_value, &dir_from_neig);
+        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &direction,&mut res);
       }
     } else {
       // Easy: always use the opposite direction
@@ -572,25 +744,26 @@ impl Layer {
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
         let dir_from_neig = direction.opposite();
-        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut res);
+        add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &direction,&mut res);
       }
     }
     res
   }
   
-  pub fn external_edge(&self, hash: u64, delta_depth: u8) -> Vec<u64> {
+  /// Provides the list of all cells of depth this layer depth + the given `delta_depth`
+  /// surrounding the cell of given hash value.
+  pub fn external_edge(&self, hash: u64, delta_depth: u8) -> Box<[u64]> {
     self.external_edge_generic(hash, delta_depth, false)
   }
   
   /// Similar to [external_edge](#method.external_edge) except that the returned list of cells is ordered.
-  pub fn sorted_external_edge(&self, hash: u64, delta_depth: u8) -> Vec<u64> {
+  pub fn external_edge_sorted(&self, hash: u64, delta_depth: u8) -> Box<[u64]> {
     self.external_edge_generic(hash, delta_depth, true)
   }
-  
-  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool) -> Vec<u64> {
+
+  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool) -> Box<[u64]> {
     self.check_hash(hash);
     let mut edge = Vec::with_capacity((4 + (self.nside << 2)) as usize); // 4 borders (nside) + 4 corners (1)
-  
     let h_bits: HashBits = self.pull_bits_appart(hash);
     if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
       // Not easy: opposite directions depends on base cell neighbours
@@ -599,8 +772,12 @@ impl Layer {
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.drain(..) {
-        append_sorted_internal_edge_element(hash_value, delta_depth,
-          direction_from_neighbour(h_parts.d0h, direction), &mut edge);
+        let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
+          direction.opposite()
+        } else {
+          direction_from_neighbour(h_parts.d0h, &direction)
+        };
+        append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut edge);
       }
     } else {
       // Easy: always use the opposite direction
@@ -611,7 +788,7 @@ impl Layer {
         append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut edge);
       }
     }
-    edge
+    edge.into_boxed_slice()
   }
   
   #[inline]
@@ -799,10 +976,15 @@ impl Layer {
   fn check_hash(&self, hash: u64) { assert!(self.is_hash(hash), "Wrong hash value: too large."); }
 
   #[inline]
+  fn h_2_d0h(&self, hash: u64) -> u8 {
+      (hash >> self.twice_depth) as u8
+  }
+  
+  #[inline]
   fn decode_hash(&self, hash: u64) -> HashParts {
     let ij: u64 = self.z_order_curve.h2ij(hash & self.xy_mask);
     HashParts {
-      d0h: (hash >> self.twice_depth) as u8,
+      d0h: self.h_2_d0h(hash),
       i: self.z_order_curve.ij2i(ij),
       j: self.z_order_curve.ij2j(ij),
     }
@@ -1421,19 +1603,10 @@ pub fn internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal) -> Bo
   }
 }
 
-/// Same as [internal_edge_part](#method.internal_edge_part) except that the result is appended
-/// to the given vec.
-pub fn append_internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal, result: &mut Vec<u64>) {
-  match *direction {
-    Ordinal::SE => append_internal_edge_southeast(hash, delta_depth, result),
-    Ordinal::SW => append_internal_edge_southwest(hash, delta_depth, result),
-    Ordinal::NE => append_internal_edge_northeast(hash, delta_depth, result),
-    Ordinal::NW => append_internal_edge_northwest(hash, delta_depth, result),
-  }
-}
-
 /// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
 /// located in the southeast internal edge of the given cell.
+/// # Info
+/// The returned vector is sorted.
 pub fn internal_edge_southeast(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
   let nside = 1_u32 << delta_depth; // 2^deltaDepth
   let mut v: Vec<u64> = Vec::with_capacity(nside as usize);
@@ -1442,16 +1615,6 @@ pub fn internal_edge_southeast(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     v.push(hash | get_zoc(delta_depth).i02h(x));
   }
   v.into_boxed_slice()
-}
-
-/// Same as [internal_edge_southeast](#method.internal_edge_southeast) except that
-/// the result is appended to the given vec.
-pub fn append_internal_edge_southeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-  hash <<= delta_depth << 1;
-  let nside = 1_u32 << delta_depth; // 2^deltaDepth
-  for x in 0..nside {
-    result.push(hash | get_zoc(delta_depth).i02h(x));
-  }
 }
 
 /// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
@@ -1466,16 +1629,6 @@ pub fn internal_edge_southwest(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     v.push(hash | get_zoc(delta_depth).oj2h(y));
   }
   v.into_boxed_slice()
-}
-
-/// Same as [internal_edge_southwest](#method.internal_edge_southwest) except that
-/// the result is appended to the given vec.
-pub fn append_internal_edge_southwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-  hash <<= delta_depth << 1;
-  let nside = 1_u32 << delta_depth; // 2^deltaDepth
-  for y in 0..nside {
-    result.push(hash | get_zoc(delta_depth).oj2h(y));
-  }
 }
 
 /// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
@@ -1493,17 +1646,6 @@ pub fn internal_edge_northeast(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
   v.into_boxed_slice()
 }
 
-/// Same as [internal_edge_northeast](#method.internal_edge_northeast) except that
-/// the result is appended to the given vec.
-pub fn append_internal_edge_northeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
-  hash <<= delta_depth << 1;
-  let nside = 1_u32 << delta_depth; // 2^deltaDepth
-  let x_bits = get_zoc(delta_depth).i02h(nside - 1);
-  for y in 0..nside {
-    result.push(hash | get_zoc(delta_depth).oj2h(y) | x_bits);
-  }
-}
-
 /// Returns the hash values of the cells of depth the given hash depth + the given `delta_depth`
 /// located in the northwest internal edge of the given cell.
 /// # Info
@@ -1517,6 +1659,48 @@ pub fn internal_edge_northwest(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     v.push(hash | get_zoc(delta_depth).i02h(x) | y_bits);
   }
   v.into_boxed_slice()
+}
+
+/// Same as [internal_edge_part](#method.internal_edge_part) except that the result is appended
+/// to the given vec.
+pub fn append_internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal, result: &mut Vec<u64>) {
+  match *direction {
+    Ordinal::SE => append_internal_edge_southeast(hash, delta_depth, result),
+    Ordinal::SW => append_internal_edge_southwest(hash, delta_depth, result),
+    Ordinal::NE => append_internal_edge_northeast(hash, delta_depth, result),
+    Ordinal::NW => append_internal_edge_northwest(hash, delta_depth, result),
+  }
+}
+
+/// Same as [internal_edge_southeast](#method.internal_edge_southeast) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_southeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  for x in 0..nside {
+    result.push(hash | get_zoc(delta_depth).i02h(x));
+  }
+}
+
+/// Same as [internal_edge_southwest](#method.internal_edge_southwest) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_southwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  for y in 0..nside {
+    result.push(hash | get_zoc(delta_depth).oj2h(y));
+  }
+}
+
+/// Same as [internal_edge_northeast](#method.internal_edge_northeast) except that
+/// the result is appended to the given vec.
+pub fn append_internal_edge_northeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
+  hash <<= delta_depth << 1;
+  let nside = 1_u32 << delta_depth; // 2^deltaDepth
+  let x_bits = get_zoc(delta_depth).i02h(nside - 1);
+  for y in 0..nside {
+    result.push(hash | get_zoc(delta_depth).oj2h(y) | x_bits);
+  }
 }
 
 /// Same as [internal_edge_northwest](#method.internal_edge_northwest) except that
@@ -1533,13 +1717,15 @@ pub fn append_internal_edge_northwest(mut hash: u64, delta_depth: u8, result: &m
 
 /// # Panics
 /// If the given Main Wind is the Center (i.e. is neither Ordinal nor Cardinal).
-fn add_sorted_internal_edge_element(hash: u64, delta_depth: u8, direction: MainWind, result: &mut ExternalEdge) {
+fn add_sorted_internal_edge_element(hash: u64, delta_depth: u8, direction: MainWind, ext_direction: &MainWind, result: &mut ExternalEdge) {
   if direction.is_cardinal() {
     let cardinal = direction.to_cardinal();
-    result.set_corner(&cardinal, internal_corner(hash, delta_depth, &cardinal));
+    result.set_corner(&ext_direction.to_cardinal(), 
+                      internal_corner(hash, delta_depth, &cardinal));
   } else if direction.is_ordinal() {
     let ordinal = direction.to_ordinal();
-    result.set_edge(&ordinal, internal_edge_part(hash, delta_depth, &ordinal));
+    result.set_edge(&ext_direction.to_ordinal(), 
+                    internal_edge_part(hash, delta_depth, &ordinal));
   } else {
     panic!("Main wind {:?} is neither ordinal not cardinal", &direction);
   }
@@ -1680,6 +1866,7 @@ pub fn x_mask(depth: u8) -> u64 {
 /// ```rust
 /// use cdshealpix::nested::{y_mask};
 /// assert_eq!(y_mask(3), 0b00101010);
+/// assert_eq!(y_mask(3), x_mask(3) << 1);
 /// ```
 #[inline]
 pub fn y_mask(depth: u8) -> u64{
@@ -2019,6 +2206,15 @@ mod tests {
     // println!("@@@@@@@@@@@@@@ {:?}", &res);
   }*/
   
+  
+  #[test]
+  fn testok_external_edge_struct() {
+    let depth = 1;
+    let hash = 10;
+    let delta_depth = 2;
+    let e = external_edge_struct(depth, hash, delta_depth);
+    println!("{:?}", &e);
+  }
   
   #[test]
   fn testok_cone_approx_bmoc() {

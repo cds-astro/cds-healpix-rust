@@ -1400,7 +1400,7 @@ fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
 /// # Panics
 /// If the base cell has no neighbour in the given direction (i.e. N/S for equatorial cells
 /// and E/W for polar caps cells)
-pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: MainWind) -> MainWind {
+pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
   match base_cell >> 2 { // <=> basce_cell / 4
     0 => npc_direction_from_neighbour(neighbour_direction),
     1 => eqr_direction_from_neighbour(neighbour_direction),
@@ -1409,9 +1409,9 @@ pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: MainWind) ->
   }
 }
 
-fn npc_direction_from_neighbour(neighbour_direction: MainWind) -> MainWind {
+fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!("No neighbour is this direction"),
+    E | W | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
     NE => NW,
     NW => NE,
     N  => N,
@@ -1419,16 +1419,16 @@ fn npc_direction_from_neighbour(neighbour_direction: MainWind) -> MainWind {
   }
 }
 
-fn eqr_direction_from_neighbour(neighbour_direction: MainWind) -> MainWind {
+fn eqr_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    S | N | C => panic!("No neighbour is this direction"),
+    S | N | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
     _ => neighbour_direction.opposite(),
   }
 }
 
-fn spc_direction_from_neighbour(neighbour_direction: MainWind) -> MainWind {
+fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!("No neighbour is this direction"),
+    E | W | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
     S  => S,
     SE => SW,
     SW => SE,

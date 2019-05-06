@@ -1,5 +1,6 @@
 use crate::compass_point::{Cardinal, Ordinal};
 
+#[derive(Debug)]
 pub struct ExternalEdge { // very simila to CardinalMap + OrdinalMap
   corners: [Option<u64>; 4],
   edges: [Box<[u64]>; 4],
