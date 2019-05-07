@@ -1396,11 +1396,100 @@ fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   }
 }
 
-/// Returns the direction of the given base cell from its neighbour located at the given direction.
+/// Returns the direction of a cell on the inner edge of the given base cell from its neighbour 
+/// located at the given direction in a different base cell.
+/// # Inputs
+/// - `base_cell` the base cell containing the sub-cell we are looking for the direction from its
+///   neighbour in the given `neighbour_direction`
+/// - `inner_direction` the direction of the sub-cell in the edge of the given base cell
+/// - `neighbour_direction` direction of the neighbour of the sub-cell from which we are looking 
+///    at the direction of the sub-cell
+///   
+pub fn edge_cell_direction_from_neighbour(base_cell: u8, inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+  match base_cell >> 2 { // <=> basce_cell / 4
+    0 => npc_egde_direction_from_neighbour(inner_direction, neighbour_direction),
+    1 => eqr_edge_direction_from_neighbour(inner_direction, neighbour_direction),
+    2 => spc_edge_direction_from_neighbour(inner_direction, neighbour_direction),
+    _ => panic!("Base cell must be in [0, 12["),
+  }
+}
+
+fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+  match neighbour_direction {
+    C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    E => match inner_direction {
+      N | NE => N,
+      E => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      S | SE => neighbour_direction.opposite(),
+      _ => unreachable!(),
+    },
+    W => match inner_direction {
+      N | NW => N,
+      W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      S | SE => neighbour_direction.opposite(),
+      _ => unreachable!(),
+    },
+    NE => { 
+      assert!(*inner_direction == N || *inner_direction == E || *inner_direction == NE);
+      NW
+    },
+    NW => {
+      assert!(*inner_direction == N || *inner_direction == W || *inner_direction == NW);
+      NE
+    },
+    N  => match inner_direction {
+      N => N,
+      E | NE => W,
+      W | NW => E,
+      _ => unreachable!(),
+    },
+    _ => neighbour_direction.opposite(),
+  }
+}
+
+fn eqr_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+  neighbour_direction.opposite()
+}
+
+fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+  match neighbour_direction {
+    C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    E => match inner_direction {
+      S | SE => S,
+      E => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      N | NE => neighbour_direction.opposite(),
+      _ => unreachable!(),
+    },
+    W => match inner_direction {
+      S | SW => S,
+      W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      N | NE => neighbour_direction.opposite(),
+      _ => unreachable!(),
+    },
+    SE => {
+      assert!(*inner_direction == S || *inner_direction == E || *inner_direction == SE);
+      SW
+    },
+    SW => {
+      assert!(*inner_direction == S || *inner_direction == W || *inner_direction == SW);
+      SE
+    },
+    S  => match inner_direction {
+      S => S,
+      E | SE => W,
+      W | SW => E,
+      _ => unreachable!(),
+    },
+    _ => neighbour_direction.opposite(),
+  }
+}
+
+/// Returns the direction of the given base cell from its neighbour base cell located 
+/// in the given direction.
 /// # Panics
 /// If the base cell has no neighbour in the given direction (i.e. N/S for equatorial cells
 /// and E/W for polar caps cells)
-pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
+pub fn direction_from_neighbourSS(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
   match base_cell >> 2 { // <=> basce_cell / 4
     0 => npc_direction_from_neighbour(neighbour_direction),
     1 => eqr_direction_from_neighbour(neighbour_direction),

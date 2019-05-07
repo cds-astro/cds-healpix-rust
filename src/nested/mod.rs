@@ -165,7 +165,7 @@ use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon};
 use super::sph_geom::cone::{Cone};
 use super::sph_geom::elliptical_cone::EllipticalCone;
-use super::{proj, direction_from_neighbour};
+use super::{proj, edge_cell_direction_from_neighbour};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
 use super::special_points_finder::{arc_special_points};
@@ -731,11 +731,14 @@ impl Layer {
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
         let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
+          println!("A: {:?}, {}", &direction, &hash_value);
           direction.opposite()
         } else {
-          direction_from_neighbour(h_parts.d0h, &direction)
+          let dir_in_basce_cell_border = self.direction_in_base_cell_border(h_bits.i, h_bits.j);
+          // println!("B: {:?}, {}, {:?}", &direction, &hash_value, &dir_in_basce_cell_border);
+          edge_cell_direction_from_neighbour(h_parts.d0h, &dir_in_basce_cell_border, &direction)
         };
-        println!("{:?}, {}, {:?}", &direction, &hash_value, &dir_from_neig);
+        // println!("{:?}, {}, {:?}", &direction, &hash_value, &dir_from_neig);
         add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &direction,&mut res);
       }
     } else {
@@ -775,7 +778,7 @@ impl Layer {
         let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
           direction.opposite()
         } else {
-          direction_from_neighbour(h_parts.d0h, &direction)
+          edge_cell_direction_from_neighbour(h_parts.d0h, &self.direction_in_base_cell_border(h_bits.i, h_bits.j), &direction)
         };
         append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut edge);
       }
@@ -795,6 +798,25 @@ impl Layer {
   fn is_in_base_cell_border(&self, i_in_base_cell_bits: u64, j_in_base_cell_bits: u64) -> bool {
     0_u64 == i_in_base_cell_bits || i_in_base_cell_bits == self.x_mask
       || 0_u64 == j_in_base_cell_bits || j_in_base_cell_bits == self.y_mask
+  }
+
+  #[inline]
+  fn direction_in_base_cell_border(&self, i_in_base_cell_bits: u64, j_in_base_cell_bits: u64) -> MainWind {
+    let i = if 0_u64 == i_in_base_cell_bits {
+      0
+    } else if i_in_base_cell_bits == self.x_mask {
+      2
+    } else {
+      1
+    };
+    let j = if 0_u64 == j_in_base_cell_bits {
+      0
+    } else if j_in_base_cell_bits == self.y_mask {
+      2
+    } else {
+      1
+    };
+    MainWind::from_index(3 * j + i)
   }
 
   fn inner_cell_neighbours(&self, d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64,
@@ -2212,8 +2234,31 @@ mod tests {
     let depth = 1;
     let hash = 10;
     let delta_depth = 2;
-    let e = external_edge_struct(depth, hash, delta_depth);
-    println!("{:?}", &e);
+    // draw moc 3/117,138,139,142,143,437,439,445,447,176, 178, 184, 186,85, 87, 93, 95,415,154
+    // let e = external_edge_struct(depth, hash, delta_depth);
+    // println!("{:?}", &e);
+    let actual_res = external_edge_sorted(depth, hash, delta_depth);
+    let expected_res: [u64; 19] = [85, 87, 93, 95, 117, 138, 139, 142, 143, 154, 176, 178, 184, 186, 415, 437, 439, 445, 447];
+    // println!("{:?}", &actual_res);
+    for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+      assert_eq!(h1, h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.len());
+  }
+
+  #[test]
+  fn testok_external_edge_struct_v2() {
+    let depth = 1;
+    let hash = 11;
+    let delta_depth = 2;
+    // draw moc 3/63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255
+    let actual_res = external_edge_sorted(depth, hash, delta_depth);
+    let expected_res: [u64; 20] = [63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255];
+    // println!("{:?}", &actual_res);
+    for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+      assert_eq!(h1, h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.len());
   }
   
   #[test]
