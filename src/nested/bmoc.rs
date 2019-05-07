@@ -915,17 +915,17 @@ if (debug) System.out.println("Add3 " + hh);
         if range.start == prev_max {
           prev_max = range.end;
         } else {
-          if prev_min != prev_max { // false only at first call, then alway true
+          if prev_min != prev_max { // false only at first call, then always true
             ranges.push(prev_min..prev_max);
           }
           prev_min = range.start;
           prev_max = range.end;
         }
-      }  else {
+      } else {
         if cell.hash == prev_max {
           prev_max += 1;
         } else {
-          if prev_min != prev_max { // false only at first call, then alway true
+          if prev_min != prev_max { // false only at first call, then always true
             ranges.push(prev_min..prev_max);
           }
           prev_min = cell.hash;
@@ -933,7 +933,7 @@ if (debug) System.out.println("Add3 " + hh);
         }
       }
     }
-    if prev_min != prev_max { // false only at first call, then alway true
+    if prev_min != prev_max { // false only at first call, then always true
       ranges.push(prev_min..prev_max);
     }
     ranges.into_boxed_slice()
