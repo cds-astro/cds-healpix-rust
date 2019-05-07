@@ -1489,7 +1489,7 @@ fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
 /// # Panics
 /// If the base cell has no neighbour in the given direction (i.e. N/S for equatorial cells
 /// and E/W for polar caps cells)
-pub fn direction_from_neighbourSS(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
+pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
   match base_cell >> 2 { // <=> basce_cell / 4
     0 => npc_direction_from_neighbour(neighbour_direction),
     1 => eqr_direction_from_neighbour(neighbour_direction),

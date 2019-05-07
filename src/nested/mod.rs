@@ -1886,7 +1886,7 @@ pub fn x_mask(depth: u8) -> u64 {
 
 /// mask ...101010
 /// ```rust
-/// use cdshealpix::nested::{y_mask};
+/// use cdshealpix::nested::{y_mask, x_mask};
 /// assert_eq!(y_mask(3), 0b00101010);
 /// assert_eq!(y_mask(3), x_mask(3) << 1);
 /// ```
