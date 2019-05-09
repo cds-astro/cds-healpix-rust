@@ -1426,7 +1426,7 @@ fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
     W => match inner_direction {
       N | NW => N,
       W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
-      S | SE => neighbour_direction.opposite(),
+      S | SW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     NE => { 
@@ -1463,7 +1463,7 @@ fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
     W => match inner_direction {
       S | SW => S,
       W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
-      N | NE => neighbour_direction.opposite(),
+      N | NW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     SE => {
