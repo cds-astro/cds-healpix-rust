@@ -165,7 +165,7 @@ use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon};
 use super::sph_geom::cone::{Cone};
 use super::sph_geom::elliptical_cone::EllipticalCone;
-use super::{proj, edge_cell_direction_from_neighbour};
+use super::{proj, direction_from_neighbour, edge_cell_direction_from_neighbour};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
 use super::special_points_finder::{arc_special_points};
@@ -730,9 +730,11 @@ impl Layer {
       self.edge_cell_neighbours(hash, &mut neighbours);
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
-        let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
-          println!("A: {:?}, {}", &direction, &hash_value);
+        
+       let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
           direction.opposite()
+        } else if self.depth == 0 {
+	  direction_from_neighbour(h_parts.d0h, &direction)
         } else {
           let dir_in_basce_cell_border = self.direction_in_base_cell_border(h_bits.i, h_bits.j);
           // println!("B: {:?}, {}, {:?}", &direction, &hash_value, &dir_in_basce_cell_border);
@@ -777,7 +779,9 @@ impl Layer {
       for (direction, hash_value) in neighbours.drain(..) {
         let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
           direction.opposite()
-        } else {
+        } else if self.depth == 0 {
+          direction_from_neighbour(h_parts.d0h, &direction)
+        }  else {
           edge_cell_direction_from_neighbour(h_parts.d0h, &self.direction_in_base_cell_border(h_bits.i, h_bits.j), &direction)
         };
         append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut edge);
@@ -2260,7 +2264,22 @@ mod tests {
     }
     assert_eq!(expected_res.len(), actual_res.len());
   }
-  
+ 
+  #[test]
+  fn testok_external_edge_struct_v3() {
+    let depth = 0;
+    let hash = 0;
+    let delta_depth = 2;
+    // draw moc 3/63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255
+    let actual_res = external_edge_sorted(depth, hash, delta_depth);
+    //let expected_res: [u64; 20] = [63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255];
+    println!("{:?}", &actual_res);
+    /*for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+      assert_eq!(h1, h2);
+    }
+    assert_eq!(expected_res.len(), actual_res.len());*/
+  }
+ 
   #[test]
   fn testok_cone_approx_bmoc() {
     // let res = cone_overlap_approx(5, 0.01, 0.02, 0.05);

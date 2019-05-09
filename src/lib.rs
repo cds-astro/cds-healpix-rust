@@ -1429,7 +1429,8 @@ fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
       S | SW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
-    NE => { 
+    NE => {
+      println!("{:?}", inner_direction);
       assert!(*inner_direction == N || *inner_direction == E || *inner_direction == NE);
       NW
     },
