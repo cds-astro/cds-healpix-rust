@@ -606,8 +606,7 @@ impl Layer {
   /// # Output
   /// - the cell numbers (hash values) of the given hash inner edge ordered consecutively, 
   /// starting from the south (x=0, y=0) cell in the anti-clokwise direction.
-  /// 
-  /// 
+  ///
   pub fn internal_edge(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     // Compute the x and y part masks for deltaDepth.
     let zoc = get_zoc(delta_depth);
@@ -644,7 +643,7 @@ impl Layer {
     res.into_boxed_slice()
   }
 
-  /// Same as method `internal_edge` except that the returned array is sorted.
+  /// Same as method [internal_edge](#method.internal_edge) except that the returned array is sorted.
   pub fn internal_edge_sorted(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     // Compute the x and y part masks for deltaDepth.
     let zoc = get_zoc(delta_depth);
@@ -756,7 +755,34 @@ impl Layer {
   }
   
   /// Provides the list of all cells of depth this layer depth + the given `delta_depth`
-  /// surrounding the cell of given hash value.
+  /// surrounding the cell of given hash value.  
+  /// 
+  /// Here the result of both following codes:
+  /// ![External edge depth 1, cells 10 and 11, delta_depth = +2](external_edge.png)
+  /// 
+  /// ```rust
+  /// use cdshealpix::nested::{external_edge_sorted};
+  /// 
+  /// let depth = 1;
+  /// let delta_depth = 2;
+  /// 
+  /// let hash = 10;
+  /// let actual_res = external_edge_sorted(depth, hash, delta_depth);
+  /// let expected_res: [u64; 19] = [85, 87, 93, 95, 117, 138, 139, 142, 143, 154, 176, 178, 184, 186, 415, 437, 439, 445, 447];
+  /// for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+  ///   assert_eq!(h1, h2);
+  /// }
+  /// assert_eq!(expected_res.len(), actual_res.len());
+  /// 
+  /// let hash = 11;
+  /// let actual_res = external_edge_sorted(depth, hash, delta_depth);
+  /// let expected_res: [u64; 20] = [63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255];
+  /// for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+  ///   assert_eq!(h1, h2);
+  /// }
+  /// assert_eq!(expected_res.len(), actual_res.len());
+  /// 
+  /// ```
   pub fn external_edge(&self, hash: u64, delta_depth: u8) -> Box<[u64]> {
     self.external_edge_generic(hash, delta_depth, false)
   }
@@ -1687,7 +1713,7 @@ pub fn internal_edge_northwest(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
   v.into_boxed_slice()
 }
 
-/// Same as [internal_edge_part](#method.internal_edge_part) except that the result is appended
+/// Same as [internal_edge_part](fn.internal_edge_part.html) except that the result is appended
 /// to the given vec.
 pub fn append_internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal, result: &mut Vec<u64>) {
   match *direction {
@@ -1698,7 +1724,7 @@ pub fn append_internal_edge_part(hash: u64, delta_depth: u8, direction: &Ordinal
   }
 }
 
-/// Same as [internal_edge_southeast](#method.internal_edge_southeast) except that
+/// Same as [internal_edge_southeast](fn.internal_edge_southeast.html) except that
 /// the result is appended to the given vec.
 pub fn append_internal_edge_southeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
   hash <<= delta_depth << 1;
@@ -1708,7 +1734,7 @@ pub fn append_internal_edge_southeast(mut hash: u64, delta_depth: u8, result: &m
   }
 }
 
-/// Same as [internal_edge_southwest](#method.internal_edge_southwest) except that
+/// Same as [internal_edge_southwest](fn.internal_edge_southwest.html) except that
 /// the result is appended to the given vec.
 pub fn append_internal_edge_southwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
   hash <<= delta_depth << 1;
@@ -1718,7 +1744,7 @@ pub fn append_internal_edge_southwest(mut hash: u64, delta_depth: u8, result: &m
   }
 }
 
-/// Same as [internal_edge_northeast](#method.internal_edge_northeast) except that
+/// Same as [internal_edge_northeast](fn.internal_edge_northeast.html) except that
 /// the result is appended to the given vec.
 pub fn append_internal_edge_northeast(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
   hash <<= delta_depth << 1;
@@ -1729,7 +1755,7 @@ pub fn append_internal_edge_northeast(mut hash: u64, delta_depth: u8, result: &m
   }
 }
 
-/// Same as [internal_edge_northwest](#method.internal_edge_northwest) except that
+/// Same as [internal_edge_northwest](fn.internal_edge_northwest.html) except that
 /// the result is appended to the given vec.
 pub fn append_internal_edge_northwest(mut hash: u64, delta_depth: u8, result: &mut Vec<u64>) {
   hash <<= delta_depth << 1;
