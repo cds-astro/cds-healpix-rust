@@ -11,7 +11,7 @@
     <script src='./cdshealpix.js'></script>
     <script>
       function run() {
-         // use 'cdshealpix', as simple alias nicer than 'wasm_bindgen'
+         // use 'hpx', an alias nicer than 'wasm_bindgen'
          hpx = wasm_bindgen;
          console.log("You can call methods (coordinate are given and returned in degrees):")
          console.log("  hpx.getOrderMax()")
@@ -26,6 +26,13 @@
          console.log("  hpx.nestedQueryPolygonBMOC(order, [ra1, dec1, ra2, dec2, ..., raN, decN])");
          console.log("From a BMOC, you can get its number of cells `bmoc.getSize()` and access each cell `bmoc.getCell(i)`");
          console.log("From a Cell, you can access directly its `order`, `icell` and `idfull` attributes");
+         console.log("");
+         console.log("Unrelated to HELPix: multi-polygone query");
+	 console.log("  map = hpx.PolygonMap.new()");
+         console.log("  map.addPolygon(int_ID, [ra1, dec1, ra2, dec2, ..., raN, decN]);");
+         console.log("  map.addPolygon(int_ID, [ra1, dec1, ra2, dec2, ..., raN, decN]);");
+         console.log("  map.polygonContaining(ra, dec);");
+         console.log("  map.rmPolygon(int_ID);");
       }
       wasm_bindgen('./cdshealpix_bg.wasm')
         .then(run)

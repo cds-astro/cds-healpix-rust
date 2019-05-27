@@ -1,16 +1,20 @@
 //! Interface for accesing the lib in WebAssembly.
 //! The Javascript name (js_name) have been chosen with T. Boch
 
+use std::collections::HashMap;
+
 extern crate cdshealpix;
 extern crate wasm_bindgen;
 
-use cdshealpix::nested::{hash, center, neighbours, vertices, cone_overlap_approx_flat, cone_overlap_approx, polygon_overlap_approx};
-use cdshealpix::nested::bmoc::*;
-use cdshealpix::compass_point::{MainWind, MainWindMap};
+// see https://rustwasm.github.io/wasm-bindgen/
 use wasm_bindgen::prelude::*;
 
-// see https://rustwasm.github.io/wasm-bindgen/
+use cdshealpix::nested::{hash, center, neighbours, vertices, cone_coverage_approx_flat, cone_coverage_approx, polygon_coverage};
+use cdshealpix::nested::bmoc::*;
+use cdshealpix::compass_point::{MainWind, MainWindMap};
 
+use cdshealpix::sph_geom::Polygon;
+use cdshealpix::sph_geom::coo3d::{Coo3D, LonLat};
 
 const DEPHT_MAX: u8 = 24;
 
@@ -20,6 +24,66 @@ const DEPHT_MAX: u8 = 24;
 #[wasm_bindgen(js_name = getOrderMax)]
 pub fn get_depth_max() -> u8 {
   DEPHT_MAX
+}
+
+#[wasm_bindgen(js_name = PolygonMap)]
+pub struct PolygonMap {
+  polygons: HashMap<u32, Polygon>,
+}
+
+#[wasm_bindgen(js_class = PolygonMap)]
+impl PolygonMap {
+
+  pub fn new() -> PolygonMap {
+    PolygonMap {
+      polygons: Default::default(),
+    }
+  }
+
+  /// Add a polygon of given identifier to the map, the provided liste is:
+  /// [ra_v1_deg, dec_v1_deg, ra_v2_deg, de_v2_deg, ..., ra_vn_deg, de_vn_deg]
+  #[wasm_bindgen(js_name = addPolygon)]
+  pub fn add_polygon(&mut self, id: u32, vertices_coos: Box<[f64]>) {
+    let mut vertices: Vec<LonLat> = Vec::with_capacity(vertices_coos.len() >> 1);
+    for i in (0..vertices_coos.len()).step_by(2) {
+      vertices.push(LonLat { 
+          lon: vertices_coos[i].to_radians(), 
+          lat: vertices_coos[i + 1].to_radians(),
+      });
+    }
+    self.polygons.insert(id, Polygon::new(vertices.into_boxed_slice()));
+  }
+
+  /// Remove the polygon of given identifier to the map.
+  #[wasm_bindgen(js_name = rmPolygon)]
+  pub fn remove_polygon(&mut self, id: u32) {
+    self.polygons.remove(&id);
+  }
+  
+  /// Returns the list of the identifiers of the polygon containing the given point.
+  #[wasm_bindgen(js_name = polygonContaining)]
+  pub fn polygon_containing(&self, ra_deg: f64, de_deg: f64) -> Box<[u32]> {
+    let coo: Coo3D = Coo3D::from_sph_coo(ra_deg.to_radians(), de_deg.to_radians());
+    let mut res: Vec<u32> = Default::default();
+    for (id, polygon) in self.polygons.iter() {
+      if polygon.contains(&coo) {
+        res.push(*id);
+      }
+    }
+    res.into_boxed_slice()
+  }
+
+  /*pub fn from(n_vertices: Box<[usize]>, vertices_coos: Box<[f64]>) -> PolygonSet {
+    let mut polygons: Vec<Polygon> = Vec::with_capacity(n_vertices.len());
+    let mut cumul_size = 0;
+    for size in n_vertices.iter() {
+    }
+    PolygonSet {
+      polygons
+    }
+  }*/
+
+
 }
 
 /// Returns the cell number (hash value) in the NESTED scheme associated with the given position
@@ -381,8 +445,8 @@ impl ColBMOC {
 /// # Outputs
 /// - the BMOC covered by the given cone
 #[wasm_bindgen(js_name = nestedQueryConeBMOC)]
-pub fn wasm_cone_overlap(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> ColBMOC {
-  bmoc2colbmoc(cone_overlap_approx(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians()))
+pub fn wasm_cone_coverage(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> ColBMOC {
+  bmoc2colbmoc(cone_coverage_approx(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians()))
 }
 
 /// Returns the flat list of HEALPix cell of given order covered by the given cone.
@@ -394,8 +458,8 @@ pub fn wasm_cone_overlap(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f
 /// # Outputs
 /// - the flat list of HEALPix cell of given order covered by the given cone
 #[wasm_bindgen(js_name = nestedQueryCone)]
-pub fn wasm_cone_overlap_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[f64]>  {
-  let a: Vec<f64> = cone_overlap_approx_flat(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians())
+pub fn wasm_cone_coverage_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[f64]>  {
+  let a: Vec<f64> = cone_coverage_approx_flat(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians())
     .iter().map(|&h| h as f64).collect();
   a.into_boxed_slice()
 }
@@ -409,12 +473,12 @@ pub fn wasm_cone_overlap_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radi
 /// # Outputs
 /// - the BMOC covered by the given polygon
 #[wasm_bindgen(js_name = nestedQueryPolygonBMOC)]
-pub fn wasm_polygon_overlap(depth: u8, vertices_coos: Box<[f64]>) -> ColBMOC {
+pub fn wasm_polygon_coverage(depth: u8, vertices_coos: Box<[f64]>) -> ColBMOC {
   let mut vertices:Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
   for i in (0..vertices_coos.len()).step_by(2) {
     vertices.push((vertices_coos[i], vertices_coos[i+1]));
   }
-  bmoc2colbmoc(polygon_overlap_approx(depth, &vertices.into_boxed_slice()))
+  bmoc2colbmoc(polygon_coverage(depth, &vertices.into_boxed_slice(), true))
 }
 
 /// Returns the BMOC covered by the given polygon.
@@ -425,12 +489,12 @@ pub fn wasm_polygon_overlap(depth: u8, vertices_coos: Box<[f64]>) -> ColBMOC {
 /// # Outputs
 /// - the BMOC covered by the given polygon
 #[wasm_bindgen(js_name = nestedQueryPolygon)]
-pub fn wasm_polygon_overlap_flat(depth: u8, vertices_coos: Box<[f64]>) -> Box<[f64]> {
+pub fn wasm_polygon_coverage_flat(depth: u8, vertices_coos: Box<[f64]>) -> Box<[f64]> {
   let mut vertices:Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
   for i in (0..vertices_coos.len()).step_by(2) {
     vertices.push((vertices_coos[i], vertices_coos[i+1]));
   }
-  let bmoc = polygon_overlap_approx(depth, &vertices.into_boxed_slice());
+  let bmoc = polygon_coverage(depth, &vertices.into_boxed_slice(), true);
   let flat_iter: BMOCFlatIter = bmoc.flat_iter();
   let mut flat: Vec<f64> = Vec::with_capacity(flat_iter.deep_size());
   for c in flat_iter {
@@ -452,7 +516,7 @@ fn bmoc2colbmoc(bmoc: BMOC) -> ColBMOC {
   }
   ColBMOC {
     n_cells: n_elems as u32,
-    depth_max: bmoc.depth_max,
+    depth_max: bmoc.get_depth_max(),
     depths: depths.into_boxed_slice(),
     hashs: hashs.into_boxed_slice(),
     is_full_flags: flags.into_boxed_slice(),

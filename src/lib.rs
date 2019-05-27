@@ -1577,7 +1577,7 @@ pub mod nested;
 
 /// No need to make those public!
 mod xy_geom;
-mod sph_geom;
+pub mod sph_geom;
 mod special_points_finder;
 
 #[cfg(test)]

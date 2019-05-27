@@ -1,7 +1,7 @@
 //! Module containing spherical geometry structures and methods like 3D vectors, 
 //! polygon or cone on the unit sphere...
 
-pub(super) mod coo3d;
+pub mod coo3d; // made public for polygon query et webasembly
 pub(super) mod cone;
 pub(super) mod elliptical_cone;
 pub(super) mod proj;

@@ -1,15 +1,15 @@
 [package]
 name = "cdshealpix_wasm"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 
 [build-dependencies]
-cdshealpix = { version = "0.1.0", path = ".." }
+cdshealpix = { version = "0.2.0", path = ".." }
 
 [dependencies]
-cdshealpix = { version = "0.1.0", path = ".." }
-wasm-bindgen = "0.2.31"
+cdshealpix = { version = "0.2.0", path = ".." }
+wasm-bindgen = "0.2.43"
 
 [lib]
 crate-type = ["cdylib"]
