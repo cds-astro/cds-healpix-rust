@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix_wasm"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 
