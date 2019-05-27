@@ -240,15 +240,44 @@ fn compute_cross_products_v2(vertices: &Box<[Coo3D]>) -> Box<[Vect3]> {
 /// longitude range
 #[inline]
 fn is_in_lon_range(coo: &Coo3D, v1: &Coo3D, v2: &Coo3D) -> bool {
-  // Case do not cross lon == 0
-  //    0 < v2.lon - v1.lon <= PI && p > v1.lon && p < v2.lon
-  // || 0 < v1.lon - v2.lon <= PI && p > v2.lon && p < v1.lon
-  // Cross lon == 0
-  // || v2.lon - v1.lon > PI && (p < v1.lon || p > v2.lon)
-  // || v1.lon - v2.lon > PI && (p < v2.lon || p > v1.lon)
-  
-  // Warning: (v2.lon() - v1.lon()).abs() > PI does not work if v1.lon() == 0 || v2.lon() == 0
-  ((v2.lon() - v1.lon()).abs() > PI) ^ ((v2.lon() > coo.lon()) != (v1.lon() > coo.lon()))
+  // First version of the code: 
+  //   ((v2.lon() - v1.lon()).abs() > PI) != ((v2.lon() > coo.lon()) != (v1.lon() > coo.lon()))
+  // 
+  // Lets note 
+  //   - lonA = v1.lon()
+  //   - lonB = v2.lon()
+  //   - lon0 = coo.lon()
+  // When (lonB - lonA).abs() <= PI 
+  //   => lonB > lon0 != lonA > lon0  like in PNPOLY
+  //   A    B    lonA <= lon0 && lon0 < lonB
+  // --[++++[--
+  //   B    A    lonB <= lon0 && lon0 < lonA
+  //
+  // But when (lonB - lonA).abs() > PI, then the test should be 
+  //  =>   lonA >= lon0 == lonB >= lon0 
+  // <=> !(lonA >= lon0 != lonB >= lon0)
+  //    A  |  B    (lon0 < lonB) || (lonA <= lon0)
+  //  --[++|++[--
+  //    B  |  A    (lon0 < lonA) || (lonB <= lon0)
+  //
+  // Instead of lonA > lon0 == lonB > lon0,
+  //     i.e. !(lonA > lon0 != lonB > lon0).
+  //    A  |  B    (lon0 <= lonB) || (lonA < lon0)
+  //  --]++|++]--
+  //    B  |  A    (lon0 <= lonA) || (lonB < lon0)
+  //
+  // So the previous code was bugged in this very specific case: 
+  // - `lon0` has the same value as a vertex being part of:
+  // - one segment that do not cross RA=0
+  //   - plus one segment crossing RA=0.
+  //   - the point have an odd number of intersections with the polygon 
+  //     (since it will be counted 0 or 2 times instead of 1).
+  let dlon = v2.lon() - v1.lon();
+  if dlon < 0.0 {
+    (dlon >= -PI) == (v2.lon() <= coo.lon() && coo.lon() < v1.lon())
+  } else {
+    (dlon <=  PI) == (v1.lon() <= coo.lon() && coo.lon() < v2.lon())
+  }
 }
 
 /// Returns `true` if the two given great_circle arcs have their longitudes ranges which overlaps.

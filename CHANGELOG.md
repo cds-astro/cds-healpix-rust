@@ -1,8 +1,19 @@
 # `cdshealpix` Change Log
 
-## 0.2
+## 0.2.1 
 
 Released 2019-XX-XX.
+
+### Bug correction
+
+* Fix polygon potential bug (see method `is_in_lon_range`)
+
+--------------------------------------------------------------------------------
+
+
+## 0.2
+
+Released 2019-05-10.
 
 ### Info
 
