@@ -1,8 +1,15 @@
 # `cdshealpix` Change Log
 
-## 0.2.1 
+## 0.3.0 
 
-Released 2019-XX-XX.
+NOT YET RELEASED. Released 2019-XX-XX.
+
+## Added
+
+* `sph_coo`: spherical coordinates from an HEALPix cell + offsets `(dx, dy)`
+* `hash_with_dxdy`: hash value together with the `(dx, dy)` offsets
+* `path_along_cell_side`: provides points along a cell side
+* `path_along_cell_edge`: provides points along a cell edge
 
 ### Bug correction
 
@@ -11,7 +18,7 @@ Released 2019-XX-XX.
 --------------------------------------------------------------------------------
 
 
-## 0.2
+## 0.2.0
 
 Released 2019-05-10.
 
@@ -19,7 +26,7 @@ Released 2019-05-10.
 
 * We have started to run astropy-healpix tests on cdshealpix in the python wrapper project
 
-## Added
+### Added
 
 * Methods to get internal/external edges of a cell a deeper depth
 

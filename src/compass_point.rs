@@ -84,6 +84,42 @@ impl Cardinal {
       _ => 0f64,
     }
   }
+
+  pub(super) fn next_clockwise(&self) -> Cardinal {
+    match *self {
+      Cardinal::S => Cardinal::W,
+      Cardinal::E => Cardinal::S,
+      Cardinal::N => Cardinal::E,
+      Cardinal::W => Cardinal::N,
+    }
+  }
+
+  pub(super) fn next_counter_clockwise(&self) -> Cardinal {
+    match *self {
+      Cardinal::S => Cardinal::E,
+      Cardinal::E => Cardinal::N,
+      Cardinal::N => Cardinal::W,
+      Cardinal::W => Cardinal::S,
+    }
+  }
+
+  pub(super) fn clockwise_cycle(&self) -> (Cardinal, Cardinal, Cardinal, Cardinal) {
+    match *self {
+      Cardinal::S => (Cardinal::S, Cardinal::W, Cardinal::N, Cardinal::E),
+      Cardinal::E => (Cardinal::E, Cardinal::S, Cardinal::W, Cardinal::N),
+      Cardinal::N => (Cardinal::N, Cardinal::E, Cardinal::S, Cardinal::W),
+      Cardinal::W => (Cardinal::W, Cardinal::N, Cardinal::E, Cardinal::S),
+    }
+  }
+
+  pub(super) fn counter_clockwise_cycle(&self) -> (Cardinal, Cardinal, Cardinal, Cardinal) {
+    match *self {
+      Cardinal::S => (Cardinal::S, Cardinal::E, Cardinal::N, Cardinal::W),
+      Cardinal::E => (Cardinal::E, Cardinal::N, Cardinal::W, Cardinal::S),
+      Cardinal::N => (Cardinal::N, Cardinal::W, Cardinal::S, Cardinal::E),
+      Cardinal::W => (Cardinal::W, Cardinal::S, Cardinal::E, Cardinal::N),
+    }
+  }
 }
 
 /// Cardinal set. 

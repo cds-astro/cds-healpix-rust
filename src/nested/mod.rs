@@ -56,10 +56,24 @@ pub fn hash(depth: u8, lon: f64, lat: f64) -> u64 {
   get_or_create(depth).hash(lon, lat)
 }
 
+/// Conveniency function simply calling the [hash](struct.Layer.html#method.hash_with_dxdy) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn hash_with_dxdy(depth: u8, lon: f64, lat: f64) -> (u64, f64, f64) {
+  get_or_create(depth).hash_with_dxdy(lon, lat)
+}
+
+/// Conveniency function simply calling the [center](struct.Layer.html#method.sph_coo) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn sph_coo(depth: u8, hash: u64, dx: f64, dy: f64) -> (f64, f64) { 
+  get_or_create(depth).sph_coo(hash, dx, dy)
+}
+
 /// Conveniency function simply calling the [center](struct.Layer.html#method.center) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn center(depth: u8, hash: u64) -> (f64, f64) { 
+pub fn center(depth: u8, hash: u64) -> (f64, f64) {
   get_or_create(depth).center(hash)
 }
 
@@ -68,6 +82,21 @@ pub fn center(depth: u8, hash: u64) -> (f64, f64) {
 #[inline]
 pub fn vertices(depth: u8, hash: u64) -> [(f64, f64); 4] {
   get_or_create(depth).vertices(hash)
+}
+
+
+/// Conveniency function simply calling the [vertices](struct.Layer.html#method.path_along_cell_side) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn path_along_cell_side(depth: u8, hash: u64, from_vertex:  &Cardinal, to_vertex: &Cardinal, include_to_vertex: bool, n_segments: u32) -> Box<[(f64, f64)]> {
+  get_or_create(depth).path_along_cell_side(hash, from_vertex, to_vertex, include_to_vertex, n_segments)
+}
+
+/// Conveniency function simply calling the [vertices](struct.Layer.html#method.path_along_cell_edge) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn path_along_cell_edge(depth: u8, hash: u64, starting_vertex: &Cardinal, clockwise_direction: bool, n_segments_by_side: u32) -> Box<[(f64, f64)]> {
+  get_or_create(depth).path_along_cell_edge(hash, starting_vertex, clockwise_direction, n_segments_by_side)
 }
 
 /// Conveniency function simply calling the [neighbours](struct.Layer.html#method.neighbours) method
@@ -255,6 +284,49 @@ impl Layer {
     self.to_coos_in_base_cell(&mut ij);
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
+
+  /// Returns the cell number (hash value) associated with the given position on the unit sphere, 
+  /// together with the offset `(dx, dy)` on the Euclidean plane of the projected position with
+  /// respect to the origin of the cell (South vertex).
+  /// # Inputs
+  /// - `lon`: longitude in radians, support reasonably large positive and negative values
+  ///          producing accurate results with a naive range reduction like modulo 2*pi
+  ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+  /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
+  /// # Output
+  /// - the cell number (hash value) associated with the given position on the unit sphere,
+  ///   in `[0, 12*nside^2[`
+  /// - `dx`: the positional offset $\in [0, 1[$ along the south-to-east axis
+  /// - `dy`: the positional offset $\in [0, 1[$ along the south-to-west axis
+  /// # Panics
+  ///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
+  /// # Examples
+  /// ```rust
+  /// use cdshealpix::{nside};
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// let depth = 12_u8;
+  /// let nside = nside(depth) as u64;
+  /// let nested12: &Layer = get_or_create(depth);
+  /// let h_org = nside * nside - 1;
+  /// let (h_ra, h_dec) = nested12.center(h_org);
+  /// let (h, dx, dy) = nested12.hash_with_dxdy(h_ra, h_dec);
+  /// assert_eq!(h_org, h);
+  /// assert_eq!(0.5, dx);
+  /// assert_eq!(0.5, dy);
+  /// ```
+  pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
+    let mut xy = proj(lon, lat);
+    xy.0 = ensures_x_is_positive(xy.0);
+    self.shift_rotate_scale(&mut xy);
+    let mut ij = discretize(xy);
+    let dx = xy.0 - (ij.0 as f64);
+    let dy = xy.1 - (ij.1 as f64);
+    let ij_d0c = self.base_cell_coos(&ij);
+    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
+    self.to_coos_in_base_cell(&mut ij);
+    (self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32), dx, dy)
+  }
   
   #[inline]
   fn shift_rotate_scale(&self, xy: &mut (f64, f64)) {
@@ -388,6 +460,51 @@ impl Layer {
     super::unproj(x, y)
   }
 
+  /// Compute the position on the unit sphere of the position '(dx, dy)' from the south vertex of 
+  /// the HEALPix cell associated to the given hash value.
+  /// The x-axis is the South-East axis while the y-axis is the south-west axis.
+  /// 
+  /// # Input
+  /// - `hash`: the hash value of the cell in which are defined `dx` and `dy`
+  /// - `dx`: the positional offset $\in [0, 1[$ along the south-to-east axis
+  /// - `dy`: the positional offset $\in [0, 1[$ along the south-to-west axis
+  /// 
+  /// # Output
+  /// - `(lon, lat)` in radians, the unprojected position (on the unit sphere) of the given position 
+  ///   inside the given cell in the Euclidean plane
+  ///   - `lon`, longitude in `[0, 2pi]` radians;
+  ///   - `lat`, latitude in `[-pi/2, pi/2]` radians. 
+  /// 
+  /// # Panics
+  /// This method panics if either:
+  /// - the given `hash` value is not in `[0, 12*nside^2[`, 
+  /// - `dx` or `dy` is not $\in [0, 1[$
+  /// 
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  ///
+  /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
+  ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
+  ///   let sindlat = f64::sin(0.5 * (p2.1 - p1.1));
+  ///   2f64 * f64::asin(f64::sqrt(sindlat * sindlat + p1.1.cos() * p2.1.cos() * sindlon * sindlon))
+  /// }
+  /// 
+  /// let depth = 0u8;
+  /// let nested0 = get_or_create(depth);
+  /// 
+  /// assert!(dist(nested0.sph_coo(0, 0.5, 0.5) , nested0.center(0)) < 1e-15);
+  /// ```
+  ///
+  pub fn sph_coo(&self, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
+    assert!(0.0 <= dx && dx < 1.0);
+    assert!(0.0 <= dy && dy < 1.0);
+    let (mut x, mut y) = self.center_of_projected_cell(hash);
+    x += (dx - dy) * self.one_over_nside;
+    y += (dx + dy - 1.0) * self.one_over_nside;
+    super::unproj(ensures_x_is_positive(x), y)
+  }
+  
   /// Computes the position on the unit sphere of the cell vertex located at the given *direction*
   /// with respect to the center of the cell.
   ///   
@@ -513,7 +630,81 @@ impl Layer {
     }
     result_map
   }
+  
+  /// Computes a list of positions on a given side of a given HEALPix cell on the unit sphere.
+  /// 
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for side path on the unit sphere.
+  /// - `from_vertex`: direction (from the cell center) of the path starting vertex
+  /// - `to_vertex`: direction (from the cell center) of the path ending vertex
+  /// - `include_to_vertex`: if set to *false*, the result contains `n_segments` points and do
+  ///                        not include the ending vertex.
+  ///                        Else the result contains `n_segments + 1` points.
+  /// - `n_segments`: number of segments in the path from the starting vertex to the ending vertex
+  ///
+  /// # Output 
+  /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
+  ///
+  pub fn path_along_cell_side(&self, hash: u64, from_vertex:  &Cardinal, to_vertex: &Cardinal,
+    include_to_vertex: bool, n_segments: u32) -> Box<[(f64, f64)]> {
+    let n_points: usize = if include_to_vertex { n_segments + 1 } else { n_segments } as usize;
+    let mut path_points: Vec<(f64, f64)> = Vec::with_capacity(n_points);
+    let proj_center = self.center_of_projected_cell(hash);
+    self.path_along_cell_side_internal(proj_center, from_vertex, to_vertex, include_to_vertex, n_segments, &mut path_points);
+    path_points.into_boxed_slice()
+  }
+  
+  fn path_along_cell_side_internal(&self, proj_center: (f64, f64), from_vertex: &Cardinal, to_vertex: &Cardinal,
+                                   include_to_vertex: bool, n_segments: u32, path_points: &mut Vec<(f64, f64)>) {
+    let n_points: usize = if include_to_vertex { n_segments + 1 } else { n_segments } as usize;
+    // Compute starting point offsets
+    let from_offset_x = (*from_vertex).offset_we(self.one_over_nside);
+    let from_offset_y = (*from_vertex).offset_we(self.one_over_nside);
+    // Compute stepX and stepY
+    let step_x = ((*to_vertex).offset_we(self.one_over_nside) - from_offset_x) / (n_segments as f64);
+    let step_y = ((*to_vertex).offset_we(self.one_over_nside) - from_offset_y) / (n_segments as f64);
+    // Compute intermediary vertices
+    for i in 0..n_points {
+      let k = i as f64;
+      let x = proj_center.0 + from_offset_x + k * step_x;
+      let y = proj_center.1 + from_offset_y + k * step_y;
+      path_points.push(super::unproj(ensures_x_is_positive(x), y));
+    }
+  }
 
+  /// Computes a list of positions on the edge of a given HEALPix cell on the unit sphere.
+  /// 
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for side path on the unit sphere.
+  /// - `starting_vertex`: direction (from the cell center) of the path starting vertex
+  /// - `clockwise_direction`: tells if the path is in the clockwise or anti-clockwise direction
+  /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of 
+  ///                         points in the path equals *4 x n_segments_by_side*.
+  /// # Output 
+  /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
+  ///
+  pub fn path_along_cell_edge(&self, hash: u64, starting_vertex: &Cardinal, clockwise_direction: bool,
+                              n_segments_by_side: u32) -> Box<[(f64, f64)]> {
+    // Prepare space for the result
+    let mut path_points: Vec<(f64, f64)> = Vec::with_capacity((n_segments_by_side << 2) as usize);
+    // Compute center
+    let proj_center = self.center_of_projected_cell(hash);
+    // Unrolled loop over successive sides
+    // - compute vertex sequence
+    let (v1, v2, v3, v4) =  if clockwise_direction {
+      starting_vertex.clockwise_cycle()
+    } else {
+      starting_vertex.counter_clockwise_cycle()
+    };
+    // - make the five sides
+    self.path_along_cell_side_internal(proj_center, &v1, &v2, false, n_segments_by_side, &mut path_points);
+    self.path_along_cell_side_internal(proj_center, &v2, &v3, false, n_segments_by_side, &mut path_points);
+    self.path_along_cell_side_internal(proj_center, &v3, &v4, false, n_segments_by_side, &mut path_points);
+    self.path_along_cell_side_internal(proj_center, &v4, &v1, false, n_segments_by_side, &mut path_points);
+    path_points.into_boxed_slice()
+  }
+  
+  
   //////////////////////////
   // NEIGHBOURS Functions //
   //////////////////////////
@@ -1853,19 +2044,19 @@ struct HashBits {
 }
 
 #[inline]
-fn discretize(xy: (f64, f64)) -> (u64, u64) {
+const fn discretize(xy: (f64, f64)) -> (u64, u64) {
   (xy.0 as u64, xy.1 as u64)
 }
 
 #[inline]
-fn rotate45_scale2(i_in_d0h: u32, j_in_d0h: u32) -> (i32, i32) {
+const fn rotate45_scale2(i_in_d0h: u32, j_in_d0h: u32) -> (i32, i32) {
   (i_in_d0h as i32 - j_in_d0h as i32, (i_in_d0h + j_in_d0h) as i32)
 }
 
 /// offset_x in [0, 7], odd for polar caps, even for equatorial region
 /// offset_y in [-1, 1], -1 or 1 for polar caps, 0 for equatorial region
 #[inline]
-fn compute_base_cell_center_offsets_in_8x3_grid(d0h: u8) -> (u8, i8) { 
+const fn compute_base_cell_center_offsets_in_8x3_grid(d0h: u8) -> (u8, i8) { 
   let offset_y = 1 - div4_quotient(d0h) as i8;
   let mut offset_x = (div4_remainder(d0h)) << 1u8;
   // +1 if the base cell is not equatorial
@@ -1883,7 +2074,7 @@ fn apply_base_cell_center_offsets(xy: &mut (f64, f64), offset_x: u8, offset_y: i
 }
 
 #[inline]
-fn bits_2_hash(d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64) -> u64 {
+const fn bits_2_hash(d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64) -> u64 {
   d0h_bits | i_in_d0h_bits | j_in_d0h_bits
 }
 
@@ -1894,13 +2085,13 @@ fn ensures_x_is_positive(x: f64) -> f64 {
 
 /// x / 4
 #[inline]
-fn div4_quotient(x: u8) -> u8 {
+const fn div4_quotient(x: u8) -> u8 {
   x >> 2
 }
 
 /// x modulo 4
 #[inline]
-fn div4_remainder(x: u8) -> u8 {
+const fn div4_remainder(x: u8) -> u8 {
   x & 3
 }
 
@@ -1910,7 +2101,7 @@ fn div4_remainder(x: u8) -> u8 {
 /// assert_eq!(x_mask(3), 0b00010101);
 /// ```
 #[inline]
-pub fn x_mask(depth: u8) -> u64 {
+pub const fn x_mask(depth: u8) -> u64 {
   0x5555555555555555_u64 >> (64 - (depth << 1))
 }
 
@@ -1921,7 +2112,7 @@ pub fn x_mask(depth: u8) -> u64 {
 /// assert_eq!(y_mask(3), x_mask(3) << 1);
 /// ```
 #[inline]
-pub fn y_mask(depth: u8) -> u64{
+pub const fn y_mask(depth: u8) -> u64{
   0xAAAAAAAAAAAAAAAA_u64 >> (64 - (depth << 1))
 }
 
@@ -1933,7 +2124,7 @@ pub fn y_mask(depth: u8) -> u64{
 /// assert_eq!(0xFFFFFFFFFFFFFFFF_u64 >> (64 - (depth << 1)), (1_u64 << (depth << 1)) - 1_u64);
 /// ```
 #[inline]
-pub fn xy_mask(depth: u8) -> u64 {
+pub const fn xy_mask(depth: u8) -> u64 {
   0xFFFFFFFFFFFFFFFF_u64 >> (64 - (depth << 1))
 }
 
@@ -2774,7 +2965,7 @@ mod tests {
     let layer_0 = get_or_create(0);
     layer_0.shift_rotate_scale(&mut xy);
     println!("x: {}, y: {}", xy.0, xy.1);
-    let mut ij = discretize(xy);
+    let ij = discretize(xy);
     println!("i: {}, j: {}", ij.0, ij.1);
     let ij_d0c = layer_0.base_cell_coos(&ij);
     println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
