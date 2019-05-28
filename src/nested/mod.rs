@@ -184,7 +184,6 @@ pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool
 }
 
 
-
 pub mod bmoc;
 mod zordercurve;
 
@@ -1260,6 +1259,105 @@ impl Layer {
     move |(h, _)| h >> twice_depth_diff
   }
 
+  ////////////////////////////
+  // Bilinear interpolation //
+  ////////////////////////////
+  
+  /// See [wikipeida](https://en.wikipedia.org/wiki/Bilinear_interpolation) about bilinear interpolation.
+  /// The main difficulty here are the corners of base cells for which the number of neighbours is not
+  /// equals to 8.
+  /// In the normal case we have:
+  /// ```math
+  /// f(x, y) = f(0, 0) (1 - x) (1 - y) 
+  ///         + f(0, 1) (1 - x) y 
+  ///         + f(1, 0) (1 - y) 
+  ///         + f(1, 1) x y
+  /// ```
+  /// If a neighbour is missing, we share equally its contribution between the 2 cells that do not
+  /// contains the given coordinate, and we fill the array with the cell of the given coordinate
+  /// with a weight of 0.  
+  /// # Output
+  /// - `[(cell, weigth), (cell, weigth), (cell, weigth), (cell, weigth)]` the cell number
+  ///    together with their weight
+  pub fn bilinear_interpolation(&self, lon: f64, lat: f64) -> [(u64, f64); 4] {
+    let (h, dx, dy) = self.hash_with_dxdy(lon, lat);
+    // We can probably optimize here since we are interested in only 3 neighbours
+    let neigbours_map = self.neighbours(h, true);
+    // Look at the four pixels
+    let xcoo = (dx <= 0.5) as u8;
+    let ycoo = (dy <= 0.5) as u8;
+    let quarter: u8 = (ycoo << 1) + xcoo;
+    match quarter {
+      0 => { // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
+        match neigbours_map.get(S) {
+          Some(nh) => [
+            (*nh, (0.5 - dx) * (0.5 - dy)), 
+            (*neigbours_map.get(SE).unwrap(), (0.5 - dx) * (0.5 + dy)), 
+            (*neigbours_map.get(SW).unwrap(), (0.5 + dx) * (0.5 - dy)), 
+            (h, (0.5 + dx) * (0.5 + dy) )
+          ],
+          None => [
+            (h, 0.0),
+            (*neigbours_map.get(SE).unwrap(), (0.5 - dx) * (0.75 - 0.5 * dy)),
+            (*neigbours_map.get(SW).unwrap(), (0.75 - 0.5 * dx) * (0.5 - dy)),
+            (h, (0.5 + dx) * (0.5 + dy))
+          ],
+        }
+      }
+      1 => // => E => (dx - 0.5, dy + 0.5, SE, E, C, NE)
+        match neigbours_map.get(E) {
+          Some(nh) => [
+            (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (0.5 - dy)),
+            (*nh, (1.5 - dx) * (0.5 + dy)),
+            (h, (dx - 0.5) * (0.5 - dy)),
+            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.5 + dy))
+          ],
+          None => [
+            (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (0.75 - 0.5 * dy)),
+            (h, 0.0),
+            (h, (0.5 - dx) * (0.5 - dy)),
+            (*neigbours_map.get(NE).unwrap(), (0.25 * 0.5 * dx) * (0.5 + dy))
+          ],
+        }
+      2 => // => W => (dx + 0.5, dy - 0.5, SW, C, W, NW)
+        match neigbours_map.get(W) {
+          Some(nh) => [
+            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (1.5 - dy)),
+            (h, (0.5 - dx) * (dy - 0.5)),
+            (*nh, (0.5 + dx) * (1.5 - dy)),
+            (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (dy - 0.5))
+          ],
+          None => [
+            (*neigbours_map.get(SW).unwrap(), (0.75 - 0.5 * dx) * (1.5 - dy)),
+            (h, (0.5 - dx) * (dy - 0.5)),
+            (h, 0.0),
+            (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (0.5 * dy + 0.25))
+          ],
+        }
+      3 => // => N => (dx - 0.5, dy - 0.5, C, NE, NW, N)
+        match neigbours_map.get(N) {
+          Some(nh) => [
+            (*nh, (1.5 - dx) * (1.5 - dy)),
+            (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (dy - 0.5)),
+            (*neigbours_map.get(SW).unwrap(), (dx - 0.5) * (1.5 - dy)),
+            (h, (dx - 0.5) * (dy - 0.5))
+          ],
+          None => [
+            (h, (1.5 - dx) * (1.5 - dy)),
+            (*neigbours_map.get(SE).unwrap(), (1.25 - 0.5 * dx) * (dy - 0.5)),
+            (*neigbours_map.get(SW).unwrap(), (dx - 0.5) * (1.25 - 0.5 * dy)),
+            (h, 0.0)
+          ],
+        }
+      _ => unreachable!(),
+    }
+  }
+  
+  //////////////////////
+  // Coverage methods //
+  //////////////////////
+  
+  
   /// Returns a hierarchical view of the list of cells overlapped by the given cone.
   /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
   /// The algorithm is fast but approximated: it may return false positive, 

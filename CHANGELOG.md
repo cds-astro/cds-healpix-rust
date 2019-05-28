@@ -10,6 +10,7 @@ NOT YET RELEASED. Released 2019-XX-XX.
 * `hash_with_dxdy`: hash value together with the `(dx, dy)` offsets
 * `path_along_cell_side`: provides points along a cell side
 * `path_along_cell_edge`: provides points along a cell edge
+* `bilinear_interpolation`: bilinear interpolation on the nested scheme
 
 ### Bug correction
 
