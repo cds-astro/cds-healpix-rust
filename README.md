@@ -44,7 +44,7 @@ Missing Features
 ----------------
 
  * Not supported
-   * RING scheme
+   * RING scheme (but support the conversions  NESTED index <--> RING index)
    * Spherical Harmonics computations
    * (Help me fill this)
  * Not yet implemented

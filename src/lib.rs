@@ -1222,6 +1222,12 @@ pub fn unproj(x: f64, y: f64) -> (f64, f64) {
     lonlat
 }
 
+/// In the case we want the projection to return values `x in [0, 8]`, we just have to apply
+/// this method to the returned `x` value.
+#[inline]
+pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
+  if x < 0.0 { x + 8.0 } else { x }
+}
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
@@ -1574,6 +1580,9 @@ fn base_cell(i: u8, j: u8) -> u8 {
 
 /// Module containing NESTED scheme methods
 pub mod nested;
+
+/// Module containing RING scheme methods
+pub mod ring;
 
 /// No need to make those public!
 mod xy_geom;

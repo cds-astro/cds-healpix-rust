@@ -2,7 +2,7 @@
 
 ## 0.3.0 
 
-NOT YET RELEASED. Released 2019-XX-XX.
+Released 2019-06-03.
 
 ## Added
 
@@ -11,6 +11,8 @@ NOT YET RELEASED. Released 2019-XX-XX.
 * `path_along_cell_side`: provides points along a cell side
 * `path_along_cell_edge`: provides points along a cell edge
 * `bilinear_interpolation`: bilinear interpolation on the nested scheme
+* `to_ring`: convert a NESTED index into a RING index
+* `from_ring`: convert a RING index into a NESTED index
 
 ### Bug correction
 

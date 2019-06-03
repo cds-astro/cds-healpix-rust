@@ -1,4 +1,7 @@
 use std::sync::Once;
+use std::ops::Shl;
+use std::ops::Shr;
+
 use super::compass_point::*;
 use super::external_edge::*;
 use super::*;
@@ -189,6 +192,7 @@ mod zordercurve;
 
 use self::zordercurve::{ZOrderCurve, get_zoc};
 use self::bmoc::*;
+use super::ring::{triangular_number_x4};
 use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon};
 use super::sph_geom::cone::{Cone};
@@ -416,8 +420,319 @@ impl Layer {
     }
   }
   
-  fn times_nside(&self, i: u8) -> f64 {
-    (i << self.depth) as f64
+  
+  /// Transforms the given NESTED hash value into the RING hash value.
+  /// 
+  /// # Examples
+  /// 
+  /// At depth 0, no differences:
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// let depth = 0;
+  /// let n0 = get_or_create(depth);
+  /// for h in 0..12 {
+  ///   assert_eq!(n0.to_ring(h), h);
+  /// }
+  /// ```
+  /// 
+  /// At depth 1:
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// 
+  /// let depth = 1;
+  /// let n1 = get_or_create(depth);
+  /// 
+  /// assert_eq!(n1.to_ring(0),  13);
+  /// assert_eq!(n1.to_ring(1),   5);
+  /// assert_eq!(n1.to_ring(2),   4);
+  /// assert_eq!(n1.to_ring(3),   0);
+  /// assert_eq!(n1.to_ring(4),  15);
+  /// assert_eq!(n1.to_ring(5),   7);
+  /// assert_eq!(n1.to_ring(6),   6);
+  /// assert_eq!(n1.to_ring(7),   1);
+  /// assert_eq!(n1.to_ring(8),  17);
+  /// assert_eq!(n1.to_ring(9),   9);
+  /// assert_eq!(n1.to_ring(10),  8);
+  /// assert_eq!(n1.to_ring(11),  2);
+  /// assert_eq!(n1.to_ring(12), 19);
+  /// assert_eq!(n1.to_ring(13), 11);
+  /// assert_eq!(n1.to_ring(14), 10);
+  /// assert_eq!(n1.to_ring(15),  3);
+  /// assert_eq!(n1.to_ring(16), 28);
+  /// assert_eq!(n1.to_ring(17), 20);
+  /// assert_eq!(n1.to_ring(18), 27);
+  /// assert_eq!(n1.to_ring(19), 12);
+  /// assert_eq!(n1.to_ring(20), 30);
+  /// assert_eq!(n1.to_ring(21), 22);
+  /// assert_eq!(n1.to_ring(22), 21);
+  /// assert_eq!(n1.to_ring(23), 14);
+  /// assert_eq!(n1.to_ring(24), 32);
+  /// assert_eq!(n1.to_ring(25), 24);
+  /// assert_eq!(n1.to_ring(26), 23);
+  /// assert_eq!(n1.to_ring(27), 16);
+  /// assert_eq!(n1.to_ring(28), 34);
+  /// assert_eq!(n1.to_ring(29), 26);
+  /// assert_eq!(n1.to_ring(30), 25);
+  /// assert_eq!(n1.to_ring(31), 18);
+  /// assert_eq!(n1.to_ring(32), 44);
+  /// assert_eq!(n1.to_ring(33), 37);
+  /// assert_eq!(n1.to_ring(34), 36);
+  /// assert_eq!(n1.to_ring(35), 29);
+  /// assert_eq!(n1.to_ring(36), 45);
+  /// assert_eq!(n1.to_ring(37), 39);
+  /// assert_eq!(n1.to_ring(38), 38);
+  /// assert_eq!(n1.to_ring(39), 31);
+  /// assert_eq!(n1.to_ring(40), 46);
+  /// assert_eq!(n1.to_ring(41), 41);
+  /// assert_eq!(n1.to_ring(42), 40);
+  /// assert_eq!(n1.to_ring(43), 33);
+  /// assert_eq!(n1.to_ring(44), 47);
+  /// assert_eq!(n1.to_ring(45), 43);
+  /// assert_eq!(n1.to_ring(46), 42);
+  /// assert_eq!(n1.to_ring(47), 35);
+  /// ```
+  /// 
+  /// At depth 2 (non exhaustive test):
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// 
+  /// let depth = 2;
+  /// let n2 = get_or_create(depth);
+  /// /// NPC
+  /// assert_eq!(n2.to_ring(47),  2);
+  /// assert_eq!(n2.to_ring(29),  7);
+  /// assert_eq!(n2.to_ring(60), 22);
+  /// // EQR
+  /// assert_eq!(n2.to_ring(51),   54);
+  /// assert_eq!(n2.to_ring(88),  107);
+  /// assert_eq!(n2.to_ring(174), 129);
+  /// // SPC
+  /// assert_eq!(n2.to_ring(177), 187);
+  /// assert_eq!(n2.to_ring(153), 157);
+  /// assert_eq!(n2.to_ring(144), 189);
+  /// ```
+  pub fn to_ring(&self, hash: u64) -> u64 {
+    // Number of isolatitude rings in a base cell: 
+    //    nbr rings:   nr = 2 * nside - 1 
+    // => index max: hmax = 2 * nside - 2
+    // Index of ring at the NPC / EQR interface:
+    //   i = nside - 1                                       (number of rings =     nside)
+    // Index of ring at lat=0 (in the EQR): 
+    //   i = nr = hmax + 1 =  = 2 * nside - 1 => always odd  (number of rings = 2 * nside)
+    // Index of ring at the EQR / SPC interface:
+    //   i = nr + nside = 3 * nside - 1                      (number of rings = 3 * nside)
+    // We note h = x + y (<=> rotation 45 and scale sqrt(2))
+    // North polar cap   base cells:   i =  hmax - h              = 2 * nside - 2 - (x + y)
+    // Equatorial region base cells:   i = (hmax - h) +     nside = 3 * nside - 2 - (x + y)
+    // South polar cap   base cells:   i = (hmax - h) + 2 * nside = 4 * nside - 2 - (x + y)
+    let HashParts {d0h, i, j} = self.decode_hash(hash);
+    let h: u64 = i as u64 + j as u64;
+    let l: i64 = i as i64 - j as i64;
+    let i_d0h = div4_remainder(d0h) as u64;
+    let j_d0h = div4_quotient(d0h) as u64;    debug_assert!(j_d0h <= 2);
+    let i_ring: u64 = self.nside_time(j_d0h + 2) - (h + 2);
+    // Number of elements in isolatitude ring of index i (i in [0, 2*(2*nside - 1)]):
+    // North polar cap: if (i < nside)         nj = 4 * i
+    // South polar cap: if (i >= 3*nside - 1)  nj = 4 * h = 4*((4*nside-2) - i) 
+    // Equatorial regi: if (ns <= i < 3*ns-1)  nj = 4 * nside
+    // l = x - y; In a base cell, l in [-nside+1, nside-1] => 2*nside - 1 values
+    // EQR: j = l / 2 + nside/2 (if not equatorial cell) + nside*(ipix%4) (special case if l<0 && baseCell=4)
+    // NPC: j = l / 2 + (i + 1) / 2 + (i+1)*(ipix%4)
+    // SPC: j = l / 2 + (h + 1) / 2 + (h+1)*(ipix%4)
+    let mut first_isolat_index = 0_u64;
+    let mut i_in_ring = div2_quotient(l); // Quotient such that: 1/2 = 0; -1/2 = -1
+    if i_ring < self.nside as u64 { // North polar cap + NPC/EQR tansition
+      // sum from i = 1 to ringIndex of 4 * i = 4 * i*(i+1)/2 = 2 * i*(i+1)
+      let ip1 = i_ring + 1;
+      first_isolat_index = (i_ring * ip1) << 1;
+      i_in_ring += (div2_quotient(ip1) + ip1 * i_d0h) as i64;
+    } else if i_ring >= self.nside_time(3) - 1 { // South polar cap
+      let ip1 = h + 1;
+      first_isolat_index = self.n_hash - triangular_number_x4(ip1);
+      i_in_ring += (div2_quotient(ip1) + ip1 * i_d0h) as i64;
+    } else { // Equatorial region
+      // sum from i = 1 to nside of i
+      first_isolat_index = self.first_hash_in_eqr() + self.minus_nside_x_4nside(i_ring); 
+      i_in_ring += div2_quotient(self.nside_time(div2_remainder(j_d0h + 1))) as i64;
+      i_in_ring += self.nside_time(if d0h == 4 && l < 0 { 4 } else { i_d0h }) as i64;
+    }
+    i_in_ring as u64 + first_isolat_index
+  }
+  
+  /// Transforms the given RING hash value into the NESTED hash value.
+  /// 
+  /// # WARNING
+  /// The RING NSIDE parameter MUST match the NESTED NSIDE parameter!! 
+  /// 
+  /// # Examples
+  /// 
+  /// At depth 0, no differences:
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// let depth = 0;
+  /// let n0 = get_or_create(depth);
+  /// for h in 0..12 {
+  ///   assert_eq!(n0.from_ring(h), h);
+  /// }
+  /// ```
+  /// At depth 1:
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// 
+  /// let depth = 1;
+  /// let n1 = get_or_create(depth);
+  /// 
+  /// assert_eq!( 3, n1.from_ring(0));
+  /// assert_eq!( 7, n1.from_ring(1));
+  /// assert_eq!(11, n1.from_ring(2));
+  /// assert_eq!(15, n1.from_ring(3));
+  /// assert_eq!( 2, n1.from_ring(4));
+  /// assert_eq!( 1, n1.from_ring(5));
+  /// assert_eq!( 6, n1.from_ring(6));
+  /// assert_eq!( 5, n1.from_ring(7));
+  /// assert_eq!(10, n1.from_ring(8));
+  /// assert_eq!( 9, n1.from_ring(9));
+  /// assert_eq!(14, n1.from_ring(10));
+  /// assert_eq!(13, n1.from_ring(11));
+  /// assert_eq!(19, n1.from_ring(12));  
+  /// assert_eq!( 0, n1.from_ring(13));
+  /// assert_eq!(23, n1.from_ring(14));
+  /// assert_eq!( 4, n1.from_ring(15));
+  /// assert_eq!(27, n1.from_ring(16)); 
+  /// assert_eq!( 8, n1.from_ring(17));
+  /// assert_eq!(31, n1.from_ring(18));
+  /// assert_eq!(12, n1.from_ring(19));
+  /// assert_eq!(17, n1.from_ring(20));
+  /// assert_eq!(22, n1.from_ring(21));
+  /// assert_eq!(21, n1.from_ring(22));
+  /// assert_eq!(26, n1.from_ring(23));
+  /// assert_eq!(25, n1.from_ring(24));
+  /// assert_eq!(30, n1.from_ring(25));
+  /// assert_eq!(29, n1.from_ring(26));
+  /// assert_eq!(18, n1.from_ring(27));
+  /// assert_eq!(16, n1.from_ring(28));
+  /// assert_eq!(35, n1.from_ring(29));
+  /// assert_eq!(20, n1.from_ring(30));
+  /// assert_eq!(39, n1.from_ring(31));
+  /// assert_eq!(24, n1.from_ring(32));
+  /// assert_eq!(43, n1.from_ring(33));
+  /// assert_eq!(28, n1.from_ring(34));
+  /// assert_eq!(47, n1.from_ring(35));
+  /// assert_eq!(34, n1.from_ring(36));
+  /// assert_eq!(33, n1.from_ring(37));
+  /// assert_eq!(38, n1.from_ring(38));
+  /// assert_eq!(37, n1.from_ring(39));
+  /// assert_eq!(42, n1.from_ring(40));
+  /// assert_eq!(41, n1.from_ring(41));
+  /// assert_eq!(46, n1.from_ring(42));
+  /// assert_eq!(45, n1.from_ring(43));
+  /// assert_eq!(32, n1.from_ring(44));
+  /// assert_eq!(36, n1.from_ring(45));
+  /// assert_eq!(40, n1.from_ring(46));
+  /// assert_eq!(44, n1.from_ring(47));
+  /// ```
+  /// 
+  /// 
+  /// At depth 2 (non exhaustive test):
+  /// ```rust
+  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// 
+  /// let depth = 2;
+  /// let n2 = get_or_create(depth);
+  /// /// NPC
+  /// assert_eq!(47, n2.from_ring(2));
+  /// assert_eq!(29, n2.from_ring(7));
+  /// assert_eq!(60, n2.from_ring(22));
+  /// // EQR
+  /// assert_eq!(51,  n2.from_ring(54));
+  /// assert_eq!(88,  n2.from_ring(107));
+  /// assert_eq!(174, n2.from_ring(129));
+  /// // SPC
+  /// assert_eq!(177, n2.from_ring(187));
+  /// assert_eq!(153, n2.from_ring(157));
+  /// assert_eq!(144, n2.from_ring(189));
+  /// ```
+  pub fn from_ring(&self, hash: u64) -> u64 {
+    // 4*sum from i=1 to nside of i =  4 * nside(nside+1)/2 = 2*nside*(nside+1)
+    let first_hash_in_eqr = dbg!(self.first_hash_in_eqr());
+    let first_hash_on_eqr_spc_transition = dbg!(self.n_hash - first_hash_in_eqr); // == first_hash_on_eqr_spc_transition
+    if hash < first_hash_in_eqr { // North polar cap
+      // Solve 2*n(n+1) = x 
+      //   => 2n^2+2n-x = 0 => b^2-4ac = 4+8x = 4(1+2x)
+      //   => n = [-2+2*sqrt(1+2x)]/4 => n = [sqrt(1+2x) - 1] / 2
+      //   => n^2+n-x/2 = 0 => b^2-4ac = 1 + 2x => n = [sqrt(1+2x) - 1] / 2
+      // n - 1 = ring index
+      // Here we may optimize by finding a good 'isqrt' implementation
+      let i_ring :u64 = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+      let n_in_ring: u64 = i_ring + 1;
+      let i_in_ring = hash - triangular_number_x4(i_ring);
+      let d0h = i_in_ring / n_in_ring;
+      let h = (((self.nside as u64) << 1) - 2) as i64 - i_ring as i64;
+      println!("ir: {}; iinr: {}; d0h: {}; ninr: {}", i_ring, i_in_ring, d0h, n_in_ring);
+      let l = ((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
+      self.build_hash_from_parts (
+        d0h as u8,
+        ((h + l) >> 1) as u32,
+        ((h - l) >> 1) as u32,
+      )
+    } else if hash >= first_hash_on_eqr_spc_transition { // South polar cap
+      let hash = self.n_hash - 1 - hash; // start counting in reverse order from south polar cap
+      let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+      let n_in_ring = i_ring + 1;
+      let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
+      let mut d0h = i_in_ring / n_in_ring;
+      let h = i_ring as i64;
+      let l =((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
+      self.build_hash_from_parts (
+        d0h as u8 + 8,
+        ((h + l) >> 1) as u32,
+        ((h - l) >> 1) as u32,
+      )
+    } else { // Equatorial region
+      // Set origin of ring indexes at the center of small cell in north corner of base cell 4 (North to South direction)
+      let mut i_ring = hash - first_hash_in_eqr;
+      let mut i_in_ring = i_ring;
+      // <=> /= 4*nside (number of hash per line) => count the number of line from first equatorial line
+      i_ring >>= self.depth + 2;
+      // Substract number of hash in previous rings (-= n_rings * 4*nside)
+      i_in_ring -= i_ring << (self.depth + 2);
+      let l = (i_in_ring << 1) + div2_remainder(i_ring);
+      // Set origin of h axis at center of small cell in south corner of base cell 4 (South to North direction)
+      let h = (((self.nside as u64) << 1) - 2) - i_ring;
+      // Rotation of -45
+      let i_in_d0c = (h + l) >> 1;
+      let j_in_d0c = (h as i64 - l as i64) >> 1;
+      // Offset of 4*nside in j
+      let j_in_d0c = (j_in_d0c + ((self.nside as i64) << 2)) as u64;
+      let i_d0c = self.div_by_nside_floor_u8(i_in_d0c);
+      let j_d0c = self.div_by_nside_floor_u8(j_in_d0c);
+      self.build_hash_from_parts (
+        depth0_hash_unsafe(i_d0c, j_d0c),
+        self.modulo_nside(i_in_d0c) as u32,
+        self.modulo_nside(j_in_d0c) as u32,
+      )
+    }
+  }
+  
+  /// arg * nside
+  #[inline]
+  fn nside_time(&self, i: u64) -> u64 {
+    i << self.depth
+  }
+  
+  /// See the same method (generalized to any NSIDE) in the RING module.
+  /// Here we addiionally use the fact that NSIDE is a powrer of two.
+  #[inline]
+  fn first_hash_in_eqr(&self) -> u64 {
+    //   2*nside*(nside + 1)
+    // = 2*[nside^2 + nside]
+    ((1_u64 << (self.depth << 1)) + self.nside as u64) << 1
+  }
+
+  /// (i_ring - nside) * 4 * nside
+  #[inline]
+  fn minus_nside_x_4nside(&self, i_ring: u64) -> u64 {
+    (i_ring - self.nside as u64) << (self.depth + 2)
   }
   
   /// Compute the position on the unit sphere of the center (in the Euclidean projection plane)
@@ -1175,20 +1490,6 @@ impl Layer {
       _ => None,
     }
   }
-
-  
-  /*pub fn to_ring(&self, hash: u64) -> u64 {
-    let (d0h, i, j) = decode_hash(hash);
-    let h = i + j;
-    let l = i - j;
-    let j_d0h = div4_quotient(d0h);
-    
-  }*/
-  
-  /*pub fn from_ring(&self, hash: u64) -> u64 {
-    
-  }*/
-  
   
   // Center of a cell, on the projection space (i.e. in the Euclidean plane).
   fn center_of_projected_cell(&self, hash: u64) -> (f64, f64) {
@@ -1864,7 +2165,15 @@ impl Layer {
   }
 }
 
-
+/// Returns the hash value of the base cell (the depth 0 cell hash value) given its '(i, j)'
+/// coordinates in the projected, rotated, scaled plane.
+/// Here we suppose that we get `(i, j)` from the center of a cell, so that we do not have to take
+/// care of border effects (see `depth0_bits` accounting for border effects).
+#[inline]
+fn depth0_hash_unsafe(i: u8, j: u8) -> u8 {
+  let k = 5_i8 - (i + j) as i8;
+  (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u8)
+}
 
 /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
 /// located in the corner of given direction in the given cell.
@@ -2176,9 +2485,17 @@ const fn bits_2_hash(d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64) -> u
   d0h_bits | i_in_d0h_bits | j_in_d0h_bits
 }
 
+/// x / 2
 #[inline]
-fn ensures_x_is_positive(x: f64) -> f64 {
-  if x < 0.0 { x + 8.0 } else { x }
+fn div2_quotient<T: Shr<u8, Output=T>>(x: T) -> T {
+  // x >> 1
+  x.shr(1)
+}
+
+/// x modulo 2
+#[inline]
+const fn div2_remainder(x: u64) -> u64 {
+  x & 1
 }
 
 /// x / 4
@@ -3075,4 +3392,14 @@ mod tests {
     assert_eq!(56, layer_2.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
 
+  #[test]
+  fn test_ring() {
+    for depth in 0..10 {
+      let layer = get_or_create(depth);
+      for h in 0..layer.n_hash {
+        assert_eq!(layer.from_ring(layer.to_ring(h)), h);
+      }
+    }
+  }
+  
 }
