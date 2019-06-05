@@ -1,5 +1,10 @@
 use super::*;
 
+pub const fn n_hash(nside: u32) -> u64 {
+  let nside = nside as u64;
+  12 * nside * nside
+}
+
 /// Returns the number of isolatitude in the whole sphere at the given `nside`, 
 /// i.e. the number of small circles parallel to the equator containing HEALPix cell centers.
 /// 
@@ -141,32 +146,251 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
 }
 
 
+/*pub fn hash_v2(nside: u32, lon: f64, lat: f64) -> u64 {
+  check_lat(lat);
+  let lon = abs_sign_decompose(lon);
+  let lat = abs_sign_decompose(lat);
+  let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
+  let mut xy = (x.pm1, lat.abs);
+  if is_in_equatorial_region(lat.abs) {
+    proj_cea(&mut xy);
+  } else {
+    proj_collignon(&mut xy);
+  }
+  
+  if lat.sign == F64_SIGN_BIT_MASK {
+    n_hash(nside_u32) - val
+  } else {
+    val 
+  }
+  apply_offset_and_signs(&mut xy, x.offset, lon.sign, lat.sign);
+}*/
 
-/*
+/// Returns the cell number (hash value) associated with the given position on the unit sphere
+/// # Inputs
+/// - `lon`: longitude in radians, support reasonably large positive and negative values
+///          producing accurate results with a naive range reduction like modulo 2*pi
+///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+/// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
+/// # Output
+/// - the cell number (hash value) associated with the given position on the unit sphere,
+///   in `[0, 12*nside^2[`
+/// # Panics
+///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
 pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
+  let nside = nside as u64;
+  let half_nside = 0.5 * (nside as f64);
+  // Project and ensure that x is positive (in case input lon < 0)
   let mut xy = proj(lon, lat);
   xy.0 = ensures_x_is_positive(xy.0);
-  
-  regarde si partie entier x * nside est 0 ou 1
-  regarde si partie entier y * nside est 0 ou 1
+  // Set the origin to (x=0, y=-3) in the projection plane, scale both axis by a factor  1/2 * nside
+  let mut dl = half_nside * xy.0;          debug_assert!(0.0 <= dl && dl <  4.0 * nside as f64);
+  let mut dh = half_nside * (xy.1 + 3.0);  debug_assert!(0.0 <= dh && dh <= 2.5 * nside as f64);
+  let mut i_ring = (dh as u64) << 1;
+  let mut i_in_ring = dl as u64;
+  dl -= i_in_ring as f64;      debug_assert!(0.0 <= dl && dl < 1.0);
+  dh -= (i_ring >> 1) as f64;  debug_assert!(0.0 <= dh && dh < 1.0);
+  deal_with_1x1_box(dl, dh, &mut i_ring, &mut i_in_ring);
   // Those tests are already performed in the proj, so if we have to improve performances we may
   // merge this code with the projection code (loosing readability).
-  if y > 1.0 {
-    
-  } else if y < -1.0 {
-    
-  } else {
-    let i_ring = ;
-    let i_in_ring = ;
+  if i_ring >= 5 * nside { // North pole, rare case
+    return i_in_ring / nside;
   }
-    
-  // projection
-  // rotation, shift, scale
-  // base cell computation
-  // i, j ... ??
-  0
+  i_ring = 5 * nside - 1 - i_ring;
+  if i_ring < nside { // North polar cap
+    let off = nside - 1 - i_ring;
+    i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
+    triangular_number_x4(i_ring) + i_in_ring
+  } else if i_ring >= 3 * nside { // South polar cap
+    let off = i_ring + 1 - 3 * nside;
+    i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
+    n_hash(nside as u32) - triangular_number_x4(n_isolatitude_rings(nside as u32) as u64 - i_ring) + i_in_ring
+  } else { // Equatorial region
+    first_hash_in_eqr(nside as u32)
+      + (i_ring - nside) * (nside << 2) 
+      + if i_in_ring == nside << 2 { 0 } else { i_in_ring }
+  }
 }
-*/
+
+///    NORTH   
+///  h ^           Deals with a box of size 1x1, with: 
+/// W  |_._    E   - dl in `[0, 1[` along the x-axis
+/// E  |\2/|   A   - dh in `[0, 1[` along the y-axis
+/// S  .3X1.   S   The box is divided in 4 quarters (q in [0, 3[) 
+/// T  |/0\|   T   - q = 0 => nothing to do
+///    --.----> l  - q = 1 => increase `i_ring` of  +1 and increase `i_in_ring` of +1
+///                - q = 2 => increase `i_ring` of  +2
+///    SOUTH       - q = 3 => increase `i_ring` of  +1
+/// Warning, the inequalities are important to decide if an edge is in a cell or its neighbour!!
+fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
+  debug_assert!(0.0 <= dl && dl < 1.0);
+  debug_assert!(0.0 <= dh && dh < 1.0);
+  let in1 = (dl <= dh) as u64;       /* 1/0 */  debug_assert!(in1 == 0 || in1 == 1);
+  let in2 = (dl >= 1.0 - dh) as u64; /* 0\1 */  debug_assert!(in2 == 0 || in2 == 1);
+  *i_ring += in1 + in2;
+  *i_in_ring += in2 >> in1; // <=> in2 & (1 - in1)
+}
+
+#[inline]
+fn is_hash(nside: u32, hash: u64) -> bool {
+  hash < n_hash(nside)
+}
+
+#[inline]
+fn check_hash(nside: u32, hash: u64) { 
+  assert!(is_hash(nside, hash), "Wrong hash value: too large.");
+}
+
+/// Center of the given cell in the Euclidean projection space.
+/// # Output
+/// - `(x, y)` coordinates such that $x \in [0, 8[$ and $y \in [-2, 2]$.
+/// 
+/// # TODO
+/// TO BE TESTED!!
+pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
+  check_hash(nside, hash);
+  if hash < first_hash_on_npc_eqr_transition(nside) { // North polar cap
+    let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+    let n_in_ring = i_ring + 1;
+    let i_in_ring = hash - triangular_number_x4(i_ring);
+    let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
+    let q = i_in_ring / n_in_ring;
+    let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
+    (x as f64 / nside as f64, y)
+  } else if hash >= first_hash_in_spc(nside) { // South polar cap
+    let hash = n_hash(nside) - 1 - hash; // start counting in reverse order from south polar cap
+    let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+    let n_in_ring = i_ring + 1;
+    let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
+    let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
+    let q = i_in_ring / n_in_ring;
+    let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
+    (x as f64 / nside as f64, -y)
+  } else { // Equatorial region
+    let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / (nside as u64);
+    let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
+    let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
+    (x, y)
+  }
+}
+
+/// Compute the position on the unit sphere of the center (in the Euclidean projection plane)
+/// of the cell associated to the given hash value.
+/// 
+/// # Input
+/// - `hash`: the hash value of the cell we look for the unprojected center
+/// 
+/// # Output
+/// - `(lon, lat)` in radians, the unprojected position (on the unit sphere) of the center of 
+///   the cell in the Euclidean plane
+///   - `lon`, longitude in `[0, 2pi]` radians;
+///   - `lat`, latitude in `[-pi/2, pi/2]` radians. 
+/// 
+/// # Panics
+/// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+pub fn center(nside: u32, hash: u64) -> (f64, f64) {
+  let (x, y) = center_of_projected_cell(nside, hash);
+  super::unproj(x, y)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#[test]
+fn test_hash() {
+  let nside = 1;
+  // Easy
+  assert_eq!(hash(nside,  40.0_f64.to_radians(),  45.0_f64.to_radians()), 0);
+  assert_eq!(hash(nside, 130.0_f64.to_radians(),  45.0_f64.to_radians()), 1);
+  assert_eq!(hash(nside, 220.0_f64.to_radians(),  45.0_f64.to_radians()), 2);
+  assert_eq!(hash(nside, 310.0_f64.to_radians(),  45.0_f64.to_radians()), 3);
+  assert_eq!(hash(nside,   0.0_f64.to_radians(),   0.0_f64.to_radians()), 4);
+  assert_eq!(hash(nside,  90.0_f64.to_radians(),   0.0_f64.to_radians()), 5);
+  assert_eq!(hash(nside, 180.0_f64.to_radians(),   0.0_f64.to_radians()), 6);
+  assert_eq!(hash(nside, 270.0_f64.to_radians(),   0.0_f64.to_radians()), 7);
+  assert_eq!(hash(nside,  40.0_f64.to_radians(), -45.0_f64.to_radians()), 8);
+  assert_eq!(hash(nside, 130.0_f64.to_radians(), -45.0_f64.to_radians()), 9);
+  assert_eq!(hash(nside, 220.0_f64.to_radians(), -45.0_f64.to_radians()), 10);
+  assert_eq!(hash(nside, 310.0_f64.to_radians(), -45.0_f64.to_radians()), 11);
+  // Particular points
+  // - north pole
+  assert_eq!(hash(nside,   40.0_f64.to_radians(),  90.0_f64.to_radians()), 0);
+  assert_eq!(hash(nside,  130.0_f64.to_radians(),  90.0_f64.to_radians()), 1);
+  assert_eq!(hash(nside,  220.0_f64.to_radians(),  90.0_f64.to_radians()), 2);
+  assert_eq!(hash(nside,  310.0_f64.to_radians(),  90.0_f64.to_radians()), 3);
+  // - south pole
+  assert_eq!(hash(nside,   40.0_f64.to_radians(),  -90.0_f64.to_radians()), 8);
+  assert_eq!(hash(nside,  130.0_f64.to_radians(),  -90.0_f64.to_radians()), 9);
+  assert_eq!(hash(nside,  220.0_f64.to_radians(),  -90.0_f64.to_radians()), 10);
+  assert_eq!(hash(nside,  310.0_f64.to_radians(),  -90.0_f64.to_radians()), 11);
+  // - around corner
+  assert_eq!(hash(nside, 44.0_f64.to_radians(),  0.0_f64.to_radians()), 4);
+  assert_eq!(hash(nside, 46.0_f64.to_radians(),  0.0_f64.to_radians()), 5);
+  assert_eq!(hash(nside, 45.0_f64.to_radians(),  1.0_f64.to_radians()), 0);
+  assert_eq!(hash(nside, 45.0_f64.to_radians(),  -1.0_f64.to_radians()), 8);
+}
+
+#[test]
+fn test_hash_2() {
+  for depth in 0..10 {
+    let nside = nside(depth);
+    let layer = nested::get_or_create(depth);
+    for icell in 0..layer.n_hash() {
+      let (lon, lat) = layer.center(icell);
+      assert_eq!(hash(nside, lon, lat), layer.to_ring(icell));
+    }
+  }   
+}
+
+
+#[test]
+fn test_deal_with_1x1_box() {
+  let mut i_ring = 0;
+  let mut i_in_ring = 0;
+  
+  deal_with_1x1_box(0.0, 0.0, &mut i_ring, &mut i_in_ring);
+  assert_eq!(i_ring, 1);
+  assert_eq!(i_in_ring, 0);
+  
+  i_ring = 0; i_in_ring = 0;
+  deal_with_1x1_box(0.5, 0.0, &mut i_ring, &mut i_in_ring);
+  assert_eq!(i_ring, 0);
+  assert_eq!(i_in_ring, 0);
+  
+  i_ring = 0; i_in_ring = 0;
+  deal_with_1x1_box(0.9, 0.5, &mut i_ring, &mut i_in_ring);
+  assert_eq!(i_ring, 1);
+  assert_eq!(i_in_ring, 1);
+  
+  i_ring = 0; i_in_ring = 0;
+  deal_with_1x1_box(0.5, 0.9, &mut i_ring, &mut i_in_ring);
+  assert_eq!(i_ring, 2);
+  assert_eq!(i_in_ring, 0);
+
+  i_ring = 0; i_in_ring = 0;
+  deal_with_1x1_box(0.5, 0.5, &mut i_ring, &mut i_in_ring);
+  assert_eq!(i_ring, 2);
+  assert_eq!(i_in_ring, 0);
+}
 
 /*
 to_nested() {

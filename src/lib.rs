@@ -90,7 +90,7 @@ pub const TRANSITION_LATITUDE: f64 = 0.72972765622696636344_f64; // asin(2/3)
 pub const TRANSITION_Z: f64 = 2_f64 / 3_f64;
 const ONE_OVER_TRANSITION_Z: f64 = 1.5_f64;
 
-const F64_SIGN_BIT_MASK: u64 = 0x8000000000000000;
+pub(crate) const F64_SIGN_BIT_MASK: u64 = 0x8000000000000000;
 const F64_BUT_SIGN_BIT_MASK: u64 = 0x7FFFFFFFFFFFFFFF;
 
 /// For each HEALPix depth, stores the smallest distance from an edge of a cell to the opposite
@@ -1107,6 +1107,51 @@ pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
     xy
 }
 
+/// Returns the hash of the base cell given the coordinates of a points in the Euclidean projection
+/// plane.
+/// The purpose so far is just to test and compare both speed and precision with the 45deg 
+/// rotation solution.
+/// 
+/// # Input
+/// - `(x, y)` the coordinates in the Euclidean projection plane, i.e. $x \in [0, 8[$ 
+/// and $y \in [-2, 2]$
+/// 
+/// # Ouput
+/// - `d0h` the hash value of the base cell (i.e. the depth 0 / nside 1 cell)
+/// 
+/// # Example
+/// Simple example based on the center of each base cell.
+/// ```rust
+/// use cdshealpix::base_cell_from_proj_coo;
+/// 
+/// assert_eq!(base_cell_from_proj_coo(1.0,  1.0),  0);
+/// assert_eq!(base_cell_from_proj_coo(3.0,  1.0),  1);
+/// assert_eq!(base_cell_from_proj_coo(5.0,  1.0),  2);
+/// assert_eq!(base_cell_from_proj_coo(7.0,  1.0),  3);
+/// assert_eq!(base_cell_from_proj_coo(0.0,  0.0),  4);
+/// assert_eq!(base_cell_from_proj_coo(2.0,  0.0),  5);
+/// assert_eq!(base_cell_from_proj_coo(4.0,  0.0),  6);
+/// assert_eq!(base_cell_from_proj_coo(6.0,  0.0),  7);
+/// assert_eq!(base_cell_from_proj_coo(1.0, -1.0),  8);
+/// assert_eq!(base_cell_from_proj_coo(3.0, -1.0),  9);
+/// assert_eq!(base_cell_from_proj_coo(5.0, -1.0), 10);
+/// assert_eq!(base_cell_from_proj_coo(7.0, -1.0), 11);
+/// ```
+pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
+  let mut x = 0.5 * ensures_x_is_positive(x);
+  let mut y = 0.5 * (y + 3.0);
+  let mut i = x as u8;     debug_assert!(0 <= i && i <  4); // if can be == 4, then (x as u8) & 3
+  let mut j = (y as u8) << 1;  debug_assert!(j == 0 || j == 2 || j == 4);
+  x -= i as f64;               debug_assert!(0.0 <= x && x < 1.0);
+  y -= (j >> 1) as f64;        debug_assert!(0.0 <= y && y < 1.0);
+  let in_northwest = (x <= y) as u8;       // 1/0
+  let in_southeast = (x >= 1.0 - y) as u8; // 0\1
+  i += in_southeast >> in_northwest; // <=> in_southeast & (1 - in_northwest) => 0 or 1
+  j += in_northwest + in_southeast;
+  if j == 6 { j = 4; } // Very rare case (North pole), so few risks of branch miss-prediction
+  debug_assert!(j == 2 || j == 3 || j == 4);
+  ((4 - j) << 2) + i
+}
 
 /// Unproject the given HEALPix projected points.  
 /// This unprojection is multi-purpose in the sense that:
@@ -1257,7 +1302,7 @@ struct AbsAndSign {
     sign: u64,
 }
 #[inline]
-fn abs_sign_decompose(x: f64) -> AbsAndSign {
+pub(crate) fn abs_sign_decompose(x: f64) -> AbsAndSign {
     let bits = f64::to_bits(x);
     AbsAndSign {
         abs: f64::from_bits(bits & F64_BUT_SIGN_BIT_MASK),
@@ -1268,12 +1313,12 @@ fn abs_sign_decompose(x: f64) -> AbsAndSign {
 // Decompose the given positive real value in
 // --* an integer offset in [1, 3, 5, 7] (*PI/4) and
 // --* a real value in [-1.0, 1.0] (*PI/4)
-struct OffsetAndPM1 {
+pub(crate) struct OffsetAndPM1 {
     offset: u8, // = 1, 3, 5 or 7
     pm1: f64,   // in [-1.0, 1.0]
 }
 #[inline]
-fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
+pub(crate) fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
     let floor: u8 = x as u8;
     let odd_floor: u8 = floor | 1u8;
     OffsetAndPM1 {
@@ -1284,7 +1329,7 @@ fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
 
 // Cylindrical Equal Area projection
 #[inline]
-fn proj_cea(xy: &mut (f64, f64)) {
+pub(crate) fn proj_cea(xy: &mut (f64, f64)) {
     let (_, ref mut y) = *xy;
     *y = f64::sin(*y) * ONE_OVER_TRANSITION_Z;
 }
@@ -1297,7 +1342,7 @@ fn deproj_cea(lonlat: &mut (f64, f64)) {
 
 // Collignon projection
 #[inline]
-fn proj_collignon(xy: &mut (f64, f64)) {
+pub(crate) fn proj_collignon(xy: &mut (f64, f64)) {
     let (ref mut x, ref mut y) = *xy;
     *y = SQRT6 * f64::cos(HALF * *y + PI_OVER_FOUR);
     *x *= *y;
@@ -1333,7 +1378,7 @@ fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
 
 // Shift x by the given offset and apply lon and lat signs to x and y respectively
 #[inline]
-fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64) {
+pub(crate) fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64) {
     let (ref mut a, ref mut b) = *ab;
     *a += off as f64;
     *a = f64::from_bits(f64::to_bits(*a) | a_sign);

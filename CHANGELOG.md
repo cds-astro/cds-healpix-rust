@@ -2,17 +2,26 @@
 
 ## 0.3.0 
 
-Released 2019-06-03.
+Released 2019-06-05.
 
 ## Added
 
-* `sph_coo`: spherical coordinates from an HEALPix cell + offsets `(dx, dy)`
-* `hash_with_dxdy`: hash value together with the `(dx, dy)` offsets
-* `path_along_cell_side`: provides points along a cell side
-* `path_along_cell_edge`: provides points along a cell edge
-* `bilinear_interpolation`: bilinear interpolation on the nested scheme
-* `to_ring`: convert a NESTED index into a RING index
-* `from_ring`: convert a RING index into a NESTED index
+* Added in the NESTED scheme
+    + `sph_coo`: spherical coordinates from an HEALPix cell + offsets `(dx, dy)`
+    + `hash_with_dxdy`: hash value together with the `(dx, dy)` offsets
+    + `path_along_cell_side`: provides points along a cell side
+    + `path_along_cell_edge`: provides points along a cell edge
+    + `bilinear_interpolation`: bilinear interpolation on the nested scheme
+    + set `center_of_projected_cell` public
+* Support of ring in NESTED:
+    + `to_ring`: convert a NESTED index into a RING index
+    + `from_ring`: convert a RING index into a NESTED index
+* Starts supporting the RING scheme
+   + `hash`: compute the RING number from (lon, lat) coordiantes
+   + `center`: get the coordiates of the center of a RING cell
+   + `center_of_projected_cell`: like center, but coordinates are gicen in the Euclidean projection plane
+* All
+   + `base_cell_from_proj_coo`: experiment to be tested 
 
 ### Bug correction
 

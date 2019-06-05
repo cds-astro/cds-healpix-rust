@@ -52,6 +52,12 @@ pub fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
   (hash << twice_delta_depth)..((hash + 1) << twice_delta_depth)
 }
 
+/// Conveniency function returning the number of hash value in the [Layer] of the given *depth*.
+#[inline]
+pub fn n_hash(depth: u8) -> u64 {
+  get_or_create(depth).n_hash
+}
+
 /// Conveniency function simply calling the [hash](struct.Layer.html#method.hash) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -256,6 +262,12 @@ impl Layer {
   #[inline]
   pub fn depth(&self) -> u8 { self.depth }
 
+  /// Returns the number of hash value of the Layer, i.e. the number of cells.
+  #[inline]
+  pub fn n_hash(&self) -> u64 {
+    self.n_hash
+  }
+  
   /// Returns the cell number (hash value) associated with the given position on the unit sphere
   /// # Inputs
   /// - `lon`: longitude in radians, support reasonably large positive and negative values
@@ -654,8 +666,8 @@ impl Layer {
   /// ```
   pub fn from_ring(&self, hash: u64) -> u64 {
     // 4*sum from i=1 to nside of i =  4 * nside(nside+1)/2 = 2*nside*(nside+1)
-    let first_hash_in_eqr = dbg!(self.first_hash_in_eqr());
-    let first_hash_on_eqr_spc_transition = dbg!(self.n_hash - first_hash_in_eqr); // == first_hash_on_eqr_spc_transition
+    let first_hash_in_eqr = self.first_hash_in_eqr();
+    let first_hash_on_eqr_spc_transition = self.n_hash - first_hash_in_eqr; // == first_hash_on_eqr_spc_transition
     if hash < first_hash_in_eqr { // North polar cap
       // Solve 2*n(n+1) = x 
       //   => 2n^2+2n-x = 0 => b^2-4ac = 4+8x = 4(1+2x)
@@ -663,12 +675,11 @@ impl Layer {
       //   => n^2+n-x/2 = 0 => b^2-4ac = 1 + 2x => n = [sqrt(1+2x) - 1] / 2
       // n - 1 = ring index
       // Here we may optimize by finding a good 'isqrt' implementation
-      let i_ring :u64 = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+      let i_ring: u64 = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
       let n_in_ring: u64 = i_ring + 1;
       let i_in_ring = hash - triangular_number_x4(i_ring);
       let d0h = i_in_ring / n_in_ring;
       let h = (((self.nside as u64) << 1) - 2) as i64 - i_ring as i64;
-      println!("ir: {}; iinr: {}; d0h: {}; ninr: {}", i_ring, i_in_ring, d0h, n_in_ring);
       let l = ((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
       self.build_hash_from_parts (
         d0h as u8,
@@ -682,7 +693,7 @@ impl Layer {
       let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
       let mut d0h = i_in_ring / n_in_ring;
       let h = i_ring as i64;
-      let l =((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
+      let l = ((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
       self.build_hash_from_parts (
         d0h as u8 + 8,
         ((h + l) >> 1) as u32,
@@ -1491,8 +1502,10 @@ impl Layer {
     }
   }
   
-  // Center of a cell, on the projection space (i.e. in the Euclidean plane).
-  fn center_of_projected_cell(&self, hash: u64) -> (f64, f64) {
+  /// Center of the given cell in the Euclidean projection space.
+  /// # Output
+  /// - `(x, y)` coordinates such that $x \in [0, 8[$ and $y \in [-2, 2]$. 
+  pub fn center_of_projected_cell(&self, hash: u64) -> (f64, f64) {
     self.check_hash(hash);
     let h_parts: HashParts = self.decode_hash(hash);
     let mut hl: (i32, i32) = rotate45_scale2(h_parts.i, h_parts.j);
