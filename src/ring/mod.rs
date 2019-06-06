@@ -451,7 +451,7 @@ pub fn sph_coo(nside: u32, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
 /// TO BE TESTED!!
 #[inline]
 pub fn vertices(nside: u32, hash: u64) -> [(f64, f64); 4] {
-  let on_over_nside = 1.0 / (nside as f64);
+  let one_over_nside = 1.0 / (nside as f64);
   let (x, y) = center_of_projected_cell(nside, hash);
   [
     super::unproj(x, y - one_over_nside), // S
