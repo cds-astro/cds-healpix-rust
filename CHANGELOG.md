@@ -17,9 +17,12 @@ Released 2019-06-05.
     + `to_ring`: convert a NESTED index into a RING index
     + `from_ring`: convert a RING index into a NESTED index
 * Starts supporting the RING scheme
-   + `hash`: compute the RING number from (lon, lat) coordiantes
+   + `hash`: compute the RING number from (lon, lat) coordinates
+   + `hash_with_dxdy`: compute the RING number from (lon, lat) coordinates and additionally provide the offsets (dx, dy) in the cell
    + `center`: get the coordiates of the center of a RING cell
    + `center_of_projected_cell`: like center, but coordinates are gicen in the Euclidean projection plane
+   + `sph_coo`: get a coordinate on the sphere from a cell and a position (dx, dy) in the cell
+   + `vertices`: provide the 4 vertices of a given cell 
 * All
    + `base_cell_from_proj_coo`: experiment to be tested 
 

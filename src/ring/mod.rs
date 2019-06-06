@@ -1,5 +1,7 @@
 use super::*;
 
+/// Returns the number of distinct hash values (i.e. the number if cells the sphere is divided in)
+/// at the gicen NSIDE.
 pub const fn n_hash(nside: u32) -> u64 {
   let nside = nside as u64;
   12 * nside * nside
@@ -145,29 +147,9 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
   (n * (n + 1)) << 1
 }
 
-
-/*pub fn hash_v2(nside: u32, lon: f64, lat: f64) -> u64 {
-  check_lat(lat);
-  let lon = abs_sign_decompose(lon);
-  let lat = abs_sign_decompose(lat);
-  let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
-  let mut xy = (x.pm1, lat.abs);
-  if is_in_equatorial_region(lat.abs) {
-    proj_cea(&mut xy);
-  } else {
-    proj_collignon(&mut xy);
-  }
-  
-  if lat.sign == F64_SIGN_BIT_MASK {
-    n_hash(nside_u32) - val
-  } else {
-    val 
-  }
-  apply_offset_and_signs(&mut xy, x.offset, lon.sign, lat.sign);
-}*/
-
 /// Returns the cell number (hash value) associated with the given position on the unit sphere
 /// # Inputs
+/// - `nside`: the NSIDE of the RING scheme
 /// - `lon`: longitude in radians, support reasonably large positive and negative values
 ///          producing accurate results with a naive range reduction like modulo 2*pi
 ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
@@ -177,7 +159,70 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
 ///   in `[0, 12*nside^2[`
 /// # Panics
 ///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
+/// # Examples
+/// ```rust
+/// use cdshealpix::ring::hash;
+/// 
+/// let nside = 1;
+/// // Easy
+/// assert_eq!(hash(nside,  40.0_f64.to_radians(),  45.0_f64.to_radians()),  0);
+/// assert_eq!(hash(nside, 130.0_f64.to_radians(),  45.0_f64.to_radians()),  1);
+/// assert_eq!(hash(nside, 220.0_f64.to_radians(),  45.0_f64.to_radians()),  2);
+/// assert_eq!(hash(nside, 310.0_f64.to_radians(),  45.0_f64.to_radians()),  3);
+/// assert_eq!(hash(nside,   0.0_f64.to_radians(),   0.0_f64.to_radians()),  4);
+/// assert_eq!(hash(nside,  90.0_f64.to_radians(),   0.0_f64.to_radians()),  5);
+/// assert_eq!(hash(nside, 180.0_f64.to_radians(),   0.0_f64.to_radians()),  6);
+/// assert_eq!(hash(nside, 270.0_f64.to_radians(),   0.0_f64.to_radians()),  7);
+/// assert_eq!(hash(nside,  40.0_f64.to_radians(), -45.0_f64.to_radians()),  8);
+/// assert_eq!(hash(nside, 130.0_f64.to_radians(), -45.0_f64.to_radians()),  9);
+/// assert_eq!(hash(nside, 220.0_f64.to_radians(), -45.0_f64.to_radians()), 10);
+/// assert_eq!(hash(nside, 310.0_f64.to_radians(), -45.0_f64.to_radians()), 11);
+/// // Particular points
+/// // - north pole
+/// assert_eq!(hash(nside,  40.0_f64.to_radians(), 90.0_f64.to_radians()), 0);
+/// assert_eq!(hash(nside, 130.0_f64.to_radians(), 90.0_f64.to_radians()), 1);
+/// assert_eq!(hash(nside, 220.0_f64.to_radians(), 90.0_f64.to_radians()), 2);
+/// assert_eq!(hash(nside, 310.0_f64.to_radians(), 90.0_f64.to_radians()), 3);
+/// // - south pole
+/// assert_eq!(hash(nside,  40.0_f64.to_radians(), -90.0_f64.to_radians()),  8);
+/// assert_eq!(hash(nside, 130.0_f64.to_radians(), -90.0_f64.to_radians()),  9);
+/// assert_eq!(hash(nside, 220.0_f64.to_radians(), -90.0_f64.to_radians()), 10);
+/// assert_eq!(hash(nside, 310.0_f64.to_radians(), -90.0_f64.to_radians()), 11);
+/// // - around the (45, 0) corner
+/// assert_eq!(hash(nside, 44.0_f64.to_radians(),  0.0_f64.to_radians()), 4);
+/// assert_eq!(hash(nside, 46.0_f64.to_radians(),  0.0_f64.to_radians()), 5);
+/// assert_eq!(hash(nside, 45.0_f64.to_radians(),  1.0_f64.to_radians()), 0);
+/// assert_eq!(hash(nside, 45.0_f64.to_radians(), -1.0_f64.to_radians()), 8);
+/// ```
 pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
+  hash_with_dldh(nside, lon, lat).0
+}
+
+/// Returns the cell number (hash value) associated with the given position on the unit sphere, 
+/// together with the offset `(dx, dy)` on the Euclidean plane of the projected position with
+/// respect to the origin of the cell (South vertex).
+/// # Inputs
+/// - `nside`: the NSIDE of the RING scheme
+/// - `lon`: longitude in radians, support reasonably large positive and negative values
+///          producing accurate results with a naive range reduction like modulo 2*pi
+///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+/// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
+/// # Output
+/// - the cell number (hash value) associated with the given position on the unit sphere,
+///   in `[0, 12*nside^2[`
+/// - `dx`: the positional offset $\in [0, 1[$ along the south-to-east axis
+/// - `dy`: the positional offset $\in [0, 1[$ along the south-to-west axis
+/// # Panics
+///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
+/// # Examples
+/// TODO: TO BE TESTED
+pub fn hash_with_dxdy(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
+  let (h, dl, dh) = hash_with_dldh(nside, lon, lat);
+  let (dx, dy) = dldh_to_dxdy(dl, dh);
+  (h, dx, dy)
+}
+
+fn hash_with_dldh(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
   let nside = nside as u64;
   let half_nside = 0.5 * (nside as f64);
   // Project and ensure that x is positive (in case input lon < 0)
@@ -194,10 +239,10 @@ pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
   // Those tests are already performed in the proj, so if we have to improve performances we may
   // merge this code with the projection code (loosing readability).
   if i_ring >= 5 * nside { // North pole, rare case
-    return i_in_ring / nside;
+    return (i_in_ring / nside, 1.0, 1.0);
   }
   i_ring = 5 * nside - 1 - i_ring;
-  if i_ring < nside { // North polar cap
+  let hash = if i_ring < nside { // North polar cap
     let off = nside - 1 - i_ring;
     i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
     triangular_number_x4(i_ring) + i_in_ring
@@ -207,9 +252,10 @@ pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
     n_hash(nside as u32) - triangular_number_x4(n_isolatitude_rings(nside as u32) as u64 - i_ring) + i_in_ring
   } else { // Equatorial region
     first_hash_in_eqr(nside as u32)
-      + (i_ring - nside) * (nside << 2) 
+      + (i_ring - nside) * (nside << 2)
       + if i_in_ring == nside << 2 { 0 } else { i_in_ring }
-  }
+  };
+  (hash, dl, dh)
 }
 
 ///    NORTH   
@@ -231,6 +277,48 @@ fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
   *i_in_ring += in2 >> in1; // <=> in2 & (1 - in1)
 }
 
+fn dldh_to_dxdy(dl: f64, dh: f64) -> (f64, f64) {
+  /*let dl = dl - 0.5;
+  let dh = dh - 0.5;
+  let dx = dh + dl;
+  let dy = dh - dl;
+  q = 0 => dx + 1, dy + 1
+  q = 1 => dx    , dy + 1
+  q = 2 => dx, dy
+  q = 3 => dx + 1, dy
+  */
+  let dx = dh + dl - 1.0;
+  let dy = dh - dl;
+  (dx + ((dx < 0.0) as u8) as f64, dy + ((dy < 0.0) as u8) as f64)
+}
+
+
+/* THE IDEE WOULD BE TO AVOID HAVING TO BLOCK OF IF CONDITION (ONE IN PROJ AND ONE AFTER PROJ)
+fn hash_v2(nside: u32, lon: f64, lat: f64) -> u64 {
+  check_lat(lat);
+  let lon = abs_sign_decompose(lon);
+  let lat = abs_sign_decompose(lat);
+  let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
+  let mut xy = (x.pm1, lat.abs);
+  if is_in_equatorial_region(lat.abs) {
+    proj_cea(&mut xy);
+  } else {
+    proj_collignon(&mut xy);
+  }
+  
+  if lat.sign == F64_SIGN_BIT_MASK {
+    n_hash(nside_u32) - val
+  } else {
+    val 
+  }
+  apply_offset_and_signs(&mut xy, x.offset, lon.sign, lat.sign);
+}*/
+
+/*
+THE IDEE WOULD BE TO USE THE 45deg ROTATION INSTEAD OF dela_with_1x1_box to compare perfs
+fn hash_v2(nside: u32, lon: f64, lat: f64) -> u64
+*/
+
 #[inline]
 fn is_hash(nside: u32, hash: u64) -> bool {
   hash < n_hash(nside)
@@ -242,6 +330,10 @@ fn check_hash(nside: u32, hash: u64) {
 }
 
 /// Center of the given cell in the Euclidean projection space.
+/// # Input
+/// - `nside`: the NSIDE of the RING scheme
+/// - `hash`: the hash value of the cell we look for the unprojected center
+/// 
 /// # Output
 /// - `(x, y)` coordinates such that $x \in [0, 8[$ and $y \in [-2, 2]$.
 /// 
@@ -278,6 +370,7 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
 /// of the cell associated to the given hash value.
 /// 
 /// # Input
+/// - `nside`: the NSIDE of the RING scheme
 /// - `hash`: the hash value of the cell we look for the unprojected center
 /// 
 /// # Output
@@ -288,114 +381,215 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
 /// 
 /// # Panics
 /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+/// 
+/// # Example
+/// TODO
+/// 
+/// # TODO
+/// TO BE TESTED!!
 pub fn center(nside: u32, hash: u64) -> (f64, f64) {
   let (x, y) = center_of_projected_cell(nside, hash);
   super::unproj(x, y)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#[test]
-fn test_hash() {
-  let nside = 1;
-  // Easy
-  assert_eq!(hash(nside,  40.0_f64.to_radians(),  45.0_f64.to_radians()), 0);
-  assert_eq!(hash(nside, 130.0_f64.to_radians(),  45.0_f64.to_radians()), 1);
-  assert_eq!(hash(nside, 220.0_f64.to_radians(),  45.0_f64.to_radians()), 2);
-  assert_eq!(hash(nside, 310.0_f64.to_radians(),  45.0_f64.to_radians()), 3);
-  assert_eq!(hash(nside,   0.0_f64.to_radians(),   0.0_f64.to_radians()), 4);
-  assert_eq!(hash(nside,  90.0_f64.to_radians(),   0.0_f64.to_radians()), 5);
-  assert_eq!(hash(nside, 180.0_f64.to_radians(),   0.0_f64.to_radians()), 6);
-  assert_eq!(hash(nside, 270.0_f64.to_radians(),   0.0_f64.to_radians()), 7);
-  assert_eq!(hash(nside,  40.0_f64.to_radians(), -45.0_f64.to_radians()), 8);
-  assert_eq!(hash(nside, 130.0_f64.to_radians(), -45.0_f64.to_radians()), 9);
-  assert_eq!(hash(nside, 220.0_f64.to_radians(), -45.0_f64.to_radians()), 10);
-  assert_eq!(hash(nside, 310.0_f64.to_radians(), -45.0_f64.to_radians()), 11);
-  // Particular points
-  // - north pole
-  assert_eq!(hash(nside,   40.0_f64.to_radians(),  90.0_f64.to_radians()), 0);
-  assert_eq!(hash(nside,  130.0_f64.to_radians(),  90.0_f64.to_radians()), 1);
-  assert_eq!(hash(nside,  220.0_f64.to_radians(),  90.0_f64.to_radians()), 2);
-  assert_eq!(hash(nside,  310.0_f64.to_radians(),  90.0_f64.to_radians()), 3);
-  // - south pole
-  assert_eq!(hash(nside,   40.0_f64.to_radians(),  -90.0_f64.to_radians()), 8);
-  assert_eq!(hash(nside,  130.0_f64.to_radians(),  -90.0_f64.to_radians()), 9);
-  assert_eq!(hash(nside,  220.0_f64.to_radians(),  -90.0_f64.to_radians()), 10);
-  assert_eq!(hash(nside,  310.0_f64.to_radians(),  -90.0_f64.to_radians()), 11);
-  // - around corner
-  assert_eq!(hash(nside, 44.0_f64.to_radians(),  0.0_f64.to_radians()), 4);
-  assert_eq!(hash(nside, 46.0_f64.to_radians(),  0.0_f64.to_radians()), 5);
-  assert_eq!(hash(nside, 45.0_f64.to_radians(),  1.0_f64.to_radians()), 0);
-  assert_eq!(hash(nside, 45.0_f64.to_radians(),  -1.0_f64.to_radians()), 8);
+/// Compute the position on the unit sphere of the position '(dx, dy)' from the south vertex of 
+/// the HEALPix cell associated to the given hash value.
+/// The x-axis is the South-East axis while the y-axis is the south-west axis.
+/// 
+/// # Input
+/// - `nside`: the NSIDE of the RING scheme
+/// - `hash`: the hash value of the cell in which are defined `dx` and `dy`
+/// - `dx`: the positional offset $\in [0, 1[$ along the south-to-east axis
+/// - `dy`: the positional offset $\in [0, 1[$ along the south-to-west axis
+/// 
+/// # Output
+/// - `(lon, lat)` in radians, the unprojected position (on the unit sphere) of the given position 
+///   inside the given cell in the Euclidean plane
+///   - `lon`, longitude in `[0, 2pi]` radians;
+///   - `lat`, latitude in `[-pi/2, pi/2]` radians. 
+/// 
+/// # Panics
+/// This method panics if either:
+/// - the given `hash` value is not in `[0, 12*nside^2[`, 
+/// - `dx` or `dy` is not $\in [0, 1[$
+/// 
+/// # Example
+/// TODO
+/// 
+/// # TODO
+/// TO BE TESTED!!
+pub fn sph_coo(nside: u32, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
+  assert!(0.0 <= dx && dx < 1.0);
+  assert!(0.0 <= dy && dy < 1.0);
+  let (mut x, mut y) = center_of_projected_cell(nside, hash);
+  x += (dx - dy) / (nside as f64);
+  y += (dx + dy - 1.0) / (nside as f64);
+  super::unproj(ensures_x_is_positive(x), y)
 }
 
-#[test]
-fn test_hash_2() {
-  for depth in 0..10 {
-    let nside = nside(depth);
-    let layer = nested::get_or_create(depth);
-    for icell in 0..layer.n_hash() {
-      let (lon, lat) = layer.center(icell);
-      assert_eq!(hash(nside, lon, lat), layer.to_ring(icell));
+/// Computes the positions on the unit sphere of the 4 vertices of the given cell.
+/// If you want to access the position for a given direction, use method 
+/// [vertices_map](#method.vertices_map).
+///   
+/// # Input
+/// - `nside`: the NSIDE of the RING scheme
+/// - `hash`: the hash value of the cell we look for the positions of its vertices
+/// 
+/// # Output
+/// - `[(lon_S, lat_S), (lon_E, lat_E), (lon_N, lat_N), (lon_W, lat_W)]` in radians, 
+///   the positions (on the unit sphere) of the vertices
+///   - `lon`, longitude in `[0, 2pi]` radians;
+///   - `lat`, latitude in `[-pi/2, pi/2]` radians.
+/// 
+/// # Panics
+/// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+/// 
+/// # Example
+/// TODO
+/// 
+/// # TODO
+/// TO BE TESTED!!
+#[inline]
+pub fn vertices(nside: u32, hash: u64) -> [(f64, f64); 4] {
+  let on_over_nside = 1.0 / (nside as f64);
+  let (x, y) = center_of_projected_cell(nside, hash);
+  [
+    super::unproj(x, y - one_over_nside), // S
+    super::unproj(x + one_over_nside, y), // E
+    super::unproj(x, y + one_over_nside), // N
+    super::unproj(ensures_x_is_positive(x - one_over_nside), y)  // W
+  ]
+}
+
+// TODO: implement path_along_cell_edge
+// TODO: implement neighbours
+// TODO: implement cone_coverage (will return RANGES) => need the exact cone impl in NESTED
+// TODO: implement interpolation
+
+// For polygon and elliptical_cone, I don't know yet how to do
+// (we can't return MOC/BMOC since we have no guarantee that NSIDE is a power of 2)!!
+
+#[cfg(test)]
+mod tests {
+  
+  use crate::ring::*;
+  
+  #[test]
+  fn test_hash() {
+    // TODO: remove this (already in the doc) and test peciliar points!
+    let nside = 1;
+    // Easy
+    assert_eq!(hash(nside,  40.0_f64.to_radians(),  45.0_f64.to_radians()),  0);
+    assert_eq!(hash(nside, 130.0_f64.to_radians(),  45.0_f64.to_radians()),  1);
+    assert_eq!(hash(nside, 220.0_f64.to_radians(),  45.0_f64.to_radians()),  2);
+    assert_eq!(hash(nside, 310.0_f64.to_radians(),  45.0_f64.to_radians()),  3);
+    assert_eq!(hash(nside,   0.0_f64.to_radians(),   0.0_f64.to_radians()),  4);
+    assert_eq!(hash(nside,  90.0_f64.to_radians(),   0.0_f64.to_radians()),  5);
+    assert_eq!(hash(nside, 180.0_f64.to_radians(),   0.0_f64.to_radians()),  6);
+    assert_eq!(hash(nside, 270.0_f64.to_radians(),   0.0_f64.to_radians()),  7);
+    assert_eq!(hash(nside,  40.0_f64.to_radians(), -45.0_f64.to_radians()),  8);
+    assert_eq!(hash(nside, 130.0_f64.to_radians(), -45.0_f64.to_radians()),  9);
+    assert_eq!(hash(nside, 220.0_f64.to_radians(), -45.0_f64.to_radians()), 10);
+    assert_eq!(hash(nside, 310.0_f64.to_radians(), -45.0_f64.to_radians()), 11);
+    // Particular points
+    // - north pole
+    assert_eq!(hash(nside,  40.0_f64.to_radians(), 90.0_f64.to_radians()), 0);
+    assert_eq!(hash(nside, 130.0_f64.to_radians(), 90.0_f64.to_radians()), 1);
+    assert_eq!(hash(nside, 220.0_f64.to_radians(), 90.0_f64.to_radians()), 2);
+    assert_eq!(hash(nside, 310.0_f64.to_radians(), 90.0_f64.to_radians()), 3);
+    // - south pole
+    assert_eq!(hash(nside,  40.0_f64.to_radians(), -90.0_f64.to_radians()),  8);
+    assert_eq!(hash(nside, 130.0_f64.to_radians(), -90.0_f64.to_radians()),  9);
+    assert_eq!(hash(nside, 220.0_f64.to_radians(), -90.0_f64.to_radians()), 10);
+    assert_eq!(hash(nside, 310.0_f64.to_radians(), -90.0_f64.to_radians()), 11);
+    // - around the (45, 0) corner
+    assert_eq!(hash(nside, 44.0_f64.to_radians(),  0.0_f64.to_radians()), 4);
+    assert_eq!(hash(nside, 46.0_f64.to_radians(),  0.0_f64.to_radians()), 5);
+    assert_eq!(hash(nside, 45.0_f64.to_radians(),  1.0_f64.to_radians()), 0);
+    assert_eq!(hash(nside, 45.0_f64.to_radians(), -1.0_f64.to_radians()), 8);
+  }
+
+  #[test]
+  fn test_hash_2() {
+    for depth in 0..10 {
+      let nside = nside(depth);
+      let layer = nested::get_or_create(depth);
+      for icell in 0..layer.n_hash() {
+        let (lon, lat) = layer.center(icell);
+        assert_eq!(hash(nside, lon, lat), layer.to_ring(icell));
+      }
     }
-  }   
+  }
+  
+  #[test]
+  fn test_deal_with_1x1_box() {
+    let mut i_ring = 0;
+    let mut i_in_ring = 0;
+
+    deal_with_1x1_box(0.0, 0.0, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 1);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.5, 0.0, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 0);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.9, 0.5, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 1);
+    assert_eq!(i_in_ring, 1);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.5, 0.9, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 2);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.5, 0.5, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 2);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.25, 0.75, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 2);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.75, 0.75, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 2);
+    assert_eq!(i_in_ring, 0);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.75, 0.25, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 1);
+    assert_eq!(i_in_ring, 1);
+
+    i_ring = 0;
+    i_in_ring = 0;
+    deal_with_1x1_box(0.25, 0.25, &mut i_ring, &mut i_in_ring);
+    assert_eq!(i_ring, 1);
+    assert_eq!(i_in_ring, 0);
+  }
+  
+  #[test]
+  fn test_dldh_to_dxdy() {
+    assert_eq!(dldh_to_dxdy(0.0, 0.0), (0.0, 0.0));
+    assert_eq!(dldh_to_dxdy(0.5, 0.0), (0.5, 0.5));
+    assert_eq!(dldh_to_dxdy(0.0, 0.5), (0.5, 0.5));
+    assert_eq!(dldh_to_dxdy(0.5, 1.0), (0.5, 0.5));
+    assert_eq!(dldh_to_dxdy(1.0, 0.5), (0.5, 0.5));
+
+    assert_eq!(dldh_to_dxdy(0.25, 0.25), (0.5, 0.0));
+    assert_eq!(dldh_to_dxdy(0.75, 0.25), (0.0, 0.5));
+    assert_eq!(dldh_to_dxdy(0.75, 0.75), (0.5, 0.0));
+    assert_eq!(dldh_to_dxdy(0.25, 0.75), (0.0, 0.5));
+  }
 }
-
-
-#[test]
-fn test_deal_with_1x1_box() {
-  let mut i_ring = 0;
-  let mut i_in_ring = 0;
-  
-  deal_with_1x1_box(0.0, 0.0, &mut i_ring, &mut i_in_ring);
-  assert_eq!(i_ring, 1);
-  assert_eq!(i_in_ring, 0);
-  
-  i_ring = 0; i_in_ring = 0;
-  deal_with_1x1_box(0.5, 0.0, &mut i_ring, &mut i_in_ring);
-  assert_eq!(i_ring, 0);
-  assert_eq!(i_in_ring, 0);
-  
-  i_ring = 0; i_in_ring = 0;
-  deal_with_1x1_box(0.9, 0.5, &mut i_ring, &mut i_in_ring);
-  assert_eq!(i_ring, 1);
-  assert_eq!(i_in_ring, 1);
-  
-  i_ring = 0; i_in_ring = 0;
-  deal_with_1x1_box(0.5, 0.9, &mut i_ring, &mut i_in_ring);
-  assert_eq!(i_ring, 2);
-  assert_eq!(i_in_ring, 0);
-
-  i_ring = 0; i_in_ring = 0;
-  deal_with_1x1_box(0.5, 0.5, &mut i_ring, &mut i_in_ring);
-  assert_eq!(i_ring, 2);
-  assert_eq!(i_in_ring, 0);
-}
-
-/*
-to_nested() {
-  check firs that the nside is a power of 2!!
-}
-*/
-
-// put also here the Cone query returning ranges!!

@@ -36,19 +36,21 @@ Features
 --------
 
  * Supports the **HEALix Nested scheme**
- * Supports approximated `cone` and `elliptical cone` and exact `polygon` queries
- * Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
- * Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
+     + Supports approximated `cone` and `elliptical cone` and **exact** `polygon` queries
+     + Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
+     + Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
+ * Supports the **HEALPix Nested scheme** with **any** NSIDE (i.e. not necessarilly powers of 2)
 
 Missing Features
 ----------------
 
  * Not supported
-   * RING scheme (but support the conversions  NESTED index <--> RING index)
+   * polygon and ellipse in the RING scheme
    * Spherical Harmonics computations
    * (Help me fill this)
  * Not yet implemented
    * Exact cone and ellipse solution (but using the `custom` approx methods, one can handle the rate of false positives)  
+   * Cone query in the RING scheme
 
 Examples
 --------
