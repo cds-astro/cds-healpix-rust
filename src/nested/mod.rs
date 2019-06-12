@@ -1030,6 +1030,38 @@ impl Layer {
   }
   
   
+  /// Computes the positions on the sky of each points located on a regular grid in the projection
+  /// plane. The grid x-axis is the South-to-east axis and the y-axis is the south-to-west axis.
+  /// The return array contains the square fo n_segments_by_side + 1 elements.
+  /// 
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for the grid on the unit sphere.
+  /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of 
+  ///                         points in the path equals *(n_segments_by_side + 1)^2*.
+  /// # Output 
+  /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
+  ///
+  /// # Motivation
+  /// - to create a mesh in Unity
+  pub fn grid(&self, hash: u64, n_segments_by_side: u16) -> Box<[(f64, f64)]> {
+    let n_points_per_side = (n_segments_by_side as usize) + 1;
+    // Prepare space for the result
+    let mut grid: Vec<(f64, f64)> = Vec::with_capacity(n_points_per_side * n_points_per_side);
+    // Compute center
+    let proj_center = self.center_of_projected_cell(hash);
+    // Compute grid
+    for i in 0..n_points_per_side {
+      let x = (i as f64) / (n_segments_by_side as f64);   // in [0, 1]
+      for j in 0..n_points_per_side {
+        let y = (j as f64) / (n_segments_by_side as f64); // in [0, 1]
+        let l = x - y;
+        let h = x + y - 1.0;
+        grid.push(super::unproj(proj_center.0 + l * self.one_over_nside, proj_center.1 + h * self.one_over_nside));
+      }
+    }
+    grid.into_boxed_slice()
+  }
+  
   //////////////////////////
   // NEIGHBOURS Functions //
   //////////////////////////
