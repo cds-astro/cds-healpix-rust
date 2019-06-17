@@ -108,6 +108,13 @@ pub fn path_along_cell_edge(depth: u8, hash: u64, starting_vertex: &Cardinal, cl
   get_or_create(depth).path_along_cell_edge(hash, starting_vertex, clockwise_direction, n_segments_by_side)
 }
 
+/// Conveniency function simply calling the [vertices](struct.Layer.html#method.grid) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn grid(depth: u8, hash: u64, n_segments_by_side: u16) -> Box<[(f64, f64)]> {
+  get_or_create(depth).grid(hash, n_segments_by_side)
+}
+
 /// Conveniency function simply calling the [neighbours](struct.Layer.html#method.neighbours) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -984,10 +991,10 @@ impl Layer {
     let n_points: usize = if include_to_vertex { n_segments + 1 } else { n_segments } as usize;
     // Compute starting point offsets
     let from_offset_x = (*from_vertex).offset_we(self.one_over_nside);
-    let from_offset_y = (*from_vertex).offset_we(self.one_over_nside);
+    let from_offset_y = (*from_vertex).offset_sn(self.one_over_nside);
     // Compute stepX and stepY
     let step_x = ((*to_vertex).offset_we(self.one_over_nside) - from_offset_x) / (n_segments as f64);
-    let step_y = ((*to_vertex).offset_we(self.one_over_nside) - from_offset_y) / (n_segments as f64);
+    let step_y = ((*to_vertex).offset_sn(self.one_over_nside) - from_offset_y) / (n_segments as f64);
     // Compute intermediary vertices
     for i in 0..n_points {
       let k = i as f64;
