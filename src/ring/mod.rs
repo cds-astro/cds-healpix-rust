@@ -438,7 +438,7 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let i_in_ring = (hash - first_hash_on_npc_eqr_transition(nside)) - i_ring * nsidex4;
     let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
     // let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
-    let x = (i_in_ring << 1 + ((i_ring + 1) & 1)) as f64 / (nside as f64);
+    let x = ((i_in_ring << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
     (x, y)
   }
 }
