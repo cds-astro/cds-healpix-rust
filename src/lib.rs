@@ -7,6 +7,8 @@
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
 
 #![cfg_attr(test, feature(test))]
+// #![cfg_attr(test)]
+
 
 #[cfg(test)]
 extern crate test;
@@ -690,6 +692,7 @@ pub fn is_depth(depth: u8) -> bool {
 }
 
 /// Returns, for the given `nside`, the number of subdivision of a base-resolution cell (i.e. the depth).
+/// For the NESTED scheme only.
 /// 
 /// # Input
 /// - `nside` must be a power of 2 in `[0, 2^29]`
@@ -727,7 +730,7 @@ fn check_nside(nside: u32) {
     assert!(is_nside(nside), "Nside must be a power of 2 in [1-2^29]");
 }
 
-/// Returns `true` if the given argument is a valid `nside`, i.e. 
+/// Returns `true` if the given argument is a valid `nside` for the NESTED scheme, i.e. 
 /// if it is a power of 2, is != 0 and is <= [NSIDE_MAX](constant.NSIDE_MAX.html). 
 #[inline]
 pub fn is_nside(nside: u32) -> bool {

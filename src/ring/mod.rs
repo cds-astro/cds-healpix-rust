@@ -1,5 +1,9 @@
 use super::*;
 
+pub const fn nside_max() -> u64 {
+  1 << 29
+}
+
 /// Returns the number of distinct hash values (i.e. the number if cells the sphere is divided in)
 /// at the gicen NSIDE.
 pub const fn n_hash(nside: u32) -> u64 {
@@ -146,6 +150,16 @@ pub const fn first_hash_in_spc(nside: u32) -> u64 {
 pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
   (n * (n + 1)) << 1
 }
+// TODO: remove the previous method and the '_u32' below
+/// Four time the [triangular number](https://en.wikipedia.org/wiki/Triangular_number), i.e.
+/// ```math
+/// 4 * \sum_{i=1}^{n} i = 4 * \frac{n (n + 1)}{2} = 2 n (n + 1)
+/// ```
+#[inline]
+pub(crate) const fn triangular_number_x4_u32(n: u32) -> u64 {
+  let n = n as u64;
+  (n * (n + 1)) << 1
+}
 
 /// Returns the cell number (hash value) associated with the given position on the unit sphere
 /// # Inputs
@@ -277,6 +291,66 @@ fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
   *i_in_ring += in2 >> in1; // <=> in2 & (1 - in1)
 }
 
+/// Build the hash value from the ring index (starting at the North pole, increasing southward)
+/// and the index inside the ring (starting at the West, increasing eastward).
+/// WARNING: the index in the ring in polar caps is provided like the index in ring in the euqatorial
+/// region, i.e. like if the projection rectangle was full (no missing triangles).
+// TODO: REMOVE DUPLICATE CODE IN RING HASH() AND NESTED TO_RING() 
+fn build_hash(nside: u32, i_ring: u32, mut i_in_ring: u32) -> u64 {
+  debug_assert!(0 <= i_ring && i_ring < n_isolatitude_rings(nside));
+  debug_assert!(0 <= i_in_ring && i_in_ring <= n_isolatitude_rings(nside));
+  if i_ring < nside { // North polar cap
+    let off = nside - 1 - i_ring;
+    i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
+    triangular_number_x4_u32(i_ring) + i_in_ring as u64
+  } else if i_ring >= 3 * nside { // South polar cap
+    let off = i_ring + 1 - 3 * nside;
+    i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
+    n_hash(nside) - triangular_number_x4_u32(n_isolatitude_rings(nside) - i_ring) + i_in_ring as u64
+  } else { // Equatorial region
+    first_hash_in_eqr(nside)
+      + (i_ring - nside) as u64 * (nside << 2) as u64
+      + if i_in_ring == nside << 2 { 0 } else { i_in_ring } as u64
+  }
+}
+
+/*
+// Return i_ring and i_in_ring
+fn decode_hash(nside: u32, hash: u64) -> (u32, u32) {
+
+}*/
+
+/*
+/// Build the hash value from the ring index (starting at the North pole, increasing southward)
+/// and the index inside the ring (starting at the West, increasing eastward)
+/// ** counted in the first quarter, i.e. in [0, pi/2]**.
+/// WARNING: the index in the ring in polar caps is provided like the index in ring in the euqatorial
+/// region, i.e. like if the projection rectangle was full (no missing triangles).
+/// - `q` simply equals i_in_ring / nside
+/// - `q` = 0 if $lon \in [0, pi/2[$
+/// - `q` = 1 if $lon \in [pi/2, pi[$
+/// - `q` = 2 if $lon \in [pi, 3pi/2[$
+/// - `q` = 3 if $lon \in [3pi/2, 2pi[$
+/// Simply equals 
+fn build_hash(nside: u32, i_ring: u32, mut i_in_ring: u32, q: u32) -> u64 {
+  debug_assert!(0 <= i_ring && i_ring < n_isolatitude_rings(nside));
+  debug_assert!(0 <= i_ring && i_ring < nside);
+  if i_ring < nside { // North polar cap
+    let off = nside - 1 - i_ring;
+    i_in_ring -= (off >> 1) + (off & 1) + (off - nside) * q;
+    triangular_number_x4_u32(i_ring) as u64 + i_in_ring as u64
+  } else if i_ring >= 3 * nside { // South polar cap
+    let off = i_ring + 1 - 3 * nside;
+    i_in_ring -= (off >> 1) + (off & 1) + (off - nside) * q;
+    n_hash(nside) - triangular_number_x4_u32(n_isolatitude_rings(nside) - i_ring) + i_in_ring as u64
+  } else { // Equatorial region
+    i_in_ring += q * nside;
+      first_hash_in_eqr(nside)
+      + (i_ring - nside) as u64 * (nside << 2) as u64
+      + if i_in_ring == nside << 2 { 0 } else { i_in_ring } as u64
+  }
+}*/
+
 fn dldh_to_dxdy(dl: f64, dh: f64) -> (f64, f64) {
   /*let dl = dl - 0.5;
   let dh = dh - 0.5;
@@ -359,9 +433,12 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
     (x as f64 / nside as f64, -y)
   } else { // Equatorial region
-    let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / (nside as u64);
+    let nsidex4 = (nside << 2) as u64;
+    let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / nsidex4;
+    let i_in_ring = (hash - first_hash_on_npc_eqr_transition(nside)) - i_ring * nsidex4;
     let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
-    let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
+    // let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
+    let x = (i_in_ring << 1 + ((i_ring + 1) & 1)) as f64 / (nside as f64);
     (x, y)
   }
 }
@@ -591,5 +668,18 @@ mod tests {
     assert_eq!(dldh_to_dxdy(0.75, 0.25), (0.0, 0.5));
     assert_eq!(dldh_to_dxdy(0.75, 0.75), (0.5, 0.0));
     assert_eq!(dldh_to_dxdy(0.25, 0.75), (0.0, 0.5));
+  }
+  
+  #[test]
+  fn test_center() {
+    let nside = 2;
+    let ipix = 33;
+    // let center = 
+    println!("{:?}", center_of_projected_cell(nside, ipix));
+    let (lon, lat) = center(nside, ipix);
+    println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
+    /*
+    dx 0.5
+    dy 0.5*/
   }
 }
