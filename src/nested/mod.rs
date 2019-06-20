@@ -157,6 +157,13 @@ pub fn external_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]>
   get_or_create(depth).external_edge_sorted(hash, delta_depth)
 }
 
+/// Conveniency function simply calling the [bilinear_interpolation](struct.Layer.html#method.bilinear_interpolation) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn bilinear_interpolation(depth: u8, lon: f64, lat: f64) -> [(u64, f64); 4] {
+  get_or_create(depth).bilinear_interpolation(lon, lat)
+}
+
 /// Conveniency function simply calling the [cone_coverage_approx](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -1622,8 +1629,8 @@ impl Layer {
   /// In the normal case we have:
   /// ```math
   /// f(x, y) = f(0, 0) (1 - x) (1 - y) 
-  ///         + f(0, 1) (1 - x) y 
-  ///         + f(1, 0) (1 - y) 
+  ///         + f(1, 0) x (1 - y)         
+  ///         + f(0, 1) (1 - x) y
   ///         + f(1, 1) x y
   /// ```
   /// If a neighbour is missing, we share equally its contribution between the 2 cells that do not
@@ -1637,22 +1644,22 @@ impl Layer {
     // We can probably optimize here since we are interested in only 3 neighbours
     let neigbours_map = self.neighbours(h, true);
     // Look at the four pixels
-    let xcoo = (dx <= 0.5) as u8;
-    let ycoo = (dy <= 0.5) as u8;
+    let xcoo = (dx > 0.5) as u8;
+    let ycoo = (dy > 0.5) as u8;
     let quarter: u8 = (ycoo << 1) + xcoo;
     match quarter {
       0 => { // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
         match neigbours_map.get(S) {
           Some(nh) => [
             (*nh, (0.5 - dx) * (0.5 - dy)), 
-            (*neigbours_map.get(SE).unwrap(), (0.5 - dx) * (0.5 + dy)), 
-            (*neigbours_map.get(SW).unwrap(), (0.5 + dx) * (0.5 - dy)), 
+            (*neigbours_map.get(SE).unwrap(), (0.5 + dx) * (0.5 - dy)), 
+            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (0.5 + dy)), 
             (h, (0.5 + dx) * (0.5 + dy) )
           ],
           None => [
             (h, 0.0),
-            (*neigbours_map.get(SE).unwrap(), (0.5 - dx) * (0.75 - 0.5 * dy)),
-            (*neigbours_map.get(SW).unwrap(), (0.75 - 0.5 * dx) * (0.5 - dy)),
+            (*neigbours_map.get(SE).unwrap(), (0.5 + dx) * (0.75 - 0.5 * dy)),
+            (*neigbours_map.get(SW).unwrap(), (0.5 + dy) * (0.75 - 0.5 * dx)),
             (h, (0.5 + dx) * (0.5 + dy))
           ],
         }
@@ -1661,44 +1668,44 @@ impl Layer {
         match neigbours_map.get(E) {
           Some(nh) => [
             (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (0.5 - dy)),
-            (*nh, (1.5 - dx) * (0.5 + dy)),
-            (h, (dx - 0.5) * (0.5 - dy)),
+            (*nh, (dx - 0.5) * (0.5 - dy)),
+            (h, (1.5 - dx) * (0.5 + dy)),
             (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.5 + dy))
           ],
           None => [
-            (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (0.75 - 0.5 * dy)),
+            (*neigbours_map.get(SE).unwrap(), (0.5 - dy) * (1.25 - 0.5 * dx)),
             (h, 0.0),
             (h, (0.5 - dx) * (0.5 - dy)),
-            (*neigbours_map.get(NE).unwrap(), (0.25 * 0.5 * dx) * (0.5 + dy))
+            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.75 + 0.5 * dy))
           ],
         }
       2 => // => W => (dx + 0.5, dy - 0.5, SW, C, W, NW)
         match neigbours_map.get(W) {
           Some(nh) => [
             (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (1.5 - dy)),
-            (h, (0.5 - dx) * (dy - 0.5)),
-            (*nh, (0.5 + dx) * (1.5 - dy)),
+            (h, (dx + 0.5) * (1.5 - dy)),
+            (*nh, (0.5 - dx) * (dy - 0.5)),
             (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (dy - 0.5))
           ],
           None => [
-            (*neigbours_map.get(SW).unwrap(), (0.75 - 0.5 * dx) * (1.5 - dy)),
-            (h, (0.5 - dx) * (dy - 0.5)),
+            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (1.25 - 0.5 * dy)),
+            (h, (dx + 0.5) * (1.5 - dy)),
             (h, 0.0),
-            (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (0.5 * dy + 0.25))
+            (*neigbours_map.get(NW).unwrap(), (dy - 0.5) * (0.5 * dx + 0.75))
           ],
         }
       3 => // => N => (dx - 0.5, dy - 0.5, C, NE, NW, N)
         match neigbours_map.get(N) {
           Some(nh) => [
             (*nh, (1.5 - dx) * (1.5 - dy)),
-            (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (dy - 0.5)),
-            (*neigbours_map.get(SW).unwrap(), (dx - 0.5) * (1.5 - dy)),
+            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (1.5 - dy)),
+            (*neigbours_map.get(NW).unwrap(), (1.5 - dx) * (dy - 0.5)),
             (h, (dx - 0.5) * (dy - 0.5))
           ],
           None => [
             (h, (1.5 - dx) * (1.5 - dy)),
-            (*neigbours_map.get(SE).unwrap(), (1.25 - 0.5 * dx) * (dy - 0.5)),
-            (*neigbours_map.get(SW).unwrap(), (dx - 0.5) * (1.25 - 0.5 * dy)),
+            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (1.25 - 0.5 * dy)),
+            (*neigbours_map.get(NW).unwrap(), (1.25 - 0.5 * dx) * (dy - 0.5)),
             (h, 0.0)
           ],
         }
@@ -3452,6 +3459,14 @@ mod tests {
         assert_eq!(layer.from_ring(layer.to_ring(h)), h);
       }
     }
+  }
+
+  #[test]
+  fn test_bilinear_interpolation() {
+    let lon_deg = 322.99297784_f64;// 324.8778822_f64
+    let lat_deg = 39.9302924_f64;// -41.08635508_f64
+    let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
+    println!("{:?}", res);
   }
   
 }

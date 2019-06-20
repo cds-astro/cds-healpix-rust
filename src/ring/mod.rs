@@ -150,6 +150,7 @@ pub const fn first_hash_in_spc(nside: u32) -> u64 {
 pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
   (n * (n + 1)) << 1
 }
+
 // TODO: remove the previous method and the '_u32' below
 /// Four time the [triangular number](https://en.wikipedia.org/wiki/Triangular_number), i.e.
 /// ```math
@@ -678,8 +679,19 @@ mod tests {
     println!("{:?}", center_of_projected_cell(nside, ipix));
     let (lon, lat) = center(nside, ipix);
     println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
-    /*
-    dx 0.5
-    dy 0.5*/
+    /* dx 0.5 dy 0.5*/
   }
+  
+  #[test]
+  fn test_center_2() {
+    let nside = 2;
+    let ipix = 10;
+    // let center = 
+    println!("{:?}", center_of_projected_cell(nside, ipix));
+    let (lon, lat) = center(nside, ipix);
+    println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
+  
+    println!("hash: {}", hash(nside, lon, lat));
+  }
+  
 }
