@@ -1675,7 +1675,7 @@ impl Layer {
           None => [
             (*neigbours_map.get(SE).unwrap(), (0.5 - dy) * (1.25 - 0.5 * dx)),
             (h, 0.0),
-            (h, (0.5 - dx) * (0.5 - dy)),
+            (h, (1.5 - dx) * (0.5 + dy)),
             (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.75 + 0.5 * dy))
           ],
         }
