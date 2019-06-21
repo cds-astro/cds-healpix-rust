@@ -1644,9 +1644,9 @@ impl Layer {
     // We can probably optimize here since we are interested in only 3 neighbours
     let neigbours_map = self.neighbours(h, true);
     // Look at the four pixels
-    let xcoo = (dbg!(dx) > 0.5) as u8;
-    let ycoo = (dbg!(dy) > 0.5) as u8;
-    let quarter: u8 = dbg!((ycoo << 1) + xcoo);
+    let xcoo = (dx > 0.5) as u8;
+    let ycoo = (dy > 0.5) as u8;
+    let quarter: u8 = (ycoo << 1) + xcoo;
     match quarter {
       0 => { // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
         match neigbours_map.get(S) {
