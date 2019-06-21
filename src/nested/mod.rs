@@ -1644,9 +1644,9 @@ impl Layer {
     // We can probably optimize here since we are interested in only 3 neighbours
     let neigbours_map = self.neighbours(h, true);
     // Look at the four pixels
-    let xcoo = (dx > 0.5) as u8;
-    let ycoo = (dy > 0.5) as u8;
-    let quarter: u8 = (ycoo << 1) + xcoo;
+    let xcoo = (dbg!(dx) > 0.5) as u8;
+    let ycoo = (dbg!(dy) > 0.5) as u8;
+    let quarter: u8 = dbg!((ycoo << 1) + xcoo);
     match quarter {
       0 => { // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
         match neigbours_map.get(S) {
@@ -1658,8 +1658,8 @@ impl Layer {
           ],
           None => [
             (h, 0.0),
-            (*neigbours_map.get(SE).unwrap(), (0.5 + dx) * (0.75 - 0.5 * dy)),
-            (*neigbours_map.get(SW).unwrap(), (0.5 + dy) * (0.75 - 0.5 * dx)),
+            (*neigbours_map.get(SE).unwrap(), (0.5 - dy) * (0.75 + 0.5 * dx)),
+            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (0.75 + 0.5 * dy)),
             (h, (0.5 + dx) * (0.5 + dy))
           ],
         }
@@ -3463,8 +3463,8 @@ mod tests {
 
   #[test]
   fn test_bilinear_interpolation() {
-    let lon_deg = 322.99297784_f64;// 324.8778822_f64
-    let lat_deg = 39.9302924_f64;// -41.08635508_f64
+    let lon_deg = 89.18473162_f64; // 322.99297784_f64;// 324.8778822_f64
+    let lat_deg = -28.04159707_f64;// 39.9302924_f64;// -41.08635508_f64
     let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
     println!("{:?}", res);
   }
