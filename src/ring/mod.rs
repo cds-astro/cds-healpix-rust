@@ -422,8 +422,10 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let i_in_ring = hash - triangular_number_x4(i_ring);
     let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
     let q = i_in_ring / n_in_ring;
-    let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
-    (x as f64 / nside as f64, y)
+    let off = (nside as u64 - n_in_ring);
+    let i_in_first_q = i_in_ring - q * n_in_ring;
+    let x = off + (i_in_first_q << 1) + (n_in_ring & 1);
+    ((q << 1) as f64 + x as f64 / nside as f64, y)
   } else if hash >= first_hash_in_spc(nside) { // South polar cap
     let hash = n_hash(nside) - 1 - hash; // start counting in reverse order from south polar cap
     let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
@@ -431,8 +433,12 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
     let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
     let q = i_in_ring / n_in_ring;
-    let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
-    (x as f64 / nside as f64, -y)
+    // let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
+    // (x as f64 / nside as f64, -y)
+    let off = (nside as u64 - n_in_ring);
+    let i_in_first_q = i_in_ring - q * n_in_ring;
+    let x = off + (i_in_first_q << 1) + (n_in_ring & 1);
+    ((q << 1) as f64 + x as f64 / nside as f64, -y)
   } else { // Equatorial region
     let nsidex4 = (nside << 2) as u64;
     let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / nsidex4;
@@ -685,13 +691,16 @@ mod tests {
   #[test]
   fn test_center_2() {
     let nside = 2;
-    let ipix = 10;
+    let ipix = 46;
+
+    println!("{:?}", center_of_projected_cell(nside, 2));
+    
     // let center = 
     println!("{:?}", center_of_projected_cell(nside, ipix));
-    let (lon, lat) = center(nside, ipix);
-    println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
+    //let (lon, lat) = center(nside, ipix);
+    //println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
   
-    println!("hash: {}", hash(nside, lon, lat));
+    // println!("hash: {}", hash(nside, lon, lat));
   }
   
 }
