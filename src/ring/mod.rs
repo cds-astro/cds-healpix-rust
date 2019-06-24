@@ -417,35 +417,40 @@ fn check_hash(nside: u32, hash: u64) {
 pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
   check_hash(nside, hash);
   if hash < first_hash_on_npc_eqr_transition(nside) { // North polar cap
+    // Ring index from the northmost ring, increasing southward
     let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
-    let n_in_ring = i_ring + 1;
-    let i_in_ring = hash - triangular_number_x4(i_ring);
+    // Number of cells in the ring for each base cell (Remark: n_in_ring = nside in th EQR)
+    let n_in_ring = dbg!(i_ring + 1);
+    // Index in the ring
+    let i_in_ring = dbg!(hash - triangular_number_x4(i_ring));
+    // Base cell containing the hash (0, 1, 2 or 3)
+    let q = dbg!(i_in_ring / n_in_ring);
+    // Position of the center of the first cell on the ring cell, in [0, nside] <=> x in [0, 1], (i.e. inside a base cell) 
+    let off_in_d0h = dbg!(nside as u64 - i_ring);
+    // Ring index in a base cell
+    let i_in_d0h_ring = dbg!(i_in_ring - q * n_in_ring);
+    // x inside a base cell, between 0 and 2 * nside
+    let x = ((i_in_d0h_ring) << 1) as f64 + off_in_d0h as f64;
     let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
-    let q = i_in_ring / n_in_ring;
-    let off = (nside as u64 - n_in_ring);
-    let i_in_first_q = i_in_ring - q * n_in_ring;
-    let x = off + (i_in_first_q << 1) + (n_in_ring & 1);
     ((q << 1) as f64 + x as f64 / nside as f64, y)
   } else if hash >= first_hash_in_spc(nside) { // South polar cap
     let hash = n_hash(nside) - 1 - hash; // start counting in reverse order from south polar cap
     let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
     let n_in_ring = i_ring + 1;
     let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
-    let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
     let q = i_in_ring / n_in_ring;
-    // let x = ((i_in_ring + q * (nside as u64 - n_in_ring)) << 1) - i_ring;
-    // (x as f64 / nside as f64, -y)
-    let off = (nside as u64 - n_in_ring);
-    let i_in_first_q = i_in_ring - q * n_in_ring;
-    let x = off + (i_in_first_q << 1) + (n_in_ring & 1);
+    let off_in_d0h = dbg!(nside as u64 - i_ring);
+    let i_in_d0h_ring = i_in_ring - q * n_in_ring;
+    let x = ((i_in_d0h_ring) << 1) as f64 + off_in_d0h as f64;
+    let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
     ((q << 1) as f64 + x as f64 / nside as f64, -y)
   } else { // Equatorial region
     let nsidex4 = (nside << 2) as u64;
     let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / nsidex4;
     let i_in_ring = (hash - first_hash_on_npc_eqr_transition(nside)) - i_ring * nsidex4;
-    let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
     // let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
     let x = ((i_in_ring << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
+    let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
     (x, y)
   }
 }
@@ -604,6 +609,15 @@ mod tests {
       }
     }
   }
+
+  #[test]
+  fn test_hash_3() {
+    let nside = 4_u32;
+    let lon = 4.71238898;
+    let lat = -1.15965846;
+    let h = hash(nside, lon, lat);
+    println!("h: {}", &h);
+  }
   
   #[test]
   fn test_deal_with_1x1_box() {
@@ -691,15 +705,32 @@ mod tests {
   #[test]
   fn test_center_2() {
     let nside = 2;
-    let ipix = 46;
+    assert_eq!(center_of_projected_cell(nside,  2), (5.0,  1.5));
+    assert_eq!(center_of_projected_cell(nside, 46), (5.0, -1.5));
 
-    println!("{:?}", center_of_projected_cell(nside, 2));
+  }
+
+  #[test]
+  fn test_center_3() {
+    let nside = 4;
+    let l2 = nested::get_or_create(2);
+    // NPC
+    let ipix = 7;
+    assert_eq!(
+      center_of_projected_cell(nside, ipix),
+      l2.center_of_projected_cell(l2.from_ring(ipix))
+    );
+    // SPC
+    let ipix = 183;
+    assert_eq!(
+      center_of_projected_cell(nside, ipix),
+      l2.center_of_projected_cell(l2.from_ring(ipix))
+    );
     
     // let center = 
-    println!("{:?}", center_of_projected_cell(nside, ipix));
     //let (lon, lat) = center(nside, ipix);
     //println!("(lon: {}, lat: {})", lon.to_degrees(), lat.to_degrees());
-  
+
     // println!("hash: {}", hash(nside, lon, lat));
   }
   
