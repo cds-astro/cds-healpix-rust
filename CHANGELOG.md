@@ -2,7 +2,7 @@
 
 ## 0.3.0 
 
-Released 2019-06-05.
+Released 2019-06-25.
 
 ## Added
 

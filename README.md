@@ -32,6 +32,20 @@ Other independant HEALPix implementations:
  * [C](https://sourceforge.net/projects/healpix/files/healpix_bare_1.0/) "official" core functionalities implementation in BSD by Martin Reinecke
  * ... (Help me to add links to other HEALPix resources and codes).
 
+Warning
+-------
+
+Although the main part of the code uses standard Rust, the nightly version of the compiler is needed to run benches.  
+So you need to install and compile with Rust nightly:
+```bash
+# Install the nightly
+rustup install nightly
+# Either set the default to nightly
+rustup default nightly
+# Or compile explicitly with nightly
+cargo build +nightly
+``` 
+
 Features
 --------
 
@@ -45,7 +59,7 @@ Missing Features
 ----------------
 
  * Not supported
-   * polygon and ellipse in the RING scheme
+   * Polygon and ellipse in the RING scheme
    * Spherical Harmonics computations
    * (Help me fill this)
  * Not yet implemented
