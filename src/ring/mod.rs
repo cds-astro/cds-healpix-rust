@@ -230,7 +230,7 @@ pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
 /// # Panics
 ///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
 /// # Examples
-/// TODO: TO BE TESTED
+/// TODO
 pub fn hash_with_dxdy(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
   let (h, dl, dh) = hash_with_dldh(nside, lon, lat);
   let (dx, dy) = dldh_to_dxdy(dl, dh);
@@ -411,24 +411,21 @@ fn check_hash(nside: u32, hash: u64) {
 /// 
 /// # Output
 /// - `(x, y)` coordinates such that $x \in [0, 8[$ and $y \in [-2, 2]$.
-/// 
-/// # TODO
-/// TO BE TESTED!!
 pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
   check_hash(nside, hash);
   if hash < first_hash_on_npc_eqr_transition(nside) { // North polar cap
     // Ring index from the northmost ring, increasing southward
     let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
     // Number of cells in the ring for each base cell (Remark: n_in_ring = nside in th EQR)
-    let n_in_ring = dbg!(i_ring + 1);
+    let n_in_ring = i_ring + 1;
     // Index in the ring
-    let i_in_ring = dbg!(hash - triangular_number_x4(i_ring));
+    let i_in_ring = hash - triangular_number_x4(i_ring);
     // Base cell containing the hash (0, 1, 2 or 3)
-    let q = dbg!(i_in_ring / n_in_ring);
+    let q = i_in_ring / n_in_ring;
     // Position of the center of the first cell on the ring cell, in [0, nside] <=> x in [0, 1], (i.e. inside a base cell) 
-    let off_in_d0h = dbg!(nside as u64 - i_ring);
+    let off_in_d0h = nside as u64 - i_ring;
     // Ring index in a base cell
-    let i_in_d0h_ring = dbg!(i_in_ring - q * n_in_ring);
+    let i_in_d0h_ring = i_in_ring - q * n_in_ring;
     // x inside a base cell, between 0 and 2 * nside
     let x = ((i_in_d0h_ring) << 1) as f64 + off_in_d0h as f64;
     let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
@@ -439,7 +436,7 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let n_in_ring = i_ring + 1;
     let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
     let q = i_in_ring / n_in_ring;
-    let off_in_d0h = dbg!(nside as u64 - i_ring);
+    let off_in_d0h = nside as u64 - i_ring;
     let i_in_d0h_ring = i_in_ring - q * n_in_ring;
     let x = ((i_in_d0h_ring) << 1) as f64 + off_in_d0h as f64;
     let y = 1.0 + (nside as u64 - 1 - i_ring) as f64 / (nside as f64);
@@ -448,7 +445,6 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     let nsidex4 = (nside << 2) as u64;
     let i_ring = (hash - first_hash_on_npc_eqr_transition(nside)) / nsidex4;
     let i_in_ring = (hash - first_hash_on_npc_eqr_transition(nside)) - i_ring * nsidex4;
-    // let x = (((hash - i_ring) << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
     let x = ((i_in_ring << 1) + ((i_ring + 1) & 1)) as f64 / (nside as f64);
     let y = (nside as i64 - i_ring as i64) as f64 / (nside as f64);
     (x, y)
@@ -473,9 +469,7 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
 /// 
 /// # Example
 /// TODO
-/// 
-/// # TODO
-/// TO BE TESTED!!
+///
 pub fn center(nside: u32, hash: u64) -> (f64, f64) {
   let (x, y) = center_of_projected_cell(nside, hash);
   super::unproj(x, y)
@@ -504,9 +498,7 @@ pub fn center(nside: u32, hash: u64) -> (f64, f64) {
 /// 
 /// # Example
 /// TODO
-/// 
-/// # TODO
-/// TO BE TESTED!!
+///
 pub fn sph_coo(nside: u32, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
   assert!(0.0 <= dx && dx < 1.0);
   assert!(0.0 <= dy && dy < 1.0);
@@ -535,9 +527,7 @@ pub fn sph_coo(nside: u32, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
 /// 
 /// # Example
 /// TODO
-/// 
-/// # TODO
-/// TO BE TESTED!!
+///
 #[inline]
 pub fn vertices(nside: u32, hash: u64) -> [(f64, f64); 4] {
   let one_over_nside = 1.0 / (nside as f64);
