@@ -139,9 +139,9 @@ impl Proj for ProjSIN {
   fn unproj(&self, x: f64, y: f64) -> Option<(f64, f64)> {
     let rho2 = x.pow2() + y.pow2();
     if rho2 < 1.0 {
-      let r = (1.0 - rho2).sqrt(); // = cos(arcsin(rho)) = rho / tan(arcsin(rho))
-      let lat = (self.sin_center_lat * r + y * self.cos_center_lat).asin();
-      let lon = self.cos_center_lat * r - y * self.sin_center_lat;
+      let z = (1.0 - rho2).sqrt(); // = cos(arcsin(rho)) = rho / tan(arcsin(rho))
+      let lat = (self.sin_center_lat * z + y * self.cos_center_lat).asin();
+      let lon = self.cos_center_lat * z - y * self.sin_center_lat;
       let lon = self.center_lon + x.atan2(lon);
       Some((
         if lon < 0.0 {

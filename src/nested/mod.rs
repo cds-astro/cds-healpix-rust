@@ -424,6 +424,13 @@ impl Layer {
       -2 => (((i - 2u8) as u64) << self.twice_depth) | self.xy_mask,
       /* I wrote this code when I forget to handle negative longitude (and I found catalogues containing
          small negative longitudes).
+         
+         case k = 3 not supported! depth: 8, lon: 3.141592653589793, lat: -0.8401642740371252, x: 511.99999999999994, y: 480.01707525021305
+         case k = 3 not supported! depth: 12, lon: 3.141592653589793, lat: -0.8401642740371252, x: 8191.999999999999, y: 7680.273204003409
+         
+         case k = 3 not supported! depth: 8, lon: 1.5707963267948966, lat: -0.7449923251372079, x: 255.99999999999997, y: 763.6235829507332
+        case k = 3 not supported! depth: 12, lon: 1.5707963267948966, lat: -0.7449923251372079, x: 4095.9999999999995, y: 12217.97732721173
+         
       3 => { // rare case
         let d0 = (xy.0 - ij.0 as f64).abs();
         let d1 = (xy.1 - ij.1 as f64).abs();
@@ -442,7 +449,7 @@ impl Layer {
       },
       _ => panic!("Algorithm error: case k = {} not supported! depth: {}, lon: {}, lat: {}, x: {}, y: {}", 
                   k, self.depth, lon, lat, xy.0, xy.1),*/
-      _ => panic!("Algorithm error: case k = {} not supported!"),
+      _ => panic!("Algorithm error: case k = {} not supported!", k),
     }
   }
   

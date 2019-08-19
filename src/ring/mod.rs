@@ -416,12 +416,12 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
   if hash < first_hash_on_npc_eqr_transition(nside) { // North polar cap
     // Ring index from the northmost ring, increasing southward
     let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
-    // Number of cells in the ring for each base cell (Remark: n_in_ring = nside in th EQR)
+    // Number of cells in the ring for each base cell (Remark: n_in_ring = nside in the EQR)
     let n_in_ring = i_ring + 1;
     // Index in the ring
     let i_in_ring = hash - triangular_number_x4(i_ring);
     // Base cell containing the hash (0, 1, 2 or 3)
-    let q = i_in_ring / n_in_ring;
+    let q = i_in_ring / n_in_ring;    debug_assert!(0 <= q && q < 4);
     // Position of the center of the first cell on the ring cell, in [0, nside] <=> x in [0, 1], (i.e. inside a base cell) 
     let off_in_d0h = nside as u64 - i_ring;
     // Ring index in a base cell

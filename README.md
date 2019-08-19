@@ -50,10 +50,10 @@ Features
 --------
 
  * Supports the **HEALix Nested scheme**
-     + Supports approximated `cone` and `elliptical cone` and **exact** `polygon` queries
-     + Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone` and `polygon` queries
+     + Supports approximated `cone` and `elliptical cone` coverage plus **exact** `polygon` coverage queries
+     + Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone`, `polygon` ot `elliptical cone` coverage queries
      + Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
- * Supports the **HEALPix Nested scheme** with **any** NSIDE (i.e. not necessarilly powers of 2)
+ * Supports the **HEALPix Ring scheme** with **any** NSIDE (i.e. not necessarilly powers of 2)
 
 Missing Features
 ----------------
