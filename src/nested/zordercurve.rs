@@ -625,7 +625,7 @@ static MEDIU_ZOC_BMI: MediuZOCbmi = MediuZOCbmi;
 static LARGE_ZOC_BMI: LargeZOCbmi = LargeZOCbmi;
 
 /// This function in only visible from super (i.e. the "nested" module
-pub(super) fn get_zoc(depth: u8) -> &'static ZOrderCurve {
+pub(super) fn get_zoc(depth: u8) -> &'static ZOrderCurve { // on day, It would be possible to add 'const'
   super::super::check_depth(depth);
   #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
   {

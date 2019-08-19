@@ -298,8 +298,8 @@ fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
 /// region, i.e. like if the projection rectangle was full (no missing triangles).
 // TODO: REMOVE DUPLICATE CODE IN RING HASH() AND NESTED TO_RING() 
 fn build_hash(nside: u32, i_ring: u32, mut i_in_ring: u32) -> u64 {
-  debug_assert!(0 <= i_ring && i_ring < n_isolatitude_rings(nside));
-  debug_assert!(0 <= i_in_ring && i_in_ring <= n_isolatitude_rings(nside));
+  debug_assert!(i_ring < n_isolatitude_rings(nside));
+  debug_assert!(i_in_ring <= n_isolatitude_rings(nside));
   if i_ring < nside { // North polar cap
     let off = nside - 1 - i_ring;
     i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
@@ -421,7 +421,7 @@ pub fn  center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
     // Index in the ring
     let i_in_ring = hash - triangular_number_x4(i_ring);
     // Base cell containing the hash (0, 1, 2 or 3)
-    let q = i_in_ring / n_in_ring;    debug_assert!(0 <= q && q < 4);
+    let q = i_in_ring / n_in_ring;    debug_assert!(q < 4);
     // Position of the center of the first cell on the ring cell, in [0, nside] <=> x in [0, 1], (i.e. inside a base cell) 
     let off_in_d0h = nside as u64 - i_ring;
     // Ring index in a base cell

@@ -16,7 +16,6 @@ extern crate test;
 use std::sync::Once;
 use std::f64::consts::{PI};
 
-const SQRT2: f64 = 1.41421356237309504880_f64;
 const SQRT6: f64 = 2.44948974278317809819_f64;
 const ONE_OVER_SQRT6: f64 = 0.40824829046386301636_f64;
 const HALF: f64 = 0.5_f64;
@@ -1143,7 +1142,7 @@ pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
 pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   let mut x = 0.5 * ensures_x_is_positive(x);
   let mut y = 0.5 * (y + 3.0);
-  let mut i = x as u8;     debug_assert!(0 <= i && i <  4); // if can be == 4, then (x as u8) & 3
+  let mut i = x as u8;     debug_assert!(i <  4); // if can be == 4, then (x as u8) & 3
   let mut j = (y as u8) << 1;  debug_assert!(j == 0 || j == 2 || j == 4);
   x -= i as f64;               debug_assert!(0.0 <= x && x < 1.0);
   y -= (j >> 1) as f64;        debug_assert!(0.0 <= y && y < 1.0);
@@ -1502,7 +1501,7 @@ fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
   }
 }
 
-fn eqr_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+fn eqr_edge_direction_from_neighbour(_inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
   neighbour_direction.opposite()
 }
 

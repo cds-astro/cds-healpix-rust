@@ -668,7 +668,7 @@ impl BMOC {
     go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
     builder.push(c.depth, c.hash, true);
     let mut is_overlapped = false;
-    let mut cell = None;
+    let mut cell;
     while {
       cell = consume_while_overlapped_and_partial(low_resolution, iter, &mut is_overlapped);
       is_overlapped
@@ -1341,55 +1341,4 @@ fn go_down(start_depth: &mut u8, start_hash: &mut u64,
   }
   *start_depth = target_depth;
   *start_hash  = target_hash;
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  /*#[test]
-  fn test_go_up_and_go_down() {
-    let mut builder = BMOCBuilderUnsafe::new(12_u8, 30_usize);
-
-    let mut d1 = 12_u8;
-    let mut h1 = 134217722_u64;
-
-    let d2 = 12_u8;
-    let h2 = 146721869_u64;
-
-    let dd = dd_4_go_up(d1, h1, d2, h2);
-    let target_h_at_d = if d2 < d1 {
-      h2 << ((d1 - d2) << 1)
-    } else {
-      h2 >> ((d2 - d1) << 1)
-    };
-
-    println!("dd: {}", &dd);
-    
-    println!("h1: {:#b}", &h1);
-    //println!("ht: {:#b}", &target_h_at_d);
-    println!("h2: {:#b}", &h2);
-
-    // go_up_v2(&mut d1, &mut h1, 11_u8, true, &mut builder);
-    go_up_v2(&mut d1, &mut h1, dd, true, &mut builder);
-    
-    println!("d: {}; h: {}", &d1, &h1);
-    // println!("{:?}", &builder);
-    //for cell in builder.to_bmoc().into_iter() {
-    //  println!("cell: {:?}", cell);
-    //}
-    
-    
-    go_down_v2(&mut d1, &mut h1, d2, h2, true, &mut builder);
-
-    println!("d: {}; h: {}", &d1, &h1);
-    // println!("{:?}", &builder);
-    for cell in builder.to_bmoc().into_iter() {
-      println!("cell: {:?}", cell);
-    }
-    
-    // d = 1, h = 32 => d = 0, h = 8
-    
-  }*/
-
 }
