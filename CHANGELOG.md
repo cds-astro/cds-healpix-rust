@@ -1,5 +1,16 @@
 # `cdshealpix` Change Log
 
+## 0.3.1 
+
+Released 2019-08-19.
+
+### Bug correction
+
+* Fix NESTED `hash` rare panic due to numerical inaccuracies
+
+--------------------------------------------------------------------------------
+
+
 ## 0.3.0 
 
 Released 2019-06-25.

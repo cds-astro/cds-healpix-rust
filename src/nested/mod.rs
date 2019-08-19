@@ -1,5 +1,4 @@
 use std::sync::Once;
-use std::ops::Shl;
 use std::ops::Shr;
 
 use super::compass_point::*;
@@ -126,6 +125,7 @@ pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn internal_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  assert!(depth + delta_depth < DEPTH_MAX);
   Layer::internal_edge(hash, delta_depth)
 }
 
@@ -133,6 +133,7 @@ pub fn internal_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn internal_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+  assert!(depth + delta_depth < DEPTH_MAX);
   Layer::internal_edge_sorted(hash, delta_depth)
 }
 
@@ -406,10 +407,10 @@ impl Layer {
 
   ///
   #[inline]
-  fn depth0_bits(&self, i: u8, j: u8, ij: (u64, u64), xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
+  fn depth0_bits(&self, i: u8, j: u8, mut ij: (u64, u64), xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
     // self.base_hash_bits_lupt[i as usize][j as usize]
-    // Useful for quick tests: https://play.rust-lang.org
     let k = 5_i8 - (i + j) as i8;
+    println!("i: {}, j: {}, k: {}", &i, &j, &k);
     // The two branches -2 and -1 are extremely rare (north pole, NPC cells upper NE and NW borders),
     // so few risks of branch miss-prediction.
     match k {
@@ -422,32 +423,23 @@ impl Layer {
         }
       },
       -2 => (((i - 2u8) as u64) << self.twice_depth) | self.xy_mask,
-      /* I wrote this code when I forget to handle negative longitude (and I found catalogues containing
-         small negative longitudes).
-         
-         case k = 3 not supported! depth: 8, lon: 3.141592653589793, lat: -0.8401642740371252, x: 511.99999999999994, y: 480.01707525021305
-         case k = 3 not supported! depth: 12, lon: 3.141592653589793, lat: -0.8401642740371252, x: 8191.999999999999, y: 7680.273204003409
-         
-         case k = 3 not supported! depth: 8, lon: 1.5707963267948966, lat: -0.7449923251372079, x: 255.99999999999997, y: 763.6235829507332
-        case k = 3 not supported! depth: 12, lon: 1.5707963267948966, lat: -0.7449923251372079, x: 4095.9999999999995, y: 12217.97732721173
-         
-      3 => { // rare case
+      3 => { // rare case due to lack of numerical precision 
         let d0 = (xy.0 - ij.0 as f64).abs();
         let d1 = (xy.1 - ij.1 as f64).abs();
         if d0 < d1 {
           ij.0 += 1;
-          return self.depth0_bits(i + 1_u8, j, ij, xy, lon, lat);
+          self.depth0_bits(i + 1_u8, j, ij, xy)
         } else {
           ij.1 += 1;
-          return self.depth0_bits(i, j + 1_u8, ij, xy, lon, lat);
+          self.depth0_bits(i, j + 1_u8, ij, xy)
         }
       },
-      4 => { // rare case
+      4 => { // rare case due to lack of numerical precision 
         ij.0 += 1;
         ij.1 += 1;
-       return self.depth0_bits(i + 1_u8, j + 1_u8, ij, xy, lon, lat);
+       self.depth0_bits(i + 1_u8, j + 1_u8, ij, xy)
       },
-      _ => panic!("Algorithm error: case k = {} not supported! depth: {}, lon: {}, lat: {}, x: {}, y: {}", 
+      /*_ => panic!("Algorithm error: case k = {} not supported! depth: {}, lon: {}, lat: {}, x: {}, y: {}", 
                   k, self.depth, lon, lat, xy.0, xy.1),*/
       _ => panic!("Algorithm error: case k = {} not supported!", k),
     }
@@ -572,7 +564,7 @@ impl Layer {
     // EQR: j = l / 2 + nside/2 (if not equatorial cell) + nside*(ipix%4) (special case if l<0 && baseCell=4)
     // NPC: j = l / 2 + (i + 1) / 2 + (i+1)*(ipix%4)
     // SPC: j = l / 2 + (h + 1) / 2 + (h+1)*(ipix%4)
-    let mut first_isolat_index = 0_u64;
+    let first_isolat_index;
     let mut i_in_ring = div2_quotient(l); // Quotient such that: 1/2 = 0; -1/2 = -1
     if i_ring < self.nside as u64 { // North polar cap + NPC/EQR tansition
       // sum from i = 1 to ringIndex of 4 * i = 4 * i*(i+1)/2 = 2 * i*(i+1)
@@ -712,7 +704,7 @@ impl Layer {
       let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
       let n_in_ring = i_ring + 1;
       let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
-      let mut d0h = i_in_ring / n_in_ring;
+      let d0h = i_in_ring / n_in_ring;
       let h = i_ring as i64;
       let l = ((i_in_ring - n_in_ring * d0h) << 1) as i64 - i_ring as i64;
       self.build_hash_from_parts (
@@ -2755,6 +2747,24 @@ mod tests {
     let layer = get_or_create(3);
     let hash = layer.hash(333.5982493968911_f64.to_radians(), -25.919634217871433_f64.to_radians());
     assert_eq!(735_u64, hash);
+  }
+
+  #[test]
+  fn testok_hash_2() {
+    let layer = get_or_create(0);
+    // ra = 179.99999999999998633839 deg
+    // de = -48.13786699999999889561 deg
+    let hash = layer.hash(3.141592653589793, -0.8401642740371252);
+    assert_eq!(9_u64, hash);
+  }
+
+  #[test]
+  fn testok_hash_3() {
+    let layer = get_or_create(0);
+    // ra = 89.99999999999999889877 deg
+    // de = -42.68491599999999973256 deg
+    let hash = layer.hash(1.5707963267948966, -0.7449923251372079);
+    assert_eq!(8_u64, hash);
   }
   
   #[test]
