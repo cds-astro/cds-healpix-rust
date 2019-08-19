@@ -549,6 +549,21 @@ impl BMOC {
     builder.to_bmoc()
   }
 
+  /* Try making operations with as few if as possible, playing on indices
+  fn and_v2(&self, other: &BMOC) -> BMOC {
+    let mut builder = BMOCBuilderUnsafe::new(
+      max(self.depth_max, other.depth_max),
+      max(self.entries.len(), other.entries.len())
+    );
+    let mut left = self.entries;
+    let mut right = other.entries;
+    let mut ileft = 0_usize;
+    let mut iright = 0_usize;
+    
+  }
+  */
+  
+  
   /// Returns the union of this BMOC with the given BMOC:
   /// - all non overlapping cells in both BMOCs are kept
   /// - overlapping cells are merged, the value of the flag is the result of a logical OR between 
