@@ -410,7 +410,6 @@ impl Layer {
   fn depth0_bits(&self, i: u8, j: u8, mut ij: (u64, u64), xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
     // self.base_hash_bits_lupt[i as usize][j as usize]
     let k = 5_i8 - (i + j) as i8;
-    println!("i: {}, j: {}, k: {}", &i, &j, &k);
     // The two branches -2 and -1 are extremely rare (north pole, NPC cells upper NE and NW borders),
     // so few risks of branch miss-prediction.
     match k {
