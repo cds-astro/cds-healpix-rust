@@ -1,5 +1,17 @@
 # `cdshealpix` Change Log
 
+## 0.3.2 
+
+Released 2019-09-02.
+
+### Bug correction
+
+* Fix NESTED `bilinear_interpolation`: ~1/4 of cases in which 2 out of 4 HEALPix
+ cell numbers where swapped
+
+--------------------------------------------------------------------------------
+
+
 ## 0.3.1 
 
 Released 2019-08-19.

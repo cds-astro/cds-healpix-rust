@@ -1695,10 +1695,10 @@ impl Layer {
       3 => // => N => (dx - 0.5, dy - 0.5, C, NE, NW, N)
         match neigbours_map.get(N) {
           Some(nh) => [
-            (*nh, (1.5 - dx) * (1.5 - dy)),
+            (h, (1.5 - dx) * (1.5 - dy)),
             (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (1.5 - dy)),
             (*neigbours_map.get(NW).unwrap(), (1.5 - dx) * (dy - 0.5)),
-            (h, (dx - 0.5) * (dy - 0.5))
+            (*nh, (dx - 0.5) * (dy - 0.5))
           ],
           None => [
             (h, (1.5 - dx) * (1.5 - dy)),
@@ -3482,7 +3482,16 @@ mod tests {
     let lon_deg = 89.18473162_f64; // 322.99297784_f64;// 324.8778822_f64
     let lat_deg = -28.04159707_f64;// 39.9302924_f64;// -41.08635508_f64
     let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
-    println!("{:?}", res);
+    // println!("{:?}", res);
+    assert_eq!(res, [(20, 0.0), (38, 0.1661686383097217), (33, 0.2024027885319438), (20, 0.6314285731583344)]);
   }
   
+  #[test]
+  fn test_bilinear_interpolation_2() {
+    let lon_deg = 83.633478_f64;
+    let lat_deg = 22.015110_f64;
+    let res = bilinear_interpolation(18, lon_deg.to_radians(), lat_deg.to_radians());
+    // println!("{:?}", res);
+    assert_eq!(res, [(405766747916, 0.5757471135241182), (405766747917, 0.3604806280107034), (405766747918, 0.039217694696856834), (405766747919, 0.024554563768321474)]);
+  }
 }
