@@ -1296,7 +1296,7 @@ pub fn is_in_equatorial_region(abs_lat: f64) -> bool {
 /// Returns `true` if the point of given (absolute value of) y coordinate in the projected plane
 /// is in the equatorial region, and `false` if it is located in one of the two polar caps
 #[inline]
-pub fn is_in_projected_equatorial_region(abs_y: f64) -> bool { abs_y <= 1f64 }
+pub fn is_in_projected_equatorial_region(abs_y: f64) -> bool { abs_y <= 1.0 }
 
 // Returns the absolute value of the given double together with its bit of sign
 struct AbsAndSign {
@@ -1348,19 +1348,19 @@ pub(crate) fn proj_collignon(xy: &mut (f64, f64)) {
     let (ref mut x, ref mut y) = *xy;
     *y = SQRT6 * f64::cos(HALF * *y + PI_OVER_FOUR);
     *x *= *y;
-    *y = 2f64 - *y;
+    *y = 2.0 - *y;
 }
 #[inline]
 fn deproj_collignon(lonlat: &mut (f64, f64)) {
     let (ref mut lon, ref mut lat) = *lonlat;
-    *lat = 2f64 - *lat;
+    *lat = 2.0 - *lat;
     if is_not_near_from_pole(*lat) { // Rare, so few risks of branch miss-prediction
         *lon /= *lat;
         deal_with_numerical_approx_in_edges(lon);
     } // in case of pole, lon = lat = 0 (we avoid NaN due to division by lat=0)
     *lat *= ONE_OVER_SQRT6;
     // Using acos is OK here since lat < 1/sqrt(6), so not near from 1.
-    *lat = 2f64 * f64::acos(*lat) - HALF_PI;
+    *lat = 2.0 * f64::acos(*lat) - HALF_PI;
 }
 
 #[inline]
@@ -1371,10 +1371,10 @@ fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
 
 #[inline]
 fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
-    if *lon > 1f64 {
-        *lon = 1f64;
-    } else if *lon < -1f64 {
-        *lon = -1f64;
+    if *lon > 1.0 {
+        *lon = 1.0;
+    } else if *lon < -1.0 {
+        *lon = -1.0;
     }
 }
 
