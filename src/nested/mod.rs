@@ -210,6 +210,7 @@ pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool
 
 pub mod bmoc;
 mod zordercurve;
+mod gpu;
 
 use self::zordercurve::{ZOrderCurve, get_zoc};
 use self::bmoc::*;
@@ -3483,7 +3484,12 @@ mod tests {
     let lat_deg = -28.04159707_f64;// 39.9302924_f64;// -41.08635508_f64
     let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
     // println!("{:?}", res);
-    assert_eq!(res, [(20, 0.0), (38, 0.1661686383097217), (33, 0.2024027885319438), (20, 0.6314285731583344)]);
+    assert_eq!(res, [
+      (20, 0.0), 
+      (38, 0.1661686383097217), 
+      (33, 0.2024027885319438), 
+      (20, 0.6314285731583344)
+    ]);
   }
   
   #[test]
@@ -3492,6 +3498,11 @@ mod tests {
     let lat_deg = 22.015110_f64;
     let res = bilinear_interpolation(18, lon_deg.to_radians(), lat_deg.to_radians());
     // println!("{:?}", res);
-    assert_eq!(res, [(405766747916, 0.5757471135241182), (405766747917, 0.3604806280107034), (405766747918, 0.039217694696856834), (405766747919, 0.024554563768321474)]);
+    assert_eq!(res, [
+      (405766747916, 0.5757471135241182), 
+      (405766747917, 0.3604806280107034), 
+      (405766747918, 0.039217694696856834), 
+      (405766747919, 0.024554563768321474)
+    ]);
   }
 }

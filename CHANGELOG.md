@@ -2,7 +2,15 @@
 
 ## 0.3.2 
 
-Released 2019-09-02.
+Released 2019-09-05.
+
+### Added
+
+* `hash_with_dxdy` algo to be ported in glsl (WebGL) for AladinLite: is takes
+  in input a vector (x, y, z) made of 3 single precision floats.
+  Most graphics cards being limited to single precision, the method is able to
+  provided indices at a maximum depth of 14. At depth 13, the precision
+  on dx and dy is better than 1/512 (<=> images at order 13 + 9).
 
 ### Bug correction
 
