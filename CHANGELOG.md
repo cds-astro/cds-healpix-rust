@@ -1,5 +1,21 @@
 # `cdshealpix` Change Log
 
+## 0.4.0 
+
+Released 2019-11-14.
+
+### Changed
+
+* Do not requires `nighlty` any more (replace built-in bench by Criterion)
+* Change `hash` internal (improve performance and fix specific cases)
+
+### Bug correction
+
+* Polygon specific case (by fixing the hash method)
+
+--------------------------------------------------------------------------------
+
+
 ## 0.3.2 
 
 Released 2019-09-05.
