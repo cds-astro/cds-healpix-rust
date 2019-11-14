@@ -219,7 +219,7 @@ impl ZOrderCurve for MediuZOC {
   }
 }
 
-struct LargeZOC;
+pub struct LargeZOC;
 impl ZOrderCurve for LargeZOC {
   fn i02h(&self, i: u32) -> u64 {
     // to/from_le do nothing on x86 architectures (which are in LE), so not perf penalty
@@ -355,9 +355,9 @@ impl ZOrderCurve for MediuZOCxor {
   fn ij2j(&self, ij: u64) -> u32 { (ij as u32) >> 16 }
 }
 
-#[cfg(test)]
-struct LargeZOCxor;
-#[cfg(test)]
+// #[cfg(any(test, bench))]
+pub struct LargeZOCxor;
+// #[cfg(any(test, bench))]
 impl ZOrderCurve for LargeZOCxor {
   fn ij2h(&self, i: u32, j: u32) -> u64 {
     let mut h = ((j as u64) << 32) | (i as u64);
@@ -404,7 +404,7 @@ impl ZOrderCurve for LargeZOCxor {
 // Instead of multiplying the #[cfg()], I should learn how to write macros... 
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
-struct SmallZOCbmi;
+pub struct SmallZOCbmi;
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
 impl ZOrderCurve for SmallZOCbmi {
   
@@ -514,7 +514,7 @@ impl ZOrderCurve for MediuZOCbmi {
 }
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
-struct LargeZOCbmi;
+pub struct LargeZOCbmi;
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
 impl ZOrderCurve for LargeZOCbmi {
   
@@ -608,24 +608,24 @@ static EMPTY_ZOC: EmptyZOC = EmptyZOC;
 
 static SMALL_ZOC_LUT: SmallZOC = SmallZOC;
 static MEDIU_ZOC_LUT: MediuZOC = MediuZOC;
-static LARGE_ZOC_LUT: LargeZOC = LargeZOC;
+pub static LARGE_ZOC_LUT: LargeZOC = LargeZOC;
 
 #[cfg(test)]
 static SMALL_ZOC_XOR: SmallZOCxor = SmallZOCxor;
 #[cfg(test)]
 static MEDIU_ZOC_XOR: MediuZOCxor = MediuZOCxor;
-#[cfg(test)]
-static LARGE_ZOC_XOR: LargeZOCxor = LargeZOCxor;
+// #[cfg(any(test, bench))]
+pub static LARGE_ZOC_XOR: LargeZOCxor = LargeZOCxor;
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
 static SMALL_ZOC_BMI: SmallZOCbmi = SmallZOCbmi;
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
 static MEDIU_ZOC_BMI: MediuZOCbmi = MediuZOCbmi;
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
-static LARGE_ZOC_BMI: LargeZOCbmi = LargeZOCbmi;
+pub static LARGE_ZOC_BMI: LargeZOCbmi = LargeZOCbmi;
 
-/// This function in only visible from super (i.e. the "nested" module
-pub(super) fn get_zoc(depth: u8) -> &'static ZOrderCurve { // on day, It would be possible to add 'const'
+/// Returns a zorder curve trait implementation according to the given depth.
+pub fn get_zoc(depth: u8) -> &'static ZOrderCurve { // on day, It would be possible to add 'const'
   super::super::check_depth(depth);
   #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
   {
@@ -655,9 +655,6 @@ pub(super) fn get_zoc(depth: u8) -> &'static ZOrderCurve { // on day, It would b
 #[cfg(test)]
 mod tests {
   use super::*;
-  use test::Bencher;
-  extern crate test;
-
   
   #[test]
   fn test_small(){
@@ -706,49 +703,5 @@ mod tests {
         assert_eq!(m2, m3)
       }
     }
-  }
-  
-  
-  #[bench]
-  fn bench_morton_lupt(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(0xFFFFFFFFu32);
-      let mut t = 0u64;
-      for i in (0..n).step_by(14999991) {
-        for j in (0..n).step_by(1499991) {
-          t ^= LARGE_ZOC_LUT.ij2h(i, j);
-        }
-      }
-      t
-    });
-  }
-
-  #[bench]
-  fn bench_morton_xor(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(0xFFFFFFFFu32);
-      let mut t = 0u64;
-      for i in (0..n).step_by(14999991) {
-        for j in (0..n).step_by(1499991) {
-          t ^= LARGE_ZOC_XOR.ij2h(i, j);
-        }
-      }
-      t
-    });
-  }
-
-  #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
-  #[bench]
-  fn bench_morton_bmi(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(0xFFFFFFFFu32);
-      let mut t = 0u64;
-      for i in (0..n).step_by(14999991) {
-        for j in (0..n).step_by(1499991) {
-          t ^= LARGE_ZOC_BMI.ij2h(i, j);
-        }
-      }
-      t
-    });
   }
 }

@@ -94,7 +94,7 @@ impl EllipticalCone {
     // The projection of a cone on a plane is an ellipse
     let proj_d_min = (ang_dist - radius).sin();
     let proj_d_max = (ang_dist + radius).sin();
-    let proj_a = radius.sin();                     // projected ellipse semi-major axis
+    let proj_a = radius.sin();                          // projected ellipse semi-major axis
     let proj_b = 0.5 * (proj_d_max - proj_d_min).abs(); // projected ellipse semi-minor axis
     let one_over_norm = 1.0 / (x.pow2() + y.pow2()).sqrt(); // distance from (0, 0) to the cone projected center (!= ellipse center)
     if !one_over_norm.is_finite() {

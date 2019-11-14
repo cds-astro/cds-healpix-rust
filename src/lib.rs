@@ -6,17 +6,23 @@
 //! * Calabretta2007: "Mapping on the HEALPix grid", Calabretta, M. R. et Roukema, B. F., 2007; 2007MNRAS.381..865C
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
 
-#![cfg_attr(test, feature(test))]
+// #![cfg_attr(test, feature(test))]
 // #![cfg_attr(test)]
 
 
-#[cfg(test)]
-extern crate test;
+// #[cfg(test)]
+// extern crate test;
 
 use std::sync::Once;
 use std::f64::consts::{PI};
 
-const SQRT6: f64 = 2.44948974278317809819_f64;
+/// Constant = sqrt(6).
+/// 
+/// ```rust
+/// use cdshealpix::{SQRT6};
+/// assert_eq!(6_f64.sqrt(), SQRT6);
+/// ```
+pub const SQRT6: f64 = 2.44948974278317809819_f64;
 const ONE_OVER_SQRT6: f64 = 0.40824829046386301636_f64;
 const HALF: f64 = 0.5_f64;
 
@@ -89,10 +95,14 @@ pub const TRANSITION_LATITUDE: f64 = 0.72972765622696636344_f64; // asin(2/3)
 /// Limit on |z|=|sin(lat)| between the equatorial region and the polar caps.
 /// Equals 2/3, see Eq. (1) in Gorsky2005.
 pub const TRANSITION_Z: f64 = 2_f64 / 3_f64;
-const ONE_OVER_TRANSITION_Z: f64 = 1.5_f64;
+/// Inverse of the limit on |z|=|sin(lat)| between the equatorial region and the polar caps.
+/// Equals 1/(2/3) = 1.5, see Eq. (1) in Gorsky2005.
+pub const ONE_OVER_TRANSITION_Z: f64 = 1.5_f64;
 
-pub(crate) const F64_SIGN_BIT_MASK: u64 = 0x8000000000000000;
-const F64_BUT_SIGN_BIT_MASK: u64 = 0x7FFFFFFFFFFFFFFF;
+/// Mask to keep only the f64 sign
+pub const F64_SIGN_BIT_MASK: u64 = 0x8000000000000000;
+/// Equals !F64_SIGN_BIT_MASK (the inverse of the f64 sign mask)
+pub const F64_BUT_SIGN_BIT_MASK: u64 = 0x7FFFFFFFFFFFFFFF;
 
 /// For each HEALPix depth, stores the smallest distance from an edge of a cell to the opposite
 /// edge of the same cell. If the radius of a cone is smaller than this distance, we know that

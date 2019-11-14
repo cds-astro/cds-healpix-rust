@@ -35,16 +35,22 @@ Other independant HEALPix implementations:
 Warning
 -------
 
-Although the main part of the code uses standard Rust, the nightly version of the compiler is needed to run benches.  
-So you need to install and compile with Rust nightly:
+For best performances on your specific hardware, you can compile using:
 ```bash
-# Install the nightly
-rustup install nightly
-# Either set the default to nightly
-rustup default nightly
-# Or compile explicitly with nightly
-cargo build +nightly
-``` 
+RUSTFLAGS='-C target-cpu=native' cargo build --release
+```
+This uses BMI2 instructions PDEP and PEXT, if supported by your processor, for bit interleaving.
+
+However, the implementaion of those instructions on **AMD Ryzen processors** are **extremely slow** (20x slower than a lookup table, 
+doubling the `hash` computation time)! 
+You can test it usingi:
+```bash
+RUSTFLAGS='-C target-cpu=native' cargo bench
+```
+If the result of `ZOrderCurve/BMI` is slower thatn `ZOrderCurve/LUPT`, compile without the `native` support:
+```bash
+cargo build --release
+```
 
 Features
 --------

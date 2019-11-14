@@ -338,8 +338,8 @@ fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_do
 mod tests {
   use super::*;
   use super::super::nested::{vertices};
-  use test::Bencher;
-  extern crate test;
+  // use test::Bencher;
+  // extern crate test;
   use std::f64::consts::{PI};
 
   #[test]
@@ -400,7 +400,7 @@ mod tests {
     .into_boxed_slice()
   }
 
-  #[bench]
+  /*#[bench]
   fn bench_make_data(b: &mut Bencher) {
     b.iter(|| {
       let n = test::black_box(20_u32);
@@ -425,7 +425,7 @@ mod tests {
       let vertices = make_bench_data(n);
       lonlat2coo3d_v2(vertices)
     });
-  }
+  }*/
   
   /*#[test]
   fn toto_v2() {

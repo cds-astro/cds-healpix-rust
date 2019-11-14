@@ -38,7 +38,7 @@ pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
   let nside = nside(depth);
   let half_nside = nside as f32 * 0.5;
   let (x_pm1, q) = xpm1_and_q(x, y);
-  let (d0h, x_proj, y_proj) = if z > TRANSITION_Z {
+  let (d0h, x_in_d0c, y_in_d0c) = if z > TRANSITION_Z {
     // North polar cap, Collignon projection.
     // - set the origin to (PI/4, 0)
     let sqrt_3_one_min_z = (3.0 * one_minus_z_pos(x, y, z)).sqrt();
@@ -68,18 +68,19 @@ pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
     let q03 = 1 - q12; /* 1\0 */
     //let q13 = q01 ^ q12;                              debug_assert!(q13 == 0 || q13 == 1);
     let q1  = q01 & q12; /* = 1 if q1, 0 else */      debug_assert!( q1 == 0 ||  q1 == 1);
-    // x: xcea - 0 if q3 | xcea - 2 if q1 | xcea - 1 if q0 or q2
+    // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
     let x_proj = x_pm1 - ((q01 + q12) as i8 - 1) as f32;
-    // y: y - 0 if q2 | y - 1 if q1 or q3 | y - 2 if q0 
+    // y: y_pm1 + 0 if q2 | y_pm1 + 1 if q1 or q3 | y_pm1 + 2 if q0 
     let y_proj = y_pm1 + (q01 + q03) as f32;
     // d0h: +8 if q0 | +4 if q3 | +5 if q1
     let d0h = ((q01 + q03) << 2) + ((q + q1) & 3);
     (d0h, x_proj, y_proj)
   };
   // Coords inside the base cell
-  let x = (half_nside * (y_proj + x_proj));    debug_assert!(x <= (0.0 - 1e-5) || x < (nside as f32 + 1e-5), format!("x: {}, x_proj: {}; y_proj: {}", &x, &x_proj, &y_proj));
-  let y = (half_nside * (y_proj - x_proj));    debug_assert!(y <= (0.0 - 1e-5) || y < (nside as f32 + 1e-5), format!("y: {}", &y));
-  let mut i = x as u32;
+  let x = half_nside * (y_in_d0c + x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && x < (nside as f32 + 1e-5), format!("x: {}, x_proj: {}; y_proj: {}", &x, &x_in_d0c, &y_in_d0c));
+  let y = half_nside * (y_in_d0c - x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && y < (nside as f32 + 1e-5), format!("y: {}", &y));
+  // Ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
+  let mut i = x as u32; 
   let mut j = y as u32;
   if i == nside { i -= 1; } // Deal with numerical inaccuracies, rare so branch miss-prediction negligible
   if j == nside { j -= 1; } // Deal with numerical inaccuracies, rare so branch miss-prediction negligible
@@ -166,8 +167,8 @@ fn xpm1_and_q(x: f32, y: f32) -> (f32, u8) {
   let x_neg = (x < 0.0) as u8;           debug_assert!(x_neg <= 1);
   let y_neg = (y < 0.0) as u8;           debug_assert!(y_neg <= 1);
   let q = (x_neg + y_neg) | (y_neg << 1);    debug_assert!(y_neg <= 3);
-  // The purpose it to have the same numerical precision for each base cell
-  // by avoiding subtraction by 1 or 3 or 5 or 7
+  // The purpose is to have the same numerical precision for each base cell
+  // by avoiding subtraction by 1.0 or 3.0 or 5.0 or 7.0
   let lon = y.abs().atan2(x.abs());          debug_assert!(0.0 <= lon && lon <= PI / 2.0);
   let x02 = lon * 4.0 / PI;                  debug_assert!(0.0 <= x02 && x02 <= 2.0);
   if x_neg != y_neg { // Could be replaced by a sign copy from (x_neg ^ y_neg) << 32
