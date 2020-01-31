@@ -658,7 +658,7 @@ impl<V: Copy + Ord> MainWindMap<V> {
     values
   }
 
-  pub fn sorted_entries(&self) -> Box<([(MainWind, V)])> {
+  pub fn sorted_entries(&self) -> Box<[(MainWind, V)]> {
     self.sorted_entries_vec().into_boxed_slice()
   }
   

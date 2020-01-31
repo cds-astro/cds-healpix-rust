@@ -625,25 +625,25 @@ static MEDIU_ZOC_BMI: MediuZOCbmi = MediuZOCbmi;
 pub static LARGE_ZOC_BMI: LargeZOCbmi = LargeZOCbmi;
 
 /// Returns a zorder curve trait implementation according to the given depth.
-pub fn get_zoc(depth: u8) -> &'static ZOrderCurve { // on day, It would be possible to add 'const'
+pub fn get_zoc(depth: u8) -> &'static dyn ZOrderCurve { // on day, It would be possible to add 'const'
   super::super::check_depth(depth);
   #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
   {
     match depth {
-             0  => &EMPTY_ZOC,
-       1 ... 8  => &SMALL_ZOC_BMI, // 2 bits *  8 = 16 bits
-       9 ... 16 => &MEDIU_ZOC_BMI, // 2 bits * 16 = 32 bits
-      17 ... 29 => &LARGE_ZOC_BMI,
+           0  => &EMPTY_ZOC,
+       1..=8  => &SMALL_ZOC_BMI, // 2 bits *  8 = 16 bits
+       9..=16 => &MEDIU_ZOC_BMI, // 2 bits * 16 = 32 bits
+      17..=29 => &LARGE_ZOC_BMI,
       _ => unreachable!(),
     }
   }
   #[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2")))]
     {
       match depth {
-        0 => &EMPTY_ZOC,
-        1 ... 8 => &SMALL_ZOC_LUT, // 2 bits *  8 = 16 bits
-        9 ... 16 => &MEDIU_ZOC_LUT, // 2 bits * 16 = 32 bits
-        17 ... 29 => &LARGE_ZOC_LUT,
+             0  => &EMPTY_ZOC,
+         1..=8  => &SMALL_ZOC_LUT, // 2 bits *  8 = 16 bits
+         9..=16 => &MEDIU_ZOC_LUT, // 2 bits * 16 = 32 bits
+        17..=29 => &LARGE_ZOC_LUT,
         _ => unreachable!(),
       }
     }

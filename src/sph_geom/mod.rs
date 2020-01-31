@@ -72,11 +72,13 @@ pub enum ContainsSouthPoleMethod {
   DEFAULT,
 }
 
-fn get_contains_south_pole_computer(method: ContainsSouthPoleMethod) -> &'static ContainsSouthPoleComputer {
-  match method {
-    ContainsSouthPoleMethod::TRUE    => &PROVIDED_TRUE,
-    ContainsSouthPoleMethod::FALSE   => &PROVIDED_FALSE,
-    ContainsSouthPoleMethod::DEFAULT => &BASIC,
+impl ContainsSouthPoleComputer for ContainsSouthPoleMethod {
+  fn contains_south_pole(&self, vertices: &Box<[Coo3D]>, cross_products: &Box<[Vect3]>) -> bool {
+    match self {
+      ContainsSouthPoleMethod::TRUE    => PROVIDED_TRUE.contains_south_pole(vertices, cross_products),
+      ContainsSouthPoleMethod::FALSE   => PROVIDED_FALSE.contains_south_pole(vertices, cross_products),
+      ContainsSouthPoleMethod::DEFAULT => BASIC.contains_south_pole(vertices, cross_products),
+    }
   }
 }
 
@@ -98,8 +100,7 @@ impl Polygon {
   pub fn new_custom(vertices: Box<[LonLat]>, method: ContainsSouthPoleMethod) -> Polygon {
     let vertices: Box<[Coo3D]> = lonlat2coo3d(vertices);
     let cross_products: Box<[Vect3]> = compute_cross_products_v2(&vertices);
-    let csp_computer = get_contains_south_pole_computer(method);
-    let contains_south_pole = (*csp_computer).contains_south_pole(&vertices, &cross_products);
+    let contains_south_pole = method.contains_south_pole(&vertices, &cross_products);
     Polygon {
       vertices,
       cross_products,

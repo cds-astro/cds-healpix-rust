@@ -16,53 +16,41 @@ pub trait Vec3 {
   
   fn new(x: f64, y: f64, z: f64) -> Self where Self: Sized;
   
-  #[inline]
   fn x(&self) -> f64;
-  
-  #[inline]
   fn y(&self) -> f64;
-  
-  #[inline]
   fn z(&self) -> f64;
-
-  #[inline]
+  
   fn norm(&self) -> f64 { 
     self.squared_norm().sqrt()
   }
-
-  #[inline]
+  
   fn squared_norm(&self) -> f64 {
     // squared_norm_of(Vec3::x(self), Vec3::y(self), Vec3::z(self))
     squared_norm_of(self.x(), self.y(), self.z())
   }
-
-  #[inline]
-  fn dot_product(&self, other: &Vec3) -> f64 {
+  
+  fn dot_product<V: Vec3>(&self, other: &V) -> f64 {
     // Vec3::x(self) * vec3.x() + Vec3::y(self) * vec3.y() + Vec3::z(self) * vec3.z()
     self.x() * other.x() + self.y() * other.y() + self.z() * other.z()
   }
-
-  #[inline]
+  
   fn lonlat(&self) -> (f64, f64) {
     // lonlat_of(Vec3::x(self), Vec3::y(self), Vec3::z(self))
     lonlat_of(self.x(), self.y(), self.z())
   }
-
-  #[inline]
+  
   fn opposite(&self) -> Self where Self: Sized{
     Self::new(-self.x(), -self.y(), -self.z())
   }
 
-  #[inline]
-  fn squared_euclidean_dist(&self, other: &Vec3) -> f64 {
+  fn squared_euclidean_dist<V: Vec3>(&self, other: &V) -> f64 {
     pow2(self.x() - other.x()) + pow2(self.y() - other.y()) + pow2(self.z() - other.z())
   }
-  
-  #[inline]
-  fn euclidean_dist(&self, other: &Vec3) -> f64 {
+
+  fn euclidean_dist<V: Vec3>(&self, other: &V) -> f64 {
     self.squared_euclidean_dist(other).sqrt()
   }
-  
+
   #[inline]
   fn normalized(&self) -> UnitVect3 {
     let norm = self.norm();
@@ -344,14 +332,8 @@ impl UnitVec3 for UnitVect3 {
 // Geographic coordinates
 
 pub trait LonLatT {
-  
-  #[inline]
   fn lon(&self) -> f64;
-
-  #[inline]
   fn lat(&self) -> f64;
-  
-  #[inline]
   fn vec3(&self) -> UnitVect3 {
     vec3_of(self.lon(), self.lat())
   }

@@ -22,6 +22,8 @@ static LAYERS_INIT: [Once; 30] = [
   Once::new(), Once::new()
 ];
 
+// const l0: Layer = 
+
 /// Lazy factory method: instantiate a new Layer at the first call for a given depth; after the 
 /// first call, returns an already instantiated Layer.
 /// # Info
@@ -46,10 +48,86 @@ pub fn get_or_create(depth: u8) -> &'static Layer {
   }
 }
 
-pub fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
+pub const fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
   let twice_delta_depth = delta_depth << 1;
   (hash << twice_delta_depth)..((hash + 1) << twice_delta_depth)
 }
+
+
+/// Transforms the given NESTED hash value into its uniq representation, i.e. the depth
+/// is encoded together with the hash value such that each possible (deph, hash) pair 
+/// gives a unique number.
+/// In practice, the unique representation uses a sentinel bit (set to one) to code the depth.
+/// The sentinel bit (set to 1) is the least significant bit (LSB) among the unused bits,
+/// i.e. the most significant bit (MSB) located just after the hash MSB.
+/// Said differently, the sentinel bit is the `(1 + 4 + 2*depth)^th` MSB
+/// The encoding, in the case of the nested scheme, is thus `0...0sbbbb112233...`, with:
+/// * `0...0`: unused bits</li>
+/// * `s` : sentinel bit</li>
+/// * `bbbb`: the 4 bits coding the base cell
+/// * `11`: the 2 bits coding depth 1
+/// * `22`: the 2 bits coding depth 2
+/// * `33`: the 2 bits coding depth 3
+/// * ...
+/// 
+/// # Example
+/// 
+/// ```rust
+/// use cdshealpix::nested::{get_or_create, Layer};
+/// let l0 = get_or_create(0);
+/// assert_eq!(l0.to_uniq(0), 16);
+/// ```
+#[inline]
+pub fn to_uniq(depth: u8, hash: u64) -> u64 {
+  check_depth(depth);
+  to_uniq_unsafe(depth, hash)
+}
+#[inline]
+const fn to_uniq_unsafe(depth: u8, hash: u64) -> u64 {
+  (16_u64 << (depth << 1)) | hash
+}
+
+/// Same as [to_uniq](fn.to_uniq.html), but
+/// following the [IVOA](http://ivoa.net/documents/MOC/) convention.
+/// It does not rely on a sentinel bit and use one less bit.
+#[inline]
+pub fn to_uniq_ivoa(depth: u8, hash: u64) -> u64 {
+  check_depth(depth);
+  to_uniq_ivoa_unsafe(depth, hash)
+}
+#[inline]
+const fn to_uniq_ivoa_unsafe(depth: u8, hash: u64) -> u64 {
+  (4_u64 << (depth << 1)) + hash
+}
+
+/// Returns the depth and the hash number from the uniq representation.
+/// Inverse operation of [to_uniq](fn.to_uniq.html).
+pub fn from_uniq(uniq_hash: u64) -> (u8, u64) {
+  let depth = (60 - uniq_hash.leading_zeros()) >> 1;
+  let hash = uniq_hash & !(16_u64 << (depth << 1));
+  // = uniq_hash - (16_u64 << (depth << 1));
+  // = uniq_hash & !highest_one_bit(uniq_hash)); also works, but do not benefit from depth
+  (depth as u8, hash)
+}
+
+/// Returns the depth and the hash number from the uniq representation.
+/// Inverse operation of [to_uniq](fn.to_uniq_ivoa.html).
+pub fn from_uniq_ivoa(uniq_hash: u64) -> (u8, u64) {
+  let depth = (61 - uniq_hash.leading_zeros()) >> 1;
+  let hash = uniq_hash - (4_u64 << (depth << 1));
+  (depth as u8, hash)
+}
+
+const fn highest_one_bit(mut i: u64) -> u64 {
+  i |= i >>  1;
+  i |= i >>  2;
+  i |= i >>  4;
+  i |= i >>  8;
+  i |= i >> 16;
+  i |= i >> 32;
+  i - (i >> 1)
+}
+
 
 /// Conveniency function returning the number of hash value in the [Layer] of the given *depth*.
 #[inline]
@@ -241,7 +319,7 @@ pub struct Layer { // Why not creating all of them at compilation using a macro?
   nside_remainder_mask: u64, // = nside - 1
   time_half_nside: i64,
   one_over_nside: f64,
-  z_order_curve: &'static ZOrderCurve,
+  z_order_curve: &'static dyn ZOrderCurve,
 }
 
 impl Layer {
@@ -420,7 +498,7 @@ impl Layer {
     let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
     let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
     let x = lon_abs * FOUR_OVER_PI;
-    let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(0 <= q && q < 8);
+    let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(q < 8);
     // Remark: to avoid the branch, we could have copied lon_sign on x - q, 
     //         but I so far lack of idea to deal with q efficiently.
     //         And we are not supposed to have negative longitudes in ICRS 
@@ -536,7 +614,7 @@ impl Layer {
     // so few risks of branch miss-prediction.
     // println!("k: {}; i: {}; j: {}; ij: {:?}; xy: {:?}", &k, &i, &j, &ij, &xy);
     match k {
-      0 ... 2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
+      0..=2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
       -1 => {
         if xy.0 - ij.0 as f64 > xy.1 - ij.1 as f64 {
           ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask
@@ -566,7 +644,18 @@ impl Layer {
       _ => panic!("Algorithm error: case k = {} not supported!", k),
     }
   }
-  
+
+  /// Conveniency function simply calling the [hash](fn.to_uniq.html) method with this layer *depth*.
+  pub fn to_uniq(&self, hash: u64) -> u64 {
+    // depth already tested, so we call the unsafe method
+    nested::to_uniq_unsafe(self.depth, hash)
+  }
+
+  /// Conveniency function simply calling the [hash](fn.to_uniq_ivoa.html) method with this layer *depth*.
+  pub fn to_uniq_ivoa(&self, hash: u64) -> u64 {
+    // depth already tested, so we call the unsafe method
+    nested::to_uniq_ivoa_unsafe(self.depth, hash)
+  }
   
   /// Transforms the given NESTED hash value into the RING hash value.
   /// 
@@ -1734,8 +1823,7 @@ impl Layer {
   }
   
   #[inline]
-  fn h_and_shs_to_lower_h(&self, deeper_depth: u8) 
-    -> impl Fn((u64, f64)) -> (u64) {
+  fn h_and_shs_to_lower_h(&self, deeper_depth: u8) -> impl Fn((u64, f64)) -> u64 {
     let twice_depth_diff = (deeper_depth - self.depth) << 1;
     move |(h, _)| h >> twice_depth_diff
   }
@@ -2771,14 +2859,13 @@ fn h_to_h_and_shs(cone_lon: f64, cone_lat: f64, cos_cone_lat:f64, layer: &'stati
 
 /// - `shs` stands for `squared half segment`
 #[inline]
-fn shs_lower_than(shs_max: f64)
-                  -> impl FnMut(&(u64, f64)) -> (bool) {
+fn shs_lower_than(shs_max: f64) -> impl FnMut(&(u64, f64)) -> bool {
   move |&(_, shs)| shs <= shs_max
 }
 
 /// The returned closure computes the 
 #[inline]
-fn shs_computer(cone_lon: f64, cone_lat: f64, cos_cone_lat: f64) -> impl Fn((f64, f64)) -> (f64) {
+fn shs_computer(cone_lon: f64, cone_lat: f64, cos_cone_lat: f64) -> impl Fn((f64, f64)) -> f64 {
   move |(lon, lat)| {
     squared_half_segment(lon - cone_lon, lat - cone_lat, lat.cos(), cos_cone_lat)
   }
@@ -3721,5 +3808,24 @@ mod tests {
     let mut file = std::fs::File::create(format!("hpx.{}.csv", depth))?;
     file.write_all(s.as_bytes())?;
     Ok(())
+  }
+
+
+  #[test]
+  fn test_to_uniq() {
+    for depth in 0..8 {
+      for idx in 0..n_hash(depth) {
+        assert_eq!((depth, idx), from_uniq(to_uniq(depth, idx)));
+      }
+    }
+  }
+
+  #[test]
+  fn test_to_uniq_ivoa() {
+    for depth in 0..8 {
+      for idx in 0..n_hash(depth) {
+        assert_eq!((depth, idx), from_uniq_ivoa(to_uniq_ivoa(depth, idx)));
+      }
+    }
   }
 }

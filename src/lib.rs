@@ -353,13 +353,9 @@ fn pow2(x: f64) -> f64 {
 
 /// Simple trait used to implements `pow2`, `twice` and `half` on f64.
 pub trait Customf64 {
-  #[inline]
   fn pow2(self) -> f64;
-  #[inline]
   fn twice(self) -> f64;
-  #[inline]
   fn half(self) -> f64;
-  #[inline]
   fn div_eucl(self, rhs: f64) -> f64;
 }
 
@@ -650,7 +646,7 @@ pub fn nside(depth: u8) -> u32 {
 /// Same as [nside](fn.nside.html) except that this version does not check the argument, and thus
 /// does not panics if the argument is illegal.
 #[inline]
-pub fn nside_unsafe(depth: u8) -> u32 {
+pub const fn nside_unsafe(depth: u8) -> u32 {
     1_u32 << depth
 }
 
@@ -685,7 +681,7 @@ pub fn nside_square(delta_depth: u8) -> u64 {
 /// Same as [nside_square](fn.nside_square.html) except that this version does not check the argument, 
 /// and thus does not panics if the argument is illegal.
 #[inline]
-pub fn nside_square_unsafe(delta_depth: u8) -> u64 {
+pub const fn nside_square_unsafe(delta_depth: u8) -> u64 {
   1_u64 << (delta_depth << 1)
 }
 
@@ -696,7 +692,7 @@ fn check_depth(depth: u8) {
 
 /// Returns `true` if the given argument is a valid depth, i.e. if it is <= [DEPTH_MAX](constant.DEPTH_MAX.html). 
 #[inline]
-pub fn is_depth(depth: u8) -> bool {
+pub const fn is_depth(depth: u8) -> bool {
     depth <= DEPTH_MAX
 }
 
@@ -730,7 +726,7 @@ pub fn depth(nside: u32) -> u8 {
 /// Same as [depth](fn.depth.html) except that this version does not check the argument, and thus
 /// does not panics if the argument is illegal.
 #[inline]
-pub fn depth_unsafe(nside: u32) -> u8 {
+pub const fn depth_unsafe(nside: u32) -> u8 {
     nside.trailing_zeros() as u8
 }
 
@@ -811,7 +807,7 @@ pub fn n_hash(depth: u8) -> u64 {
 /// Same as [n_hash](fn.n_hash.html) except that this version does not panic if the given `depth` is
 /// out of range.
 #[inline]
-pub fn n_hash_unsafe(depth: u8) -> u64 { 12u64 << (depth << 1u8) }
+pub const fn n_hash_unsafe(depth: u8) -> u64 { 12u64 << (depth << 1u8) }
 
 /// Returns `true` if the function [best_starting_depth](fn.best_starting_depth.html) is valid
 /// for the given argument `d_max_rad`. So if `d_max_rad < ~48 deg`. `d_max_rad` is given in radians.

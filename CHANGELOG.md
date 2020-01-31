@@ -1,5 +1,21 @@
 # `cdshealpix` Change Log
 
+## 0.4.1
+
+Released 2019-11-14.
+
+### Changed
+
+* Transform methods in `const`, add `dyn` for trait objects. 
+
+### Added
+
+* `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle 
+  uniq hash notation (i.e. uniq value for all possible (depth, hash) tuples).
+
+--------------------------------------------------------------------------------
+
+
 ## 0.4.0 
 
 Released 2019-11-14.
@@ -7,11 +23,12 @@ Released 2019-11-14.
 ### Changed
 
 * Do not requires `nighlty` any more (replace built-in bench by Criterion)
-* Change `hash` internal (improve performance and fix specific cases)
+* Change `hash` internals (improve performance and fix specific cases)
 
 ### Bug correction
 
 * Polygon specific case (by fixing the hash method)
+* `hash`: fix very specific cases (lon = n * PI/2) in the South polar cap
 
 --------------------------------------------------------------------------------
 
