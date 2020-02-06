@@ -6,16 +6,6 @@ extern crate libc;
 // - https://github.com/jeff-davis/postgres-extension.rs
 // See PostgreSQL code here: https://github.com/postgres/postgres/
 
-// use libc::int8_t;
-// use libc::int16_t;
-// use libc::int32_t;
-// use libc::int64_t;
-
-use libc::uint8_t;
-// use libc::uint16_t;
-use libc::uint32_t;
-use libc::uint64_t;
-
 // use libc::c_float;
 use libc::c_double;
 
@@ -23,11 +13,23 @@ extern crate cdshealpix;
 //use cdshealpix;
 
 #[no_mangle]
-pub extern fn nside(depth: uint8_t) -> uint32_t {
-    cdshealpix::nside(depth)
+pub extern fn nside(depth: u8) -> u32 {
+  cdshealpix::nside(depth)
 }
 
 #[no_mangle]
-pub extern fn hash(depth: uint8_t, lon_deg: c_double, lat_deg: c_double) -> uint64_t {
-    cdshealpix::nested::hash(depth, lon_deg.to_radians(), lat_deg.to_radians())
+pub extern fn hash(depth: u8, lon_deg: c_double, lat_deg: c_double) -> u64 {
+  cdshealpix::nested::hash(depth, lon_deg.to_radians(), lat_deg.to_radians())
 }
+
+#[no_mangle]
+pub extern fn center(depth: u8, icell: u64, res_ptr: *mut c_double) {
+  assert!(!res_ptr.is_null(), "Null pointer in center()");
+  let res: &mut[c_double] = unsafe { std::slice::from_raw_parts_mut(res_ptr, 2) }; 
+  let (lon, lat) = cdshealpix::nested::center(depth, icell);
+  res[0] = lon.to_degrees();
+  res[1] = lat.to_degrees();
+}
+
+
+
