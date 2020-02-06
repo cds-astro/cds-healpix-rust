@@ -1,0 +1,18 @@
+[package]
+name = "cdshealpix_pgsql10"
+version = "0.1.0"
+authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
+
+[build-dependencies]
+cdshealpix = { version = "0.2.0", path = "../" }
+
+[dependencies]
+libc = "*"
+cdshealpix = { version = "0.2.0", path = "../" }
+
+
+[lib]
+name = "cdshealpix_pgsql10"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+

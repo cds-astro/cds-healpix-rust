@@ -2,8 +2,8 @@
 /trash/
 /target/
 /libwasm/
-/libpsql/
 /libpsql10/
+/libpsql_test/
 /test/target/
 /resources/gnuplot
 
@@ -14,4 +14,5 @@ CRATESIO_NOTICE.txt
 Cargo.lock
 Makefile
 **/*.rs.bk
+**/*.swp
 
