@@ -18,18 +18,20 @@ pub extern fn nside(depth: u8) -> u32 {
 }
 
 #[no_mangle]
-pub extern fn hash(depth: u8, lon_deg: c_double, lat_deg: c_double) -> u64 {
+pub extern fn nest_hash(depth: u8, lon_deg: c_double, lat_deg: c_double) -> u64 {
   cdshealpix::nested::hash(depth, lon_deg.to_radians(), lat_deg.to_radians())
 }
 
 #[no_mangle]
-pub extern fn center(depth: u8, icell: u64, res_ptr: *mut c_double) {
+pub extern fn nest_center(depth: u8, icell: u64, res_ptr: *mut c_double) {
   assert!(!res_ptr.is_null(), "Null pointer in center()");
   let res: &mut[c_double] = unsafe { std::slice::from_raw_parts_mut(res_ptr, 2) }; 
   let (lon, lat) = cdshealpix::nested::center(depth, icell);
   res[0] = lon.to_degrees();
   res[1] = lat.to_degrees();
 }
+
+
 
 
 
