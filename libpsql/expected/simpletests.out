@@ -1,0 +1,73 @@
+CREATE EXTENSION pg_cds_healpix;
+-- TEST HPX_NSIDE
+SELECT hpx_nside(0);  -- expected: 1
+ hpx_nside 
+-----------
+         1
+(1 row)
+
+SELECT hpx_nside(5);  -- expected: 32
+ hpx_nside 
+-----------
+        32
+(1 row)
+
+SELECT hpx_nside(13); -- expected: 8192
+ hpx_nside 
+-----------
+      8192
+(1 row)
+
+SELECT hpx_nside(30); -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 30!
+HINT:  An HEALPix depth must be inside [0,29].
+SELECT hpx_nside(-1); -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 255!
+HINT:  An HEALPix depth must be inside [0,29].
+-- TEST HPX_HASH
+SELECT hpx_hash(0, 0, 0);      -- expected: 4
+ hpx_hash 
+----------
+        4
+(1 row)
+
+SELECT hpx_hash(15, 250, -90); -- expected: 10737418240
+  hpx_hash   
+-------------
+ 10737418240
+(1 row)
+
+SELECT hpx_hash(30, 0, 0);     -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 30!
+HINT:  An HEALPix depth must be inside [0,29].
+SELECT hpx_hash(-1, 0, 0);     -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 255!
+HINT:  An HEALPix depth must be inside [0,29].
+SELECT hpx_hash(0, 0, 91);     -- expected: ERROR!
+ERROR:  Incorrect latitude: 91.000000!
+HINT:  A latitude must be inside [-90,90] degrees.
+SELECT hpx_hash(0, 0, -91);    -- expected: ERROR!
+ERROR:  Incorrect latitude: -91.000000!
+HINT:  A latitude must be inside [-90,90] degrees.
+-- TEST HXP_CENTER
+SELECT hpx_center(0, 4);            -- expected: {0,0}
+ hpx_center 
+------------
+ {0,0}
+(1 row)
+
+SELECT hpx_center(15, 10737418240); -- expected: {225,-89.9985723325173}
+       hpx_center        
+-------------------------
+ {225,-89.9985723325173}
+(1 row)
+
+SELECT hpx_center(30, 4);           -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 30!
+HINT:  An HEALPix depth must be inside [0,29].
+SELECT hpx_center(-1, 4);           -- expected: ERROR!
+ERROR:  Incorrect HEALPix depth: 255!
+HINT:  An HEALPix depth must be inside [0,29].
+SELECT hpx_center(0, 13);           -- expected: ERROR!
+ERROR:  Incorrect HEALPix cell hash: 13!
+HINT:  An HEALPix cell hash at depth 0 must be inside [0,11].
