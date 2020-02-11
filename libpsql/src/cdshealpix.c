@@ -1,7 +1,5 @@
 #include "cdshealpix.h"
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 //
 // ARGUMENT TESTING methods
@@ -166,7 +164,7 @@ PG_FUNCTION_INFO_V1(hpx_center);
  * @depends check_hpx_depth(long)
  */
 Datum hpx_center(PG_FUNCTION_ARGS) {
-    float8* coordsRust;
+    float8 coordsRust[2];
     Datum*  coordsPSQL;
 
     // Get arguments (depth, hpx hash):
@@ -178,14 +176,12 @@ Datum hpx_center(PG_FUNCTION_ARGS) {
     check_hpx_hash(depth, hash);
 
     // Compute the center of the specified HEALPix cell:
-    coordsRust = palloc0(sizeof(float8) * 2);
     nest_center(depth, hash, coordsRust);
 
     // Cast the result to Datum array (for Postgres):
     coordsPSQL = palloc0(sizeof(Datum) * 2);
     coordsPSQL[0] = Float8GetDatum(coordsRust[0]);
     coordsPSQL[1] = Float8GetDatum(coordsRust[1]);
-    pfree(coordsRust);
     
     // Return the final PostgreSQL array object:
     //   note: construct_array returns an ArrayType* ; its parameters are:
