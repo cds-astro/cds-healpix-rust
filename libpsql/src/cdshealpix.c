@@ -27,15 +27,44 @@ void check_hpx_depth(uint8_t depth) {
 }
 
 /**
+ * Check the given longitude (in degrees).
+ *
+ * If NaN or +/-Infinity, report an error in the PostgreSQL backend.
+ * In such case, the query execution is immediately stopped.
+ *
+ * @param lon_deg  The longitude to check.
+ */
+void check_lon(float8 lon_deg) {
+    if (isnan(lon_deg) || isinf(lon_deg)){
+        ereport(ERROR,
+	      (
+	        errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+	        errmsg("Incorrect longitude! NaN, +/-Infinity are not allowed."),
+	        errhint("A longitude should be inside [0,360] degrees.")
+	      )
+	    );
+    }
+}
+
+/**
  * Check the given latitude (in degrees).
  *
- * If not inside [-90,90], report an error in the PostgreSQL backend.
- * In such case, the query execution is immediately stopped.
+ * If not inside [-90,90] or if NaN or +/-Infinity, report an error in the
+ * PostgreSQL backend. In such case, the query execution is immediately stopped.
  *
  * @param lat_deg  The latitude to check.
  */
 void check_lat(float8 lat_deg) {
-    if (lat_deg > 90 || lat_deg < -90) {
+    if (isnan(lat_deg) || isinf(lat_deg)){
+        ereport(ERROR,
+	      (
+	        errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+	        errmsg("Incorrect latitude! NaN and +/-Infinity are not allowed."),
+	        errhint("A latitude must be inside [-90,90] degrees.")
+	      )
+	    );
+    }
+    else if (lat_deg > 90 || lat_deg < -90) {
         ereport(ERROR,
 	      (
 	        errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
@@ -135,6 +164,7 @@ Datum hpx_hash(PG_FUNCTION_ARGS) {
     float8 lat_deg = PG_GETARG_FLOAT8(2);
     // Check them:
     check_hpx_depth(depth);
+    check_lon(lon_deg);
     check_lat(lat_deg);
     // Compute the HEALPix cell hash:
     PG_RETURN_INT64( (int64_t) nest_hash(depth, lon_deg, lat_deg) );

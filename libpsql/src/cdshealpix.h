@@ -6,6 +6,7 @@
 
 #include "postgres.h"
 #include "fmgr.h"
+#include "math.h"
 #include <utils/array.h>
 #include <catalog/pg_type.h>
 #include <utils/lsyscache.h>
@@ -39,6 +40,9 @@ extern void nest_center(uint8_t, uint64_t, float8*);
 
 /** [ check_hpx_depth(ushort depth) ] */
 void check_hpx_depth(uint8_t);
+
+/** [ check_lon(float lon_deg) ] */
+void check_lon(float8);
 
 /** [ check_lat(float lat_deg) ] */
 void check_lat(float8);
