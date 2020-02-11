@@ -2,7 +2,6 @@
 /trash/
 /target/
 /libwasm/
-/libpsql/
 /libpsql10/
 /libpsql_test/
 /test/target/
@@ -14,5 +13,7 @@ GIT_NOTICE.txt
 CRATESIO_NOTICE.txt
 Cargo.lock
 Makefile
+!/libpsql/Makefile
 **/*.rs.bk
+**/*.swp
 
