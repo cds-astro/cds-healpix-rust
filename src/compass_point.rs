@@ -626,7 +626,7 @@ impl<V: Copy> MainWindMap<V> {
 
   /// Returns a vector of values
   pub fn values_vec(&self) -> Vec<V> {
-    self.array.into_iter().filter_map(|&o| o).collect::<Vec<V>>()
+    self.array.iter().filter_map(|&o| o).collect::<Vec<V>>()
   }
   
   pub fn entries(&self) -> Box<[(MainWind, V)]> {
@@ -634,7 +634,7 @@ impl<V: Copy> MainWindMap<V> {
   }
 
   pub fn entries_vec(&self) -> Vec<(MainWind, V)> {
-    self.array.into_iter().enumerate()
+    self.array.iter().enumerate()
       .filter_map(|(i, &o)| o.map(|v| (MainWind::from_index(i as u8), v)))
       .collect::<Vec<(MainWind, V)>>()
   }

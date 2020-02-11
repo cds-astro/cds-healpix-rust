@@ -4,6 +4,8 @@
 //! So far, all BMOC logical operations (not, and, or, xor) are made from the BMOC representation.
 //! It is probably simpler and faster to work on ranges (but we have to handle the flag).
 
+use base64::{encode, decode, DecodeError};
+
 use std::slice::Iter;
 use std::cmp::max;
 // use std::opt::Range;
@@ -67,13 +69,13 @@ impl BMOCBuilderUnsafe {
     self
   }
   
-  pub fn to_bmoc(&mut self) -> BMOC {
+  pub fn to_bmoc(mut self) -> BMOC {
     BMOC::create_unsafe(self.depth_max, self.entries.take().expect("Empty builder!").into_boxed_slice())
   }
 
   /// We consider that the pushed elements are not ordered, but they come from a valid BMOC (i.e.
   /// no cell included in another cell)
-  pub fn to_bmoc_from_unordered(&mut self) -> BMOC {
+  pub fn to_bmoc_from_unordered(mut self) -> BMOC {
     let mut res = self.entries.take().expect("Empty builder!");
     res.sort_unstable();
     BMOC::create_unsafe(self.depth_max, res.into_boxed_slice())
@@ -202,9 +204,11 @@ impl BMOCBuilderUnsafe {
     BMOC::create_unsafe(new_depth, entries.into_boxed_slice())
   }
 
+  #[inline]
   fn get_depth(&self, raw_value: u64) -> u8 {
     self.get_depth_no_flag(rm_flag(raw_value))
   }
+  #[inline]
   /// Works both with no flag or with flag set to 0
   fn get_depth_no_flag(&self, raw_value_no_flag: u64) -> u8 {
     self.depth_max - (raw_value_no_flag.trailing_zeros() >> 1) as u8
@@ -256,9 +260,9 @@ impl BMOCBuilderFixedDepth {
   }
   
   pub fn to_bmoc(&mut self) -> Option<BMOC> {
-    if self.buffer.len() > 0 {
+    // if self.buffer.len() > 0 {
       self.drain_buffer();
-    }
+    // }
     self.bmoc.take()
   }
   
@@ -385,6 +389,10 @@ impl BMOC {
     BMOC { depth_max, entries: Vec::with_capacity(capacity) }
   }*/
 
+  pub fn size(&self) -> usize {
+    self.entries.len()
+  }
+  
   /// We suppose here that the entries are already sorted (ASC natural ordering) with
   /// no duplicates and no small cells included into larger one's.
   pub(super) fn create_unsafe(depth_max: u8, entries: Box<[u64]>) -> BMOC {
@@ -918,6 +926,15 @@ if (debug) System.out.println("Add3 " + hh);
     self.depth_max - (raw_value_no_flag.trailing_zeros() >> 1) as u8
   }
   
+  fn get_depth_icell(&self, raw_value: u64) -> (u8, u64) {
+    // Remove the flag bit, then divide by 2 (2 bits per level)
+    let delta_depth = ((raw_value >> 1).trailing_zeros() >> 1) as u8;
+    // Remove 2 bits per depth difference + 1 sentinel bit + 1 flag bit
+    let hash = raw_value >> (2 + (delta_depth << 1));
+    let depth = self.depth_max - delta_depth;
+    (depth, hash)
+  }
+  
   /// Transform this (B)MOC as a simple (sorted) array of ranges.
   /// During the operation, we loose the `flag` information attached to each BMOC cell.  
   pub fn to_ranges(&self) -> Box<[std::ops::Range<u64>]> {
@@ -953,8 +970,155 @@ if (debug) System.out.println("Add3 " + hh);
     }
     ranges.into_boxed_slice()
   }
-  
+
+  /// Transform this (B)MOC in a very compressed version. We call it `lossy` because
+  /// during the operation, we loose the `flag` information attached to each BMOC cell.
+  /// # Remark
+  /// * If needed we could store the flag information!
+  /// # Info
+  /// * Original idea by F.-X. Pineau (see Java library), improved by M. Reinecke (through
+  /// private communication) leading to an even better compression factor.
+  /// * Although its seems (c.f. M. Reinecke) that this is quite similar to `Interpolative coding`,
+  /// M. Reinecke tests show a slightly better compression factor. M. Reinecke raised the following 
+  /// question: was it worth implementing this specific case instead of using an
+  /// `Interpolative coding` library?
+  /// # Idea
+  /// * The basic idea consists 
+  pub fn compress_lossy(&self) -> CompressedMOC {
+    let n = self.entries.len();
+    let dm = self.depth_max;
+    let mut b = CompressedMOCBuilder::new(dm, 4 + 3 * n);
+    if n == 0 { // Special case of empty MOC
+      if dm == 0 {
+        for _ in 0..12 {
+          b.push_leaf_empty();
+        }
+      } else {
+        for _ in 0..12 {
+          b.push_node_empty();
+        }
+      }
+      return b.to_compressed_moc();
+    } else if dm == 0 { // Special case of other MOC at depth max = 0
+      let (curr_d, curr_h) = self.get_depth_icell(self.entries[0]);
+      assert_eq!(curr_d, 0);
+      let mut h = 0_u64;
+      for (curr_d, curr_h) in self.entries.iter().map(|e| self.get_depth_icell(*e)) {
+        for _ in h..curr_h {
+          b.push_leaf_empty();
+        }
+        b.push_leaf_full();
+        h = curr_h + 1;
+      }
+      for _ in h..12 {
+        b.push_leaf_empty();
+      }
+      return b.to_compressed_moc();
+    }
+    // Let's start serious things
+    let mut d = 0;
+    let mut h = 0;
+    let (curr_d, curr_h) = self.get_depth_icell(self.entries[0]);
+    // go down to curr hash
+    for dd in (0..=curr_d).rev() {
+      let target_h = curr_h >> (dd << 1);
+      if curr_d == dm && dd == 0 {
+        for _ in h..target_h {
+          b.push_leaf_empty();
+        }
+        b.push_leaf_full();
+      } else {
+        for _ in h..target_h {
+          b.push_node_empty();
+        }
+        if dd == 0 { b.push_node_full() } else { b.push_node_partial() };
+      }
+      h = target_h << 2;
+    }
+    d = curr_d;
+    h = curr_h;
+    // middle, go up and down
+    let mut i = 1_usize;
+    while i < n {
+      let (curr_d, curr_h) = self.get_depth_icell(self.entries[i]);
+      // go up (if needed)!
+      let (mut dd, mut target_h) = if d > curr_d { // case previous hash deeper that current hash
+        let dd =  d - curr_d;
+        (dd,  curr_h << (dd << 1))
+      } else { // case current hash deeper that previous hash, need to go up?
+        let dd = curr_d - d;
+        (dd,  curr_h >> (dd << 1))
+      };
+      dd = ((63 - (h ^ target_h).leading_zeros()) >> 1) as u8;
+      if dd > d {
+        dd = d;
+      }
+      // - go up to common depth
+      if dd > 0 && d == dm {
+        for _ in h & 3..3 { // <=> (h + 1) & 3 < 4
+          b.push_leaf_empty();
+        }
+        h >>= 2;
+        dd -= 1;
+        d -= 1;
+      }
+      for _ in 0..dd {
+        for _ in h & 3..3 { // <=> (h + 1) & 3 < 4
+          b.push_node_empty();
+        }
+        h >>= 2;
+      }
+      d -= dd;
+      h += 1;
+      // - go down
+      let dd = curr_d - d;
+      for rdd in (0..=dd).rev() {
+        let target_h = curr_h >> (rdd << 1);
+        if curr_d == dm && rdd == 0 {
+          for _ in h..target_h {
+            b.push_leaf_empty();
+          }
+          b.push_leaf_full();
+        } else {
+          for _ in h..target_h {
+            b.push_node_empty();
+          }
+          if rdd == 0 { b.push_node_full() } else { b.push_node_partial() };
+        }
+        h = target_h << 2;
+      }
+      d = curr_d;
+      h = curr_h;
+      i += 1;
+    }
+    // - go up to depth 0
+    if d == dm {
+      for _ in h & 3..3 {
+        b.push_leaf_empty();
+      }
+      h >>= 2;
+      d -= 1;
+    }
+    for _ in 0..d {
+      for _ in h & 3..3 {
+        b.push_node_empty();
+      }
+      h >>= 2;
+    }
+    // - complete till base cell 11
+    if dm == 0 {
+      for _ in h + 1..12 {
+        b.push_leaf_empty();
+      }
+    } else {
+      for _ in h + 1..12 {
+        b.push_node_empty();
+      }
+    }
+    b.to_compressed_moc()
+  }
 }
+
 
 #[inline]
 fn consume_while_overlapped(low_resolution: &Cell, iter: &mut BMOCIter) -> Option<Cell> {
@@ -1341,4 +1505,226 @@ fn go_down(start_depth: &mut u8, start_hash: &mut u64,
   }
   *start_depth = target_depth;
   *start_hash  = target_hash;
+}
+
+pub struct CompressedMOCBuilder {
+  moc: Vec<u8>,
+  depth_max: u8,
+  ibyte: usize,
+  ibit: u8,
+}
+
+impl CompressedMOCBuilder {
+  
+  /// Capacity = number of bytes.
+  fn new(depth_max: u8, capacity: usize) -> CompressedMOCBuilder {
+    let mut moc = vec![0_u8; capacity + 1];
+    moc[0] = depth_max;
+    CompressedMOCBuilder {
+      moc,
+      depth_max,
+      ibyte: 1,
+      ibit: 0,
+    }
+  }
+
+  fn to_compressed_moc(mut self) -> CompressedMOC {
+    self.moc.resize(if self.ibit == 0 { self.ibyte } else { self.ibyte + 1 } , 0);
+    CompressedMOC {
+      moc: self.moc.into_boxed_slice(),
+      depth_max: self.depth_max,
+    }
+  }
+
+  fn push_0(&mut self) {
+    self.ibyte += (self.ibit == 7) as usize;
+    self.ibit += 1;
+    self.ibit &= 7;
+  }
+  fn push_1(&mut self) {
+    self.moc[self.ibyte] |= 1_u8 << self.ibit;
+    self.push_0();
+  }
+  fn push_node_empty(&mut self) {
+    self.push_1();
+    self.push_0();
+  }
+  fn push_node_full(&mut self) {
+    self.push_1();
+    self.push_1();
+  }
+  fn push_node_partial(&mut self) {
+    self.push_0();
+  }
+  fn push_leaf_empty(&mut self) {
+    self.push_0();
+  }
+  fn push_leaf_full(&mut self) {
+    self.push_1();
+  }
+}
+
+pub struct CompressedMOCDecompHelper<'a> {
+  moc: &'a [u8],
+  ibyte: usize,
+  ibit: u8,
+}
+
+impl<'a> CompressedMOCDecompHelper<'a> {
+
+  fn new(moc: &'a [u8]) ->  CompressedMOCDecompHelper<'a> {
+    CompressedMOCDecompHelper {
+      moc,
+      ibyte: 1,
+      ibit: 0,
+    }
+  }
+  
+  fn get(&mut self) -> bool {
+    let r = self.moc[self.ibyte] & (1_u8 << self.ibit) != 0;
+    self.ibyte += (self.ibit == 7) as usize;
+    self.ibit += 1;
+    self.ibit &= 7;
+    r
+  }
+
+}
+
+/// First elements contains the maximum depth
+pub struct CompressedMOC {
+  moc: Box<[u8]>,
+  depth_max: u8,
+}
+
+impl CompressedMOC {
+
+  pub fn depth(&self) -> u8 {
+    self.depth_max
+  }
+  
+  pub fn byte_size(&self) -> usize {
+    self.moc.len()
+  }
+  
+  pub fn to_b64(&self) -> String {
+    encode(&self.moc)
+  }
+
+  pub fn from_b64(b64_encoded: String) -> Result<CompressedMOC, DecodeError> {
+    let decoded = decode(&b64_encoded)?;
+    let depth_max = decoded[0];
+    Ok(
+      CompressedMOC {
+        moc: decoded.into_boxed_slice(),
+        depth_max,
+      }
+    )
+  }
+
+  pub fn self_decompress(&self) -> BMOC {
+    CompressedMOC::decompress(&self.moc)
+  }
+  
+  // TODO: create an iterator (to iterate on cells while decompressing)
+  pub fn decompress(cmoc: &[u8]) -> BMOC {
+    let depth_max = cmoc[0];
+    let mut moc_builder = BMOCBuilderUnsafe::new(depth_max, 8 * (cmoc.len() - 1));
+    let mut bits = CompressedMOCDecompHelper::new(cmoc);
+    let mut depth = 0_u8;
+    let mut hash = 0_u64;
+    while depth != 0 || hash != 12 {
+      if bits.get() { // bit = 1
+        if depth == depth_max || bits.get() {
+          moc_builder.push(depth, hash, true);
+        }
+        // go up if needed
+        while hash & 3 == 3 && depth > 0 {
+          hash >>= 2;
+          depth -= 1;
+        }
+        // take next hash
+        hash += 1;
+      } else { // bit = 0
+        if depth == depth_max {
+          // go up if needed
+          while hash & 3 == 3 && depth > 0 {
+            hash >>= 2;
+            depth -= 1;
+          }
+          // take next hash
+          hash += 1;
+        } else {
+          // go down of 1 level
+          hash <<= 2;
+          depth += 1;
+          debug_assert!(depth < depth_max);
+        }
+      }
+    }
+    moc_builder.to_bmoc()
+  }
+
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn build_compressed_moc_empty(depth: u8) -> CompressedMOC {
+    let mut builder = BMOCBuilderFixedDepth::new(depth, true);
+    builder.to_bmoc().unwrap().compress_lossy()
+  }
+  
+  fn build_compressed_moc_full(depth: u8) -> CompressedMOC {
+    let mut builder = BMOCBuilderFixedDepth::new(depth, true);
+    for icell in 0..12 * (1 << (depth << 1)) {
+      builder.push(icell)
+    }
+    let bmoc = builder.to_bmoc().unwrap();
+    eprintln!("Entries: {}", bmoc.entries.len());
+    bmoc.compress_lossy()
+  }
+  
+  #[test]
+  fn testok_compressed_moc_empty_d0() {
+    let compressed = build_compressed_moc_empty(0);
+    assert_eq!(compressed.byte_size(), 1 + 2);
+    assert_eq!(compressed.moc, vec![0_u8, 0_u8, 0_u8].into_boxed_slice());
+    let b64 = compressed.to_b64();
+    assert_eq!(b64, "AAAA");
+    assert_eq!(CompressedMOC::decompress(&compressed.moc).compress_lossy().to_b64(), b64);
+  }
+
+  #[test]
+  fn testok_compressed_moc_empty_d1() {
+    let compressed = build_compressed_moc_empty(1);
+    assert_eq!(compressed.byte_size(), 1 + 24 / 8);
+    assert_eq!(compressed.moc, vec![1_u8, 85_u8, 85_u8, 85_u8].into_boxed_slice());
+    let b64 = compressed.to_b64();
+    assert_eq!(b64, "AVVVVQ==");
+    assert_eq!(CompressedMOC::decompress(&compressed.moc).compress_lossy().to_b64(), b64);
+  }
+  
+  #[test]
+  fn testok_compressed_moc_full_d0() {
+    let compressed = build_compressed_moc_full(0);
+    assert_eq!(compressed.byte_size(), 1 + 2);
+    assert_eq!(compressed.moc, vec![0_u8, 255_u8, 15_u8].into_boxed_slice());
+    // eprintln!("{}", compressed.to_b64());
+    let b64 = compressed.to_b64();
+    assert_eq!(b64, "AP8P");
+    assert_eq!(CompressedMOC::decompress(&compressed.moc).compress_lossy().to_b64(), b64);
+  }
+
+
+  #[test]
+  fn testok_compressed_moc_full_d1() {
+    let compressed = build_compressed_moc_full(1);
+    assert_eq!(compressed.byte_size(), 1 + 24 / 8);
+    eprintln!("{:?}", compressed.moc);
+    eprintln!("{}", compressed.to_b64());
+    let b64 = compressed.to_b64();
+    assert_eq!(b64, "Af///w==");
+    assert_eq!(CompressedMOC::decompress(&compressed.moc).compress_lossy().to_b64(), b64);
+  }
 }

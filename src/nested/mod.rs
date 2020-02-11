@@ -387,6 +387,15 @@ impl Layer {
     self.hash_v2(lon, lat)
   }
 
+  /* The clean way to do, but changes the API...
+  pub fn hash(&self, lon: f64, lat: f64) -> Result<u64, Error> {
+    check lon, lat
+    hash_uncheked(lon, lat)
+  }
+  pub fn hash_uncheked(&self, lon: f64, lat: f64) -> u64 {
+    ...
+  }*/
+  
   pub fn hash_v1(&self, lon: f64, lat: f64) -> u64 {
     let mut xy = proj(lon, lat);
     xy.0 = ensures_x_is_positive(xy.0);
@@ -398,6 +407,8 @@ impl Layer {
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
 
+  
+  
   pub fn hash_v2(&self, lon: f64, lat: f64) -> u64 {
     check_lat(lat);
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
@@ -1482,7 +1493,7 @@ impl Layer {
       let mut tmp = x & lim;  debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == x));
       k0 += (tmp >> 1) as usize;
       k1 += tmp as usize;
-      tmp -= x;           debug_assert!((x < lim && tmp <  0) || (x == lim && tmp == 0));
+      tmp -= x;           debug_assert!((x < lim            ) || (x == lim && tmp == 0));
       tmp = 1 >> tmp;     debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == 1));
       lim <<= tmp;
     }
@@ -2289,7 +2300,7 @@ impl Layer {
     } else if ellipse.contains(lon, lat) || ellipse.overlap_cone(lon, lat, distance) {
       if depth == self.depth {
         let mut is_full = true;
-        for (lon, lat) in self.vertices(hash).into_iter() {
+        for (lon, lat) in self.vertices(hash).iter() {
           is_full &= ellipse.contains(*lon, *lat); // Not sure computation not done if is_full==false, to be verfied
         }
         bmoc_builder.push(depth, hash, is_full);
@@ -3828,4 +3839,13 @@ mod tests {
       }
     }
   }
+
+  #[test]
+  fn test_xpm1_and_q () {
+    let a = Layer::d0h_lh_in_d0c(std::f64::NAN, 0.0);
+    eprintln!("{:?}", &a);
+    let a = Layer::d0h_lh_in_d0c(std::f64::INFINITY, 0.0);
+    eprintln!("{:?}", &a);
+  }
+
 }

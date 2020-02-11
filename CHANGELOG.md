@@ -2,7 +2,7 @@
 
 ## 0.4.1
 
-Released 2019-11-14.
+Released 2020-02-11.
 
 ### Changed
 
@@ -12,6 +12,7 @@ Released 2019-11-14.
 
 * `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle 
   uniq hash notation (i.e. uniq value for all possible (depth, hash) tuples).
+* Add MOC compression/decompression
 
 --------------------------------------------------------------------------------
 

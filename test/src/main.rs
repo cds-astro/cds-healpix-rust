@@ -85,6 +85,46 @@ fn test_sdss_build_from_ordered_input() {
   assert!(sdss.equals(&sdss2));
 }
 
+fn test_compress_glimpse() {
+  let glimpse = load_glimpse().unwrap().to_bmoc();
+  let now = Instant::now();
+  let compressed = glimpse.compress_lossy();
+  println!("GLIMPSE moc compression done in {} ms. Out size: {} bytes",
+           now.elapsed().as_millis(), compressed.byte_size());
+  let now = Instant::now();
+  let b64 = compressed.to_b64();
+  println!("GLIMPSE b64 done in {} ms. Out size: {} characters",
+           now.elapsed().as_millis(), b64.len());
+  let now = Instant::now();
+  let decompressed = compressed.self_decompress();
+  println!("GLIMPSE decompression done in {} ms. Out moc size: {} cells",
+           now.elapsed().as_millis(), decompressed.size());
+
+  assert_eq!(decompressed.compress_lossy().to_b64(), b64);
+  
+  println!("b64 MOC: {}", b64);
+}
+
+fn test_compress_sdss() {
+  let sdss = load_sdss().unwrap().to_bmoc();
+  let now = Instant::now();
+  let compressed = sdss.compress_lossy();
+  println!("SDSS moc compression done in {} ms. Out size: {} bytes",
+           now.elapsed().as_millis(), compressed.byte_size());
+  let now = Instant::now();
+  let b64 = compressed.to_b64();
+  println!("SDSS b64 done in {} ms. Out size: {} characters",
+           now.elapsed().as_millis(), b64.len());
+  let now = Instant::now();
+  let decompressed = compressed.self_decompress();
+  println!("SDSS decompression done in {} ms. Out moc size: {} cells",
+           now.elapsed().as_millis(), decompressed.size());
+
+  assert_eq!(decompressed.compress_lossy().to_b64(), b64);
+
+  // println!("b64 MOC: {}", b64);
+
+}
 
 pub fn main() {
   test_sdss_not();
@@ -93,4 +133,8 @@ pub fn main() {
   test_or();
   test_xor();
   test_sdss_build_from_ordered_input();
+
+  test_compress_sdss();
+  test_compress_glimpse();
+
 }

@@ -4,6 +4,7 @@
 /libwasm/
 /libpsql/
 /libpsql10/
+/libpsql_test/
 /test/target/
 /resources/gnuplot
 
