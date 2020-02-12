@@ -6,13 +6,23 @@ Released 2020-02-11.
 
 ### Changed
 
-* Transform methods in `const`, add `dyn` for trait objects. 
-
+* Transform methods in `const`, add `dyn` for trait objects.
+* Add an enum implementing the `ZOrderCurve` trait to allow...
+* ... the usage of a `const fn` to compute `Layers` structs at compile time.
+* Replace a few constants by the ones defined in the Rust standard library
+ 
 ### Added
 
 * `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle 
   uniq hash notation (i.e. uniq value for all possible (depth, hash) tuples).
 * Add MOC compression/decompression
+
+
+### Bug correction
+
+* Fix `polygon_coverage` bug due to a bug in `great_circle_arcs_are_overlapping_in_lon`
+  when a great circle crosses the RA=0 meridian.
+
 
 --------------------------------------------------------------------------------
 

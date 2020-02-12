@@ -1,28 +1,26 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main, BenchmarkId};
 use rand::Rng;
 
-use std::f64::consts::PI;
+use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 
 use cdshealpix::{
-  HALF_PI,
   TWICE_PI,
   TRANSITION_LATITUDE, 
   ONE_OVER_TRANSITION_Z, 
   SQRT6, 
-  PI_OVER_FOUR, 
   FOUR_OVER_PI,
   F64_SIGN_BIT_MASK,
   F64_BUT_SIGN_BIT_MASK
 };
 use cdshealpix::nested::{self, get_or_create};
-use cdshealpix::nested::zordercurve::{ZOrderCurve, get_zoc};
+use cdshealpix::nested::zordercurve::{ZOC, ZOrderCurve, get_zoc};
 
 pub fn hash_v1(depth: u8, lon: f64, lat: f64) -> u64 {
-  get_or_create(depth).hash_v1(lon, lat)
+  get_or_create(depth).hash(lon, lat)
 }
 
 pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {
-  /*let nside = (1u32 << depth);
+  let nside = (1u32 << depth);
   let nside_minus_1 = nside - 1;
   let time_half_nside = ((depth - 1) as i64) << 52; // WARNING DO NOT WORK WITH depth=0
   
@@ -34,8 +32,8 @@ pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {
   //  - deals with numerical inaccuracies, rare so branch miss-prediction negligible
   let i = if i == nside { nside_minus_1 } else { i };
   let j = if j == nside { nside_minus_1 } else { j };
-  build_hash_from_parts(depth, d0h, i, j)*/
-  get_or_create(depth).hash_v2(lon, lat)
+  build_hash_from_parts(depth, d0h, i, j)
+  // get_or_create(depth).hash_v2(lon, lat)
 }
 
 pub fn hash_v3(depth: u8, lon: f64, lat: f64) -> u64 {
@@ -61,7 +59,8 @@ fn build_hash_from_parts(depth: u8, d0h: u8, i: u32, j: u32) -> u64 {
 
 #[inline]
 fn build_hash(depth: u8, d0h_bits: u64, i: u32, j: u32) -> u64 {
-  d0h_bits | get_zoc(depth).ij2h(i, j)
+  // d0h_bits | get_zoc(depth).ij2h(i, j)
+  d0h_bits | ZOC::LARGE.ij2h(i, j)
 }
 
 fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
@@ -69,14 +68,14 @@ fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
   if lat > TRANSITION_LATITUDE {
     // North polar cap, Collignon projection.
     // - set the origin to (PI/4, 0)
-    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 + PI_OVER_FOUR).cos();
+    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 + FRAC_PI_4).cos();
     let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, 2.0 - sqrt_3_one_min_z);
     let d0h = q;
     (d0h, x_proj, y_proj)
   } else if lat < -TRANSITION_LATITUDE {
     // South polar cap, Collignon projection
     // - set the origin to (PI/4, -PI/2)
-    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 - PI_OVER_FOUR).cos(); // cos(-x) = cos(x)
+    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 - FRAC_PI_4).cos(); // cos(-x) = cos(x)
     let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, sqrt_3_one_min_z);
     let d0h = q + 8;
     (d0h, x_proj, y_proj)
@@ -113,14 +112,14 @@ fn d0h_lh_in_d0c_v2(lon: f64, lat: f64) -> (u8, f64, f64) {
   if lat > TRANSITION_LATITUDE {
     // North polar cap, Collignon projection.
     // - set the origin to (PI/4, 0)
-    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 + PI_OVER_FOUR).cos();
+    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 + FRAC_PI_4).cos();
     let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, 2.0 - sqrt_3_one_min_z);
     let d0h = q;
     (d0h, x_proj, y_proj)
   } else if lat < -TRANSITION_LATITUDE {
     // South polar cap, Collignon projection
     // - set the origin to (PI/4, -PI/2)
-    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 - PI_OVER_FOUR).cos(); // cos(-x) = cos(x)
+    let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 - FRAC_PI_4).cos(); // cos(-x) = cos(x)
     let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, sqrt_3_one_min_z);
     let d0h = q + 8;
     (d0h, x_proj, y_proj)
@@ -179,7 +178,7 @@ fn gen_rand_lonlat(n: usize) -> Vec<(f64, f64)> {
   // let v: Vec<f64, f64> = Vec::with_capacity(n);
   let mut rng = rand::thread_rng();
   (0..n).into_iter()
-    .map(|_| (rng.gen::<f64>() * TWICE_PI, rng.gen::<f64>() * PI - HALF_PI))
+    .map(|_| (rng.gen::<f64>() * TWICE_PI, rng.gen::<f64>() * PI - FRAC_PI_2))
     .collect()
 }
 

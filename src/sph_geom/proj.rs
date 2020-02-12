@@ -1,4 +1,5 @@
-use super::super::HALF_PI;
+use std::f64::consts::FRAC_PI_2;
+
 use super::super::TWICE_PI;
 use super::super::Customf64;
 
@@ -34,7 +35,7 @@ pub trait Proj: Default {
 /// Normalize the given longitude and latitude so that their values are in `[0, 2pi]` and  `[-pi/2, pi/2]`.
 /// WARNING: the normalization (without a priori) is time consuming and should be avoided as much as possible
 fn normalize_lonlat(lon: &mut f64, lat: &mut f64) {
-  if *lon < 0.0 || TWICE_PI <= *lon || *lat < -HALF_PI || HALF_PI < *lat {
+  if *lon < 0.0 || TWICE_PI <= *lon || *lat < -FRAC_PI_2 || FRAC_PI_2 < *lat {
     let (sin_l, cos_l) = (*lon).sin_cos();
     let (sin_b, cos_b) = (*lat).sin_cos();
     let x = cos_b * cos_l;
@@ -106,7 +107,7 @@ impl Proj for ProjSIN {
     // I put assert tests here because the normalization is time consuming and I would like to
     // avoid it as much as possible
 //    debug_assert!(0.0 <= lon && lon < TWICE_PI);
-//    debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
+//    debug_assert!(-FRAC_PI_2 <= lat && lat < FRAC_PI_2);
     self.center_lon = lon;
     self.center_lat = lat;
     normalize_lonlat(&mut self.center_lon, &mut self.center_lat);

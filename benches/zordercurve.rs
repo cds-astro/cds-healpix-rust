@@ -2,7 +2,6 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main, Benchmark
 
 use cdshealpix::nested::zordercurve::{ZOrderCurve};
 
-
 use cdshealpix::nested::zordercurve::LARGE_ZOC_LUT;
 fn bench_morton_lupt(n: u32) -> u64 {
   let mut t = 0u64;
@@ -13,7 +12,6 @@ fn bench_morton_lupt(n: u32) -> u64 {
   }
   t
 }
-
 
 use cdshealpix::nested::zordercurve::LARGE_ZOC_XOR;
 fn bench_morton_xor(n: u32) -> u64 {

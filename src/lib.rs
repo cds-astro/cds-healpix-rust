@@ -14,7 +14,7 @@
 // extern crate test;
 
 use std::sync::Once;
-use std::f64::consts::{PI};
+use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 
 /// Constant = sqrt(6).
 /// 
@@ -28,15 +28,6 @@ const HALF: f64 = 0.5_f64;
 
 /// Upper limit on sqrt(3(1-|z|)) to consider that we are not near from the poles
 const EPS_POLE: f64 = 1e-13_f64;
-
-/// Constant = pi/2.
-/// 
-/// ```rust
-/// use cdshealpix::{HALF_PI};
-/// use std::f64::consts::PI;
-/// assert_eq!(PI / 2f64, HALF_PI);
-/// ```
-pub const HALF_PI: f64 = HALF * PI;
 
 /// Constant = pi/2.
 /// 
@@ -55,15 +46,6 @@ pub const TWICE_PI: f64 = 2.0 * PI;
 /// assert_eq!(4f64 / PI, FOUR_OVER_PI);
 /// ```
 pub const FOUR_OVER_PI: f64 = 4_f64 / PI;
-
-/// Constant = pi/4.
-/// 
-/// ```rust
-/// use cdshealpix::{PI_OVER_FOUR};
-/// use std::f64::consts::PI;
-/// assert_eq!(PI / 4f64, PI_OVER_FOUR);
-/// ```
-pub const PI_OVER_FOUR: f64 = 0.25_f64 * PI;
 
 /// Constant = 29, i.e. the largest possible depth we can store on a signed positive long
 /// (4 bits for base cells + 2 bits per depth + 2 remaining bits (1 use in the unique notation).
@@ -275,10 +257,10 @@ impl ConstantsC2V {
     let mut d_min = lat_north - TRANSITION_LATITUDE;
     let mut d_max: f64 = sphe_dist(
       squared_half_segment(
-        PI_OVER_FOUR * dist_cw, d_min,
+        FRAC_PI_4 * dist_cw, d_min,
         lat_north.cos(),  TRANSITION_LATITUDE.cos()));
     // - linear approx
-    let slope_npc: f64 = (d_max - d_min) / (PI_OVER_FOUR * one_min_dist_cw); // a = (yB - yA) / (xB - xA); with xA = 0
+    let slope_npc: f64 = (d_max - d_min) / (FRAC_PI_4 * one_min_dist_cw); // a = (yB - yA) / (xB - xA); with xA = 0
     let intercept_npc: f64 = d_min;                                          // b = yA - a * xA          ; with xA = 0
     // EQR TOP, see comment of function largest_c2v_dist_in_eqr_top()
     d_min =  FOUR_OVER_PI * dist_cw * COS_LAT_OF_SQUARE_CELL;
@@ -408,7 +390,7 @@ impl Customf64 for f64 {
 pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
   // Specific case for depth 0
   if depth == 0 {
-    return HALF_PI - TRANSITION_LATITUDE;
+    return FRAC_PI_2 - TRANSITION_LATITUDE;
   }
   // Regular case
   let lat_abs = lat.abs();
@@ -433,7 +415,7 @@ pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
 pub fn largest_center_to_vertex_distance_with_radius(depth: u8, lon: f64, lat: f64, radius: f64) -> f64 {
   // Specific case for depth 0
   if depth == 0 {
-    return HALF_PI - TRANSITION_LATITUDE;
+    return FRAC_PI_2 - TRANSITION_LATITUDE;
   }
   // Regular case
   let lat_abs = lat.abs();
@@ -460,7 +442,7 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
   let mut vec: Vec<f64> = Vec::with_capacity((to_depth - from_depth) as usize);
   // Specific case for depth 0
   if from_depth == 0 {
-    vec.push(HALF_PI - TRANSITION_LATITUDE);
+    vec.push(FRAC_PI_2 - TRANSITION_LATITUDE);
     from_depth = 1_u8;
   }
   // Regular case
@@ -468,8 +450,8 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
   let lat_max = lat_abs + radius;
   let lat_min = lat_abs - radius;
   if lat_max >= TRANSITION_LATITUDE {
-    let mut lon = (PI_OVER_FOUR - (lon % HALF_PI)).abs();
-    lon = f64::min(lon + radius, PI_OVER_FOUR);
+    let mut lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
+    lon = f64::min(lon + radius, FRAC_PI_4);
     for depth in from_depth..to_depth {
       let csts = get_or_create(depth);
       vec.push(linear_approx(lon, csts.slope_npc, csts.intercept_npc));
@@ -516,17 +498,17 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
 /// > d = ((lon % pi/2) - pi/4) * (dMax - dMin)/(pi/4 * (1 - 1/nside)) + dMin
 #[inline]
 fn largest_c2v_dist_in_npc(lon: f64, csts: &ConstantsC2V) -> f64 {
-  let lon = (PI_OVER_FOUR - (lon % HALF_PI)).abs();
-  debug_assert!(0_f64 <= lon && lon <= PI_OVER_FOUR);
+  let lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
+  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
 /// Same as the above method, but taking into account an additional radius
 #[inline]
 fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
   debug_assert!(0_f64 < radius);
-  let mut lon = (PI_OVER_FOUR - (lon % HALF_PI)).abs();
-  debug_assert!(0_f64 <= lon && lon <= PI_OVER_FOUR);
-  lon = f64::min(lon + radius, PI_OVER_FOUR);
+  let mut lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
+  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
+  lon = f64::min(lon + radius, FRAC_PI_4);
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
 
@@ -1027,8 +1009,8 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// # Examples
 /// To obtain the WCS projection (see Calabretta2007), you can write:
 /// ```rust
-/// use cdshealpix::{HALF_PI, PI_OVER_FOUR, proj};
-/// use std::f64::consts::{PI};
+/// use cdshealpix::proj;
+/// use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 ///
 /// let lon = 25.1f64;
 /// let lat = 46.7f64;
@@ -1037,67 +1019,68 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// if x > 4f64 {
 ///   x -= 8f64;
 /// }
-/// x *= PI_OVER_FOUR;
-/// y *= PI_OVER_FOUR;
+/// x *= FRAC_PI_4;
+/// y *= FRAC_PI_4;
 ///
 /// assert!(-PI <= x && x <= PI);
-/// assert!(-HALF_PI <= y && y <= HALF_PI);
+/// assert!(-FRAC_PI_2 <= y && y <= FRAC_PI_2);
 /// ```
 ///
 /// Other test example:
 /// ```rust
-/// use cdshealpix::{TRANSITION_LATITUDE, HALF_PI, PI_OVER_FOUR, proj};
-///
+/// use cdshealpix::{TRANSITION_LATITUDE, proj};
+/// use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
+/// 
 /// let (x, y) = proj(0.0, 0.0);
 /// assert_eq!(0f64, x);
 /// assert_eq!(0f64, y);
 ///
-/// assert_eq!((0.0, 1.0), proj(0.0 * HALF_PI, TRANSITION_LATITUDE));
+/// assert_eq!((0.0, 1.0), proj(0.0 * FRAC_PI_2, TRANSITION_LATITUDE));
 ///
 /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
 ///     f64::sqrt((p2.0 - p1.0) * (p2.0 - p1.0) + (p2.1 - p1.1) * (p2.1 - p1.1))
 /// }
-/// assert!(dist((0.0, 0.0), proj(0.0 * HALF_PI, 0.0)) < 1e-15);
-/// assert!(dist((0.0, 1.0), proj(0.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((1.0, 2.0), proj(0.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((2.0, 1.0), proj(1.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((3.0, 2.0), proj(1.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((4.0, 1.0), proj(2.0 * HALF_PI , TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((5.0, 2.0), proj(2.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((6.0, 1.0), proj(3.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((7.0, 2.0), proj(3.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((0.0, 1.0), proj(4.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((0.0, 0.0), proj(4.0 * HALF_PI, 0.0)) < 1e-15);
-/// assert!(dist((0.0, -1.0), proj(0.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((1.0, -2.0), proj(0.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((2.0, -1.0), proj(1.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((3.0, -2.0), proj(1.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((4.0, -1.0), proj(2.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((5.0, -2.0), proj(2.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((6.0, -1.0), proj(3.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((7.0, -2.0), proj(3.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((0.0, -1.0), proj(4.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((0.0, 0.0), proj(0.0 * FRAC_PI_2, 0.0)) < 1e-15);
+/// assert!(dist((0.0, 1.0), proj(0.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((1.0, 2.0), proj(0.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((2.0, 1.0), proj(1.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((3.0, 2.0), proj(1.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((4.0, 1.0), proj(2.0 * FRAC_PI_2 , TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((5.0, 2.0), proj(2.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((6.0, 1.0), proj(3.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((7.0, 2.0), proj(3.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((0.0, 1.0), proj(4.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((0.0, 0.0), proj(4.0 * FRAC_PI_2, 0.0)) < 1e-15);
+/// assert!(dist((0.0, -1.0), proj(0.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((1.0, -2.0), proj(0.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((2.0, -1.0), proj(1.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((3.0, -2.0), proj(1.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((4.0, -1.0), proj(2.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((5.0, -2.0), proj(2.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((6.0, -1.0), proj(3.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((7.0, -2.0), proj(3.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((0.0, -1.0), proj(4.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
 ///
-/// assert!(dist((-0.0, 0.0), proj(-0.0 * HALF_PI, 0.0)) < 1e-15);
-/// assert!(dist((-0.0, 1.0), proj(-0.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-1.0, 2.0), proj(-0.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((-2.0, 1.0), proj(-1.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-3.0, 2.0), proj(-1.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((-4.0, 1.0), proj(-2.0 * HALF_PI , TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-5.0, 2.0), proj(-2.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((-6.0, 1.0), proj(-3.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-7.0, 2.0), proj(-3.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-/// assert!(dist((-0.0, 1.0), proj(-4.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-0.0, 0.0), proj(-4.0 * HALF_PI, 0.0)) < 1e-15);
-/// assert!(dist((-0.0, -1.0), proj(-0.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-1.0, -2.0), proj(-0.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((-2.0, -1.0), proj(-1.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-3.0, -2.0), proj(-1.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((-4.0, -1.0), proj(-2.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-5.0, -2.0), proj(-2.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((-6.0, -1.0), proj(-3.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-/// assert!(dist((-7.0, -2.0), proj(-3.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-/// assert!(dist((-0.0, -1.0), proj(-4.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-0.0, 0.0), proj(-0.0 * FRAC_PI_2, 0.0)) < 1e-15);
+/// assert!(dist((-0.0, 1.0), proj(-0.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-1.0, 2.0), proj(-0.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-2.0, 1.0), proj(-1.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-3.0, 2.0), proj(-1.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-4.0, 1.0), proj(-2.0 * FRAC_PI_2 , TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-5.0, 2.0), proj(-2.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-6.0, 1.0), proj(-3.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-7.0, 2.0), proj(-3.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-0.0, 1.0), proj(-4.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-0.0, 0.0), proj(-4.0 * FRAC_PI_2, 0.0)) < 1e-15);
+/// assert!(dist((-0.0, -1.0), proj(-0.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-1.0, -2.0), proj(-0.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-2.0, -1.0), proj(-1.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-3.0, -2.0), proj(-1.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-4.0, -1.0), proj(-2.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-5.0, -2.0), proj(-2.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-6.0, -1.0), proj(-3.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+/// assert!(dist((-7.0, -2.0), proj(-3.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+/// assert!(dist((-0.0, -1.0), proj(-4.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
 /// ```
 #[inline]
 pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
@@ -1185,8 +1168,8 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 /// # Examples
 /// To obtain the WCS un-projection (see Calabretta2007), you can write:
 /// ```rust
-/// use cdshealpix::{HALF_PI, FOUR_OVER_PI, unproj};
-/// use std::f64::consts::{PI};
+/// use cdshealpix::{FOUR_OVER_PI, unproj};
+/// use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 ///
 /// let x = 2.1f64;
 /// let y = 0.36f64;
@@ -1197,12 +1180,13 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 /// }
 ///
 /// assert!(0f64 <= lon && lon <= 2f64 * PI);
-/// assert!(-HALF_PI <= lat && lat <= HALF_PI);
+/// assert!(-FRAC_PI_2 <= lat && lat <= FRAC_PI_2);
 /// ```
 ///
 /// Other test example:
 /// ```rust
-/// use cdshealpix::{TRANSITION_LATITUDE, HALF_PI, PI_OVER_FOUR, proj, unproj};
+/// use cdshealpix::{TRANSITION_LATITUDE, proj, unproj};
+/// use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 ///
 /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
 ///     let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1211,46 +1195,46 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 /// }
 /// 
 /// let points: [(f64, f64); 40] = [
-///     (0.0 * HALF_PI, 0.0),
-///     (1.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (2.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (3.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (4.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (0.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (1.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (2.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (3.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (4.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (0.0 * HALF_PI, 0.0),
-///     (1.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (2.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (3.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (4.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (0.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (1.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (2.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (3.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (4.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (-0.0 * HALF_PI, 0.0),
-///     (-1.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (-2.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (-3.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (-4.0 * HALF_PI, TRANSITION_LATITUDE),
-///     (-0.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (-1.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (-2.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (-3.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (-4.0 * HALF_PI + PI_OVER_FOUR, HALF_PI),
-///     (-0.0 * HALF_PI, 0.0),
-///     (-1.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (-2.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (-3.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (-4.0 * HALF_PI, -TRANSITION_LATITUDE),
-///     (-0.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (-1.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (-2.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (-3.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI),
-///     (-4.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)
+///     (0.0 * FRAC_PI_2, 0.0),
+///     (1.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (2.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (3.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (4.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (0.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (1.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (2.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (3.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (4.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (0.0 * FRAC_PI_2, 0.0),
+///     (1.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (2.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (3.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (4.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (0.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (1.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (2.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (3.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (4.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (-0.0 * FRAC_PI_2, 0.0),
+///     (-1.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (-2.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (-3.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (-4.0 * FRAC_PI_2, TRANSITION_LATITUDE),
+///     (-0.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (-1.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (-2.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (-3.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (-4.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2),
+///     (-0.0 * FRAC_PI_2, 0.0),
+///     (-1.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (-2.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (-3.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (-4.0 * FRAC_PI_2, -TRANSITION_LATITUDE),
+///     (-0.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (-1.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (-2.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (-3.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
+///     (-4.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)
 /// ];
 /// 
 /// for (lon, lat) in points.iter() {
@@ -1271,7 +1255,7 @@ pub fn unproj(x: f64, y: f64) -> (f64, f64) {
         deproj_collignon(&mut lonlat);
     }
     apply_offset_and_signs(&mut lonlat, lon.offset, x.sign, y.sign);
-    lonlat.0 *= PI_OVER_FOUR;
+    lonlat.0 *= FRAC_PI_4;
     lonlat
 }
 
@@ -1285,7 +1269,7 @@ pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
 fn check_lat(lat: f64) {
-    assert!(-HALF_PI <= lat && lat <= HALF_PI);
+    assert!(-FRAC_PI_2 <= lat && lat <= FRAC_PI_2);
 }
 
 /// Verify that the projected y coordinate is in [-2, 2], panics if not.
@@ -1352,7 +1336,7 @@ fn deproj_cea(lonlat: &mut (f64, f64)) {
 #[inline]
 pub(crate) fn proj_collignon(xy: &mut (f64, f64)) {
     let (ref mut x, ref mut y) = *xy;
-    *y = SQRT6 * f64::cos(HALF * *y + PI_OVER_FOUR);
+    *y = SQRT6 * f64::cos(HALF * *y + FRAC_PI_4);
     *x *= *y;
     *y = 2.0 - *y;
 }
@@ -1366,7 +1350,7 @@ fn deproj_collignon(lonlat: &mut (f64, f64)) {
     } // in case of pole, lon = lat = 0 (we avoid NaN due to division by lat=0)
     *lat *= ONE_OVER_SQRT6;
     // Using acos is OK here since lat < 1/sqrt(6), so not near from 1.
-    *lat = 2.0 * f64::acos(*lat) - HALF_PI;
+    *lat = 2.0 * f64::acos(*lat) - FRAC_PI_2;
 }
 
 #[inline]
@@ -1693,47 +1677,47 @@ mod tests {
     }
     // println!("{:?}", proj(0.0, TRANSITION_LATITUDE));
     // println!("{}", dist((0.0, 1.0), proj(0.0, TRANSITION_LATITUDE)));
-    assert!(dist((0.0, 0.0), proj(0.0 * HALF_PI, 0.0)) < 1e-15);
-    assert!(dist((0.0, 1.0), proj(0.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((1.0, 2.0), proj(0.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((2.0, 1.0), proj(1.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((3.0, 2.0), proj(1.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((4.0, 1.0), proj(2.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((5.0, 2.0), proj(2.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((6.0, 1.0), proj(3.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((7.0, 2.0), proj(3.0 * HALF_PI + PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((0.0, 1.0), proj(4.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((0.0, 0.0), proj(4.0 * HALF_PI, 0.0)) < 1e-15);
-    assert!(dist((0.0, -1.0), proj(0.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((1.0, -2.0), proj(0.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((2.0, -1.0), proj(1.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((3.0, -2.0), proj(1.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((4.0, -1.0), proj(2.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((5.0, -2.0), proj(2.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((6.0, -1.0), proj(3.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((7.0, -2.0), proj(3.0 * HALF_PI + PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((0.0, -1.0), proj(4.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((0.0, 0.0), proj(0.0 * FRAC_PI_2, 0.0)) < 1e-15);
+    assert!(dist((0.0, 1.0), proj(0.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((1.0, 2.0), proj(0.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((2.0, 1.0), proj(1.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((3.0, 2.0), proj(1.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((4.0, 1.0), proj(2.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((5.0, 2.0), proj(2.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((6.0, 1.0), proj(3.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((7.0, 2.0), proj(3.0 * FRAC_PI_2 + FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((0.0, 1.0), proj(4.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((0.0, 0.0), proj(4.0 * FRAC_PI_2, 0.0)) < 1e-15);
+    assert!(dist((0.0, -1.0), proj(0.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((1.0, -2.0), proj(0.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((2.0, -1.0), proj(1.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((3.0, -2.0), proj(1.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((4.0, -1.0), proj(2.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((5.0, -2.0), proj(2.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((6.0, -1.0), proj(3.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((7.0, -2.0), proj(3.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((0.0, -1.0), proj(4.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
 
-    assert!(dist((-0.0, 0.0), proj(-0.0 * HALF_PI, 0.0)) < 1e-15);
-    assert!(dist((-0.0, 1.0), proj(-0.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-1.0, 2.0), proj(-0.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((-2.0, 1.0), proj(-1.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-3.0, 2.0), proj(-1.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((-4.0, 1.0), proj(-2.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-5.0, 2.0), proj(-2.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((-6.0, 1.0), proj(-3.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-7.0, 2.0), proj(-3.0 * HALF_PI - PI_OVER_FOUR, HALF_PI)) < 1e-15);
-    assert!(dist((-0.0, 1.0), proj(-4.0 * HALF_PI, TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-0.0, 0.0), proj(-4.0 * HALF_PI, 0.0)) < 1e-15);
-    assert!(dist((-0.0, -1.0), proj(-0.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-1.0, -2.0), proj(-0.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((-2.0, -1.0), proj(-1.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-3.0, -2.0), proj(-1.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((-4.0, -1.0), proj(-2.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-5.0, -2.0), proj(-2.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((-6.0, -1.0), proj(-3.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
-    assert!(dist((-7.0, -2.0), proj(-3.0 * HALF_PI - PI_OVER_FOUR, -HALF_PI)) < 1e-15);
-    assert!(dist((-0.0, -1.0), proj(-4.0 * HALF_PI, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-0.0, 0.0), proj(-0.0 * FRAC_PI_2, 0.0)) < 1e-15);
+    assert!(dist((-0.0, 1.0), proj(-0.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-1.0, 2.0), proj(-0.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((-2.0, 1.0), proj(-1.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-3.0, 2.0), proj(-1.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((-4.0, 1.0), proj(-2.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-5.0, 2.0), proj(-2.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((-6.0, 1.0), proj(-3.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-7.0, 2.0), proj(-3.0 * FRAC_PI_2 - FRAC_PI_4, FRAC_PI_2)) < 1e-15);
+    assert!(dist((-0.0, 1.0), proj(-4.0 * FRAC_PI_2, TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-0.0, 0.0), proj(-4.0 * FRAC_PI_2, 0.0)) < 1e-15);
+    assert!(dist((-0.0, -1.0), proj(-0.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-1.0, -2.0), proj(-0.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((-2.0, -1.0), proj(-1.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-3.0, -2.0), proj(-1.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((-4.0, -1.0), proj(-2.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-5.0, -2.0), proj(-2.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((-6.0, -1.0), proj(-3.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
+    assert!(dist((-7.0, -2.0), proj(-3.0 * FRAC_PI_2 - FRAC_PI_4, -FRAC_PI_2)) < 1e-15);
+    assert!(dist((-0.0, -1.0), proj(-4.0 * FRAC_PI_2, -TRANSITION_LATITUDE)) < 1e-15);
   }
 
   #[test]

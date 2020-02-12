@@ -1,10 +1,99 @@
 use std::sync::Once;
 use std::ops::Shr;
+use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 
 use super::compass_point::*;
 use super::external_edge::*;
 use super::*;
 
+pub mod zordercurve;
+
+use self::zordercurve::{ZOC, ZOrderCurve, get_zoc};
+
+// We use an array here since operations on f64 are not yet stable for `const fn` :o/
+// Run the following code on e.g. https://play.rust-lang.org/
+// fn main() {
+//   for d in 0..=29 {
+//     let nside = (1 as u32) << d;
+//     let time_nside = (d as u64) << 52;
+//     let one_over_nside_v1 = 1_f64 / nside as f64;
+//     let one_over_nside_v2 = f64::from_bits(1_f64.to_bits() - time_nside);
+//     assert_eq!(one_over_nside_v1, one_over_nside_v2);
+//     println!("  {},", one_over_nside_v2);
+//   }
+// }
+const ONE_OVER_NSIDE: [f64; 30] = [
+  1.0,
+  0.5,
+  0.25,
+  0.125,
+  0.0625,
+  0.03125,
+  0.015625,
+  0.0078125,
+  0.00390625,
+  0.001953125,
+  0.0009765625,
+  0.00048828125,
+  0.000244140625,
+  0.0001220703125,
+  0.00006103515625,
+  0.000030517578125,
+  0.0000152587890625,
+  0.00000762939453125,
+  0.000003814697265625,
+  0.0000019073486328125,
+  0.00000095367431640625,
+  0.000000476837158203125,
+  0.0000002384185791015625,
+  0.00000011920928955078125,
+  0.00000005960464477539063,
+  0.000000029802322387695313,
+  0.000000014901161193847656,
+  0.000000007450580596923828,
+  0.000000003725290298461914,
+  0.000000001862645149230957,
+];
+
+/// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
+const LAYERS: [Layer; 30] =  [
+  Layer::new(0, ZOC::EMPTY),
+  Layer::new(1, ZOC::SMALL),
+  Layer::new(2, ZOC::SMALL),
+  Layer::new(3, ZOC::SMALL),
+  Layer::new(4, ZOC::SMALL),
+  Layer::new(5, ZOC::SMALL),
+  Layer::new(6, ZOC::SMALL),
+  Layer::new(7, ZOC::SMALL),
+  Layer::new(8, ZOC::SMALL),
+  Layer::new(9, ZOC::MEDIUM),
+  Layer::new(10, ZOC::MEDIUM),
+  Layer::new(11, ZOC::MEDIUM),
+  Layer::new(12, ZOC::MEDIUM),
+  Layer::new(13, ZOC::MEDIUM),
+  Layer::new(14, ZOC::MEDIUM),
+  Layer::new(15, ZOC::MEDIUM),
+  Layer::new(16, ZOC::MEDIUM),
+  Layer::new(17, ZOC::LARGE),
+  Layer::new(18, ZOC::LARGE),
+  Layer::new(19, ZOC::LARGE),
+  Layer::new(20, ZOC::LARGE),
+  Layer::new(21, ZOC::LARGE),
+  Layer::new(22, ZOC::LARGE),
+  Layer::new(23, ZOC::LARGE),
+  Layer::new(24, ZOC::LARGE),
+  Layer::new(25, ZOC::LARGE),
+  Layer::new(26, ZOC::LARGE),
+  Layer::new(27, ZOC::LARGE),
+  Layer::new(28, ZOC::LARGE),
+  Layer::new(29, ZOC::LARGE)
+];
+
+pub fn get_or_create(depth: u8) -> &'static Layer {
+  &LAYERS[depth as usize]
+}
+
+/*
 /// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
 /// Info: Unfortunately Default::default(); do no work with static arrays :o/
 static mut LAYERS: [Option<Layer>; 30] =  [
@@ -47,6 +136,9 @@ pub fn get_or_create(depth: u8) -> &'static Layer {
     }
   }
 }
+*/
+
+// pub mod moc;
 
 pub const fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
   let twice_delta_depth = delta_depth << 1;
@@ -287,10 +379,8 @@ pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool
 
 
 pub mod bmoc;
-pub mod zordercurve;
 mod gpu;
 
-use self::zordercurve::{ZOrderCurve, get_zoc};
 use self::bmoc::*;
 use super::ring::{triangular_number_x4};
 use super::sph_geom::coo3d::*;
@@ -306,7 +396,7 @@ use super::special_points_finder::{arc_special_points};
 /// Defines an HEALPix layer in the NESTED scheme.
 /// A layer is simply an utility structure containing all constants and methods related
 /// to a given depth.
-pub struct Layer { // Why not creating all of them at compilation using a macro?!
+pub struct Layer {
   depth: u8,
   nside: u32,
   nside_minus_1: u32,
@@ -319,14 +409,37 @@ pub struct Layer { // Why not creating all of them at compilation using a macro?
   nside_remainder_mask: u64, // = nside - 1
   time_half_nside: i64,
   one_over_nside: f64,
-  z_order_curve: &'static dyn ZOrderCurve,
+  // z_order_curve: &'static dyn ZOrderCurve,
+  z_order_curve: ZOC,
 }
 
 impl Layer {
   
-  fn new(depth: u8) -> Layer {
+  const fn new(depth: u8, z_order_curve: ZOC) -> Layer {
+    // const onef64_to_bits: u64 = 4607182418800017408_u64; // 1_f64.to_bits()
+    // let time_nside = (depth as u64) << 52;
     let twice_depth: u8 = depth << 1u8;
-    let nside: u32 = 1u32 << depth;
+    let nside: u32 = super::nside_unsafe(depth);
+    Layer {
+      depth,
+      nside,
+      nside_minus_1: nside - 1,
+      n_hash: super::n_hash_unsafe(depth),
+      twice_depth,
+      d0h_mask: 15_u64 << twice_depth,
+      x_mask: nested::x_mask(depth),
+      y_mask: nested::y_mask(depth), //x_mask << 1,
+      xy_mask: nested::xy_mask(depth),
+      nside_remainder_mask: (nside - 1) as u64, // xy_mask >> depth 
+      time_half_nside: (depth as i64 - 1) << 52,
+      one_over_nside: ONE_OVER_NSIDE[depth as usize], // f64::from_bits(onef64_to_bits - time_nside),
+      z_order_curve
+    }
+  }
+
+  /*fn new(depth: u8) -> Layer {
+    let twice_depth: u8 = depth << 1u8;
+    let nside: u32 = super::nside_unsafe(depth);
     let mut x_mask = 0u64;
     let mut xy_mask = 0u64;
     let mut time_half_nside = -1_i64 << 52;
@@ -347,10 +460,10 @@ impl Layer {
       xy_mask,
       nside_remainder_mask: xy_mask >> depth, // = nside - 1
       time_half_nside,
-      one_over_nside: 1f64 / super::nside_unsafe(depth) as f64,
+      one_over_nside: 1f64 / nside as f64,
       z_order_curve: get_zoc(depth)
     }
-  }
+  }*/
 
   /// Returns the depth of the Layer (i.e. the HEALPix *order*)
   #[inline]
@@ -396,7 +509,7 @@ impl Layer {
     ...
   }*/
   
-  pub fn hash_v1(&self, lon: f64, lat: f64) -> u64 {
+  fn hash_v1(&self, lon: f64, lat: f64) -> u64 {
     let mut xy = proj(lon, lat);
     xy.0 = ensures_x_is_positive(xy.0);
     self.shift_rotate_scale(&mut xy);
@@ -407,9 +520,7 @@ impl Layer {
     self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
   }
 
-  
-  
-  pub fn hash_v2(&self, lon: f64, lat: f64) -> u64 {
+  fn hash_v2(&self, lon: f64, lat: f64) -> u64 {
     check_lat(lat);
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
     // Coords inside the base cell
@@ -422,40 +533,20 @@ impl Layer {
     self.build_hash_from_parts(d0h, i, j)
   }
   
-  pub fn hash_dxdy_v2(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
-    let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
-    // Coords inside the base cell time nside/2
-    let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64); 
-    debug_assert!(x <= (0.0 - 1e-15) || x < (self.nside as f64 + 1e-15), format!("x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c));
-    let y = f64::from_bits((self.time_half_nside + (h_in_d0c - l_in_d0c).to_bits() as i64) as u64);
-    debug_assert!(y <= (0.0 - 1e-15) || y < (self.nside as f64 + 1e-15), format!("y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c));
-    // - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
-    let i = x as u32;
-    let j = y as u32;
-    //  - deals with numerical inaccuracies, rare so branch miss-prediction negligible
-    let i = if i == self.nside { self.nside_minus_1 } else { i };
-    let j = if j == self.nside { self.nside_minus_1 } else { j };
-    (
-      self.build_hash_from_parts(d0h, i, j),
-      (x - (i as f64)),
-      (y - (j as f64)),
-    )
-  }
-
   #[inline]
   fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
     let (x_pm1, q) = Layer::xpm1_and_q(lon);
     if lat > TRANSITION_LATITUDE {
       // North polar cap, Collignon projection.
       // - set the origin to (PI/4, 0)
-      let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 + PI_OVER_FOUR).cos();
+      let sqrt_3_one_min_z = SQRT6 * (HALF * lat + FRAC_PI_4).cos();
       let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, 2.0 - sqrt_3_one_min_z);
       let d0h = q;
       (d0h, x_proj, y_proj)
     } else if lat < -TRANSITION_LATITUDE {
       // South polar cap, Collignon projection
       // - set the origin to (PI/4, -PI/2)
-      let sqrt_3_one_min_z = SQRT6 * (lat / 2.0 - PI_OVER_FOUR).cos(); // cos(-x) = cos(x)
+      let sqrt_3_one_min_z = SQRT6 * (HALF * lat - FRAC_PI_4).cos(); // cos(-x) = cos(x)
       let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, sqrt_3_one_min_z);
       let d0h = q + 8;
       (d0h, x_proj, y_proj)
@@ -487,9 +578,9 @@ impl Layer {
       // |\2/|
       // .3X1.
       // |/0\|
-      let q01 = (x_pm1 >   y_pm1) as u8;  /* 0/1 */  debug_assert!(q01 == 0 || q01 == 1);
+      let q01 = (x_pm1 >   y_pm1) as u8; /* 0/1 */  debug_assert!(q01 == 0 || q01 == 1);
       let q12 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */  debug_assert!(q12 == 0 || q12 == 1);
-      let q1 = q01 & q12; /* = 1 if q1, 0 else */       debug_assert!( q1 == 0 ||  q1 == 1);
+      let q1 = q01 & q12; /* = 1 if q1, 0 else */   debug_assert!( q1 == 0 ||  q1 == 1);
       let q013 = q01 + (1 - q12); // = q01 + q03; /* 0/1 + 1\0 +  */
       // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
       let x_proj = x_pm1 - ((q01 + q12) as i8 - 1) as f64;
@@ -553,20 +644,49 @@ impl Layer {
   /// let (h_ra, h_dec) = nested12.center(h_org);
   /// let (h, dx, dy) = nested12.hash_with_dxdy(h_ra, h_dec);
   /// assert_eq!(h_org, h);
-  /// assert_eq!(0.5, dx);
-  /// assert_eq!(0.5, dy);
+  /// // A precision of 1e-12 in a cell of depth 12 (side of ~51.5 arcsec)
+  /// // leads to an absolute precision of ~0.05 nanoarcsec
+  /// assert!((dx - 0.5).abs() < 1e-12_f64);
+  /// assert!((dy - 0.5).abs() < 1e-12_f64);
   /// ```
   pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
+    self.hash_with_dxdy_v2(lon, lat)
+  }
+
+  fn hash_with_dxdy_v1(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
     let mut xy = proj(lon, lat);
     xy.0 = ensures_x_is_positive(xy.0);
     self.shift_rotate_scale(&mut xy);
     let mut ij = discretize(xy);
+    // eprintln!("x: {:.16}; y: {:.16}; i: {}; j: {}", xy.0, xy.1, ij.0, ij.1);
     let dx = xy.0 - (ij.0 as f64);
     let dy = xy.1 - (ij.1 as f64);
     let ij_d0c = self.base_cell_coos(&ij);
     let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
     self.to_coos_in_base_cell(&mut ij);
     (self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32), dx, dy)
+  }
+
+  fn hash_with_dxdy_v2(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
+    let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
+    // Coords inside the base cell time nside/2
+    let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64);
+    debug_assert!(x <= (0.0 - 1e-15) || x < (self.nside as f64 + 1e-15), format!("x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c));
+    let y = f64::from_bits((self.time_half_nside + (h_in_d0c - l_in_d0c).to_bits() as i64) as u64);
+    debug_assert!(y <= (0.0 - 1e-15) || y < (self.nside as f64 + 1e-15), format!("y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c));
+    // - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
+    let i = x as u32;
+    let j = y as u32;
+    //  - deals with numerical inaccuracies, rare so branch miss-prediction negligible
+    let i = if i == self.nside { self.nside_minus_1 } else { i };
+    let j = if j == self.nside { self.nside_minus_1 } else { j };
+    eprintln!("x: {:.16}; y: {:.16}; i: {}; j: {}; xbits: {}; ybits: {}", x, y, i, j, x.to_bits(), y.to_bits());
+    eprintln!("xmi: {}; ymj: {}", x - (i as f64), y - (j as f64));
+    (
+      self.build_hash_from_parts(d0h, i, j),
+      (x - (i as f64)),
+      (y - (j as f64)),
+    )
   }
   
   #[inline]
@@ -598,6 +718,11 @@ impl Layer {
   #[inline]
   fn modulo_nside(&self, val: u64) -> u64 {
     val & self.nside_remainder_mask
+  }
+
+  #[inline]
+  fn modulo_nside_u32(&self, val: u32) -> u32 {
+    val & self.nside_minus_1
   }
 
   #[inline]
@@ -954,8 +1079,8 @@ impl Layer {
       let j_d0c = self.div_by_nside_floor_u8(j_in_d0c);
       self.build_hash_from_parts (
         depth0_hash_unsafe(i_d0c, j_d0c),
-        self.modulo_nside(i_in_d0c) as u32,
-        self.modulo_nside(j_in_d0c) as u32,
+        self.modulo_nside_u32(i_in_d0c as u32),
+        self.modulo_nside_u32(j_in_d0c as u32) 
       )
     }
   }
@@ -1825,7 +1950,7 @@ impl Layer {
   #[inline]
   fn shift_from_small_cell_center_to_base_cell_center(&self, ij: &mut (i32, i32)) {
     let (ref mut _i, ref mut j) = *ij;
-    *j -= self.nside_remainder_mask as i32; // nside_remainder_mask == nside - 1
+    *j -= self.nside_minus_1 as i32;
   }
 
   #[inline]
@@ -2232,7 +2357,7 @@ impl Layer {
   }
 
   pub fn elliptical_cone_coverage_internal(&self, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOCBuilderUnsafe {
-    if a >= HALF_PI {
+    if a >= FRAC_PI_2 {
       panic!("Unable to handle ellipses with a semi-major axis > PI/2");
     }
     // Special case: the full sky is covered
@@ -2421,6 +2546,18 @@ impl Layer {
       }
     } else {
       let (n_vertices_in_poly, poly_vertices) = n_vertices_in_poly(depth, hash, poly);
+
+      /*// TODO REMOVE!!
+      if depth == 7 && hash == 77882 {
+        eprintln!("COUCOU {} {}", n_vertices_in_poly, has_intersection(poly, poly_vertices.clone()));
+        for v in poly_vertices.clone().iter() {
+          eprintln!("-- l: {}; b: {}", v.lon().to_degrees(), v.lat().to_degrees());
+        }
+      } else {
+        eprintln!("----");
+      }*/
+      
+      
       if n_vertices_in_poly == 4 {
         moc_builder.push(depth, hash, true);
       } else if n_vertices_in_poly > 0 || has_intersection(poly, poly_vertices) {
@@ -2812,7 +2949,7 @@ const fn div4_remainder(x: u8) -> u8 {
 /// ```
 #[inline]
 pub const fn x_mask(depth: u8) -> u64 {
-  0x5555555555555555_u64 >> (64 - (depth << 1))
+  0x0555555555555555_u64 >> (60 - (depth << 1))
 }
 
 /// mask ...101010
@@ -2823,7 +2960,7 @@ pub const fn x_mask(depth: u8) -> u64 {
 /// ```
 #[inline]
 pub const fn y_mask(depth: u8) -> u64{
-  0xAAAAAAAAAAAAAAAA_u64 >> (64 - (depth << 1))
+  0x0AAAAAAAAAAAAAAA_u64 >> (60 - (depth << 1))
 }
 
 /// mask ...111111
@@ -2835,7 +2972,8 @@ pub const fn y_mask(depth: u8) -> u64{
 /// ```
 #[inline]
 pub const fn xy_mask(depth: u8) -> u64 {
-  0xFFFFFFFFFFFFFFFF_u64 >> (64 - (depth << 1))
+  // 0x0FFFFFFFFFFFFFFF_u64 >> (60 - (depth << 1))
+  (1_u64 << (depth << 1)) - 1_u64
 }
 
 #[inline]
@@ -3617,29 +3755,58 @@ mod tests {
   #[test]
   fn testok_polygone_exact_2() {
     // In Aladin: draw polygon(174.75937396073138, -49.16744206799886, 185.24062603926856, -49.16744206799887, 184.63292896369916, -42.32049830486584, 175.3670710363009, -42.32049830486584)
-    let depth = 10;
+    let depth = 3; // 10
     
     let mut vertices = [(174.75937396073138, -49.16744206799886), 
       (185.24062603926856, -49.16744206799887), 
       (184.63292896369916, -42.32049830486584),
       (175.3670710363009, -42.32049830486584)];
-    //let expected_res_approx: [u64; 2] = [384, 385];
-    //let expected_res_exact: [u64; 4] = [384, 385, 682, 683];
+    let expected_res_exact: [u64; 4] = [596, 597, 680, 682];
 
     to_radians(&mut vertices);
 
-    /*let actual_res_approx = polygon_coverage(depth, &vertices, false);
-    assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
-    for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
-      assert_eq!(h1, *h2);
-    }*/
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
 
-    let actual_res_exact = polygon_coverage(depth, &vertices, false);
-
-    println!("@@@@@ FLAT VIEW");
+    /*println!("@@@@@ FLAT VIEW");
     for cell in actual_res_exact.flat_iter() {
       println!("@@@@@ cell a: {:?}", cell);
+    }*/
+    
+    assert!(actual_res_exact.deep_size() > 0);
+    
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
     }
+  }
+
+  #[test]
+  fn testok_polygone_exact_3() {
+    // In Aladin: draw polygon(359.05552155,+04.00678949, 003.48359255,-04.16855897, 000.85415475,-04.30100561)
+    let depth = 7; // 7
+    
+    let mut vertices = [(359.05552155, 4.00678949),
+    (3.48359255, -4.16855897),
+    (0.85415475, -4.30100561)];
+    let expected_res_exact: [u64; 86] =[
+      69479, 69484, 69485, 69486, 69487, 69488, 69489, 69490, 69491, 69492, 69494, 69496, 69497, 
+      69498, 69499, 69500, 69501, 69502, 69503, 69572, 69573, 69574, 69575, 69581, 69584, 69585,
+      69586, 69587, 69588, 69589, 69590, 69591, 69592, 69593, 69594, 69595, 69596, 69597, 69598,
+      69599, 69617, 69619, 69620, 69621, 69622, 69623, 69628, 69629, 69631, 72322, 72328, 72330,
+      72352, 72353, 72354, 72355, 72360, 72361, 72362, 72363, 72364, 72366, 75093, 77824, 77825,
+      77826, 77827, 77828, 77830, 77831, 77833, 77835, 77836, 77837, 77838, 77839, 77860, 77861,
+      77863, 77869, 77872, 77874, 77880, 77882, 77883, 77969];
+    
+    to_radians(&mut vertices);
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+
+    to_aladin_moc(&actual_res_exact);
+
+    /*println!("@@@@@ FLAT VIEW");
+    for cell in actual_res_exact.flat_iter() {
+    println!("@@@@@ cell a: {:?}", cell);
+    }*/
     
     assert!(actual_res_exact.deep_size() > 0);
     
@@ -3777,12 +3944,20 @@ mod tests {
     let lon_deg = 89.18473162_f64; // 322.99297784_f64;// 324.8778822_f64
     let lat_deg = -28.04159707_f64;// 39.9302924_f64;// -41.08635508_f64
     let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
-    // println!("{:?}", res);
+    println!("{:?}", res);
+    /* Result with previous version of hash_dxdy_v1 !
     assert_eq!(res, [
       (20, 0.0), 
       (38, 0.1661686383097217), 
       (33, 0.2024027885319438), 
       (20, 0.6314285731583344)
+    ]);*/
+    // Result with previous version of hash_dxdy_v2 !
+    assert_eq!(res, [
+      (20, 0.0),
+      (38, 0.1661686383097213),
+      (33, 0.20240278853194385),
+      (20, 0.6314285731583348)
     ]);
   }
   
@@ -3792,11 +3967,19 @@ mod tests {
     let lat_deg = 22.015110_f64;
     let res = bilinear_interpolation(18, lon_deg.to_radians(), lat_deg.to_radians());
     // println!("{:?}", res);
+    /* Result with previous version of hash_dxdy_v1 !
     assert_eq!(res, [
       (405766747916, 0.5757471135241182), 
       (405766747917, 0.3604806280107034), 
       (405766747918, 0.039217694696856834), 
       (405766747919, 0.024554563768321474)
+    ]);
+    */
+    assert_eq!(res, [
+      (405766747916, 0.5757471135599139),
+      (405766747917, 0.3604806280331154),
+      (405766747918, 0.039217694661061175),
+      (405766747919, 0.024554563745909478)
     ]);
   }
 

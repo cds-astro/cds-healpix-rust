@@ -383,7 +383,7 @@ impl LonLatT for LonLat {
 
 // Specific Coo3D
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Coo3D {
   x: f64,
   y: f64,

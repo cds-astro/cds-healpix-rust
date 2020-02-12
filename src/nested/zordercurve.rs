@@ -183,7 +183,7 @@ impl ZOrderCurve for SmallZOC {
     LUPT_TO_HASH[(i as u8) as usize] as u64
   }
   fn h2ij(&self, h: u64) -> u64 {
-    let bytes:  [u8; 2] = to_bytes_u16((h as u16).to_le()); //.to_bytes();
+    let bytes:  [u8; 2] = (h as u16).to_le_bytes();
     (   LUPT_TO_IJ_BYTE[bytes[0] as usize]
       | LUPT_TO_IJ_BYTE[bytes[1] as usize] << 4
     ) as u64
@@ -199,12 +199,12 @@ impl ZOrderCurve for SmallZOC {
 struct MediuZOC;
 impl ZOrderCurve for MediuZOC {
   fn i02h(&self, i: u32) -> u64 {
-    let bytes: [u8; 2] = to_bytes_u16((i as u16).to_le());// .to_bytes();
+    let bytes: [u8; 2] = (i as u16).to_le_bytes();
        LUPT_TO_HASH[bytes[0] as usize] as u64
     | (LUPT_TO_HASH[bytes[1] as usize] as u64) << 16
   }
   fn h2ij(&self, h: u64) -> u64 {
-    let bytes: [u8; 4] = to_bytes_u32((h as u32).to_le()); //.to_bytes();
+    let bytes: [u8; 4] = (h as u32).to_le_bytes();
     (   LUPT_TO_IJ_SHORT[bytes[0] as usize]
       | LUPT_TO_IJ_SHORT[bytes[1] as usize] <<  4
       | LUPT_TO_IJ_SHORT[bytes[2] as usize] <<  8
@@ -223,14 +223,13 @@ pub struct LargeZOC;
 impl ZOrderCurve for LargeZOC {
   fn i02h(&self, i: u32) -> u64 {
     // to/from_le do nothing on x86 architectures (which are in LE), so not perf penalty
-    // WARNING: to_bytes not stable yet, see https://github.com/rust-lang/rust/pull/51919
-    let bytes: [u8; 4] = to_bytes_u32(i.to_le()); //.to_bytes();
+    let bytes: [u8; 4] = i.to_le_bytes();
     /*(     LUPT_TO_HASH[bytes[0] as usize] as u64
 				| (LUPT_TO_HASH[bytes[1] as usize] as u64) << 16
 				| (LUPT_TO_HASH[bytes[2] as usize] as u64) << 32
 				| (LUPT_TO_HASH[bytes[3] as usize] as u64) << 48
 		) as u64*/
-    // Portability on BE architecture to be tested!! (is not portable, use the above formulation)
+    // Portability on BE architecture to be tested!! (if not portable, use the above formulation)
     u64::from_le(
       unsafe {
         mem::transmute::<[u16; 4], u64>([
@@ -242,7 +241,7 @@ impl ZOrderCurve for LargeZOC {
     )
   }
   fn h2ij(&self, h: u64) -> u64 {
-    let bytes: [u8; 8] = to_bytes_u64(h.to_le()); //.to_bytes();
+    let bytes: [u8; 8] = h.to_le_bytes();
       LUPT_TO_IJ_INT[bytes[0] as usize] as u64
     | LUPT_TO_IJ_INT[bytes[1] as usize] <<  4
     | LUPT_TO_IJ_INT[bytes[2] as usize] <<  8
@@ -259,17 +258,6 @@ impl ZOrderCurve for LargeZOC {
     (ij >> 32) as u32
   }
 }
-
-fn to_bytes_u16(v: u16) -> [u8; 2]{
-  unsafe { mem::transmute(v) }
-}
-fn to_bytes_u32(v: u32) -> [u8; 4]{
-  unsafe { mem::transmute(v) }
-}
-fn to_bytes_u64(v: u64) -> [u8; 8]{
-  unsafe { mem::transmute(v) }
-}
-
 
 #[cfg(test)]
 struct SmallZOCxor;
@@ -426,13 +414,13 @@ impl ZOrderCurve for SmallZOCbmi {
       _pdep_u32(i, 0x00005555u32) as u64
     }
   }
-  fn oj2h(&self, i: u32) -> u64 {
+  fn oj2h(&self, j: u32) -> u64 {
     #[cfg(target_arch = "x86")]
     use std::arch::x86::_pdep_u32;
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::_pdep_u32;
     unsafe {
-      _pdep_u32(i, 0x0000AAAAu32) as u64
+      _pdep_u32(j, 0x0000AAAAu32) as u64
     }
   }
   fn h2ij(&self, h: u64) -> u64 {
@@ -623,6 +611,150 @@ static SMALL_ZOC_BMI: SmallZOCbmi = SmallZOCbmi;
 static MEDIU_ZOC_BMI: MediuZOCbmi = MediuZOCbmi;
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
 pub static LARGE_ZOC_BMI: LargeZOCbmi = LargeZOCbmi;
+
+pub enum ZOC {
+  EMPTY,  // for depth = 0
+  SMALL,  // for depth in [1, 8]
+  MEDIUM, // for depth in [9, 16]
+  LARGE,  // for depth in [17, 29]
+}
+
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]
+impl ZOrderCurve for ZOC {
+  fn ij2h(&self, i: u32, j: u32) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2h(i, j),
+      ZOC::SMALL => SMALL_ZOC_BMI.ij2h(i, j),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.ij2h(i, j),
+      ZOC::LARGE => LARGE_ZOC_BMI.ij2h(i, j),
+    }
+  }
+  fn i02h(&self, i: u32) -> u64 {
+    match self {
+      ZOC:: EMPTY => EMPTY_ZOC.i02h(i),
+      ZOC::SMALL => SMALL_ZOC_BMI.i02h(i),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.i02h(i),
+      ZOC::LARGE => LARGE_ZOC_BMI.i02h(i),
+    }
+  }
+  fn oj2h(&self, j: u32) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.oj2h(j),
+      ZOC::SMALL => SMALL_ZOC_BMI.oj2h(j),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.oj2h(j),
+      ZOC::LARGE => LARGE_ZOC_BMI.oj2h(j),
+    }
+  }
+  fn h2ij(&self, h: u64) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.h2ij(h),
+      ZOC::SMALL => SMALL_ZOC_BMI.h2ij(h),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.h2ij(h),
+      ZOC::LARGE => LARGE_ZOC_BMI.h2ij(h),
+    }
+  }
+  fn h2i0(&self, h: u64) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.h2i0(h),
+      ZOC::SMALL => SMALL_ZOC_BMI.h2i0(h),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.h2i0(h),
+      ZOC::LARGE => LARGE_ZOC_BMI.h2i0(h),
+    }
+  }
+  fn ij2i(&self, ij: u64) -> u32 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2i(ij),
+      ZOC::SMALL => SMALL_ZOC_BMI.ij2i(ij),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.ij2i(ij),
+      ZOC::LARGE => LARGE_ZOC_BMI.ij2i(ij),
+    }
+  }
+  fn ij2j(&self, ij: u64) -> u32 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2j(ij),
+      ZOC::SMALL => SMALL_ZOC_BMI.ij2j(ij),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.ij2j(ij),
+      ZOC::LARGE => LARGE_ZOC_BMI.ij2j(ij),
+    }
+  }
+  fn xy2h(&self, x: f64, y: f64) -> u64{
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.xy2h(x, y),
+      ZOC::SMALL => SMALL_ZOC_BMI.xy2h(x, y),
+      ZOC::MEDIUM => MEDIU_ZOC_BMI.xy2h(x, y),
+      ZOC::LARGE => LARGE_ZOC_BMI.xy2h(x, y),
+    }
+  }
+}
+
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2")))]
+impl ZOrderCurve for ZOC {
+  fn ij2h(&self, i: u32, j: u32) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2h(i, j),
+      ZOC::SMALL => SMALL_ZOC_LUT.ij2h(i, j),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.ij2h(i, j),
+      ZOC::LARGE => LARGE_ZOC_LUT.ij2h(i, j),
+    }
+  }
+  fn i02h(&self, i: u32) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.i02h(i),
+      ZOC::SMALL => SMALL_ZOC_LUT.i02h(i),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.i02h(i),
+      ZOC::LARGE => LARGE_ZOC_LUT.i02h(i),
+    }
+  }
+  fn oj2h(&self, j: u32) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.oj2h(j),
+      ZOC::SMALL => SMALL_ZOC_LUT.oj2h(j),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.oj2h(j),
+      ZOC::LARGE => LARGE_ZOC_LUT.oj2h(j),
+    }
+  }
+  fn h2ij(&self, h: u64) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.h2ij(h),
+      ZOC::SMALL => SMALL_ZOC_LUT.h2ij(h),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.h2ij(h),
+      ZOC::LARGE => LARGE_ZOC_LUT.h2ij(h),
+    }
+  }
+  fn h2i0(&self, h: u64) -> u64 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.h2i0(h),
+      ZOC::SMALL => SMALL_ZOC_LUT.h2i0(h),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.h2i0(h),
+      ZOC::LARGE => LARGE_ZOC_LUT.h2i0(h),
+    }
+  }
+  fn ij2i(&self, ij: u64) -> u32 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2i(ij),
+      ZOC::SMALL => SMALL_ZOC_LUT.ij2i(ij),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.ij2i(ij),
+      ZOC::LARGE => LARGE_ZOC_LUT.ij2i(ij),
+    }
+  }
+  fn ij2j(&self, ij: u64) -> u32 {
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.ij2j(ij),
+      ZOC::SMALL => SMALL_ZOC_LUT.ij2j(ij),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.ij2j(ij),
+      ZOC::LARGE => LARGE_ZOC_LUT.ij2j(ij),
+    }
+  }
+  fn xy2h(&self, x: f64, y: f64) -> u64{
+    match self {
+      ZOC::EMPTY => EMPTY_ZOC.xy2h(x, y),
+      ZOC::SMALL => SMALL_ZOC_LUT.xy2h(x, y),
+      ZOC::MEDIUM => MEDIU_ZOC_LUT.xy2h(x, y),
+      ZOC::LARGE => LARGE_ZOC_LUT.xy2h(x, y),
+    }
+  }
+}
+
 
 /// Returns a zorder curve trait implementation according to the given depth.
 pub fn get_zoc(depth: u8) -> &'static dyn ZOrderCurve { // on day, It would be possible to add 'const'

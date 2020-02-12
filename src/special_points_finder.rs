@@ -1,6 +1,6 @@
-use std::f64::consts::PI;
+use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4, FRAC_PI_8};
 
-use super::{Customf64, HALF_PI, PI_OVER_FOUR, TRANSITION_Z, ONE_OVER_TRANSITION_Z};
+use super::{Customf64, TRANSITION_Z, ONE_OVER_TRANSITION_Z};
 use super::sph_geom::coo3d::*;
 // use super::sph_geom::{Polygon};
 
@@ -127,9 +127,9 @@ pub fn cone_special_point_in_eqr(mut z: f64, z0: f64, eucl_cone_radius: f64, nor
   z_eps_max: f64, n_iter_max: u8) -> Option<f64> {
   // Compute constants
   let cte = if north_point { // negative slope
-    -ONE_OVER_TRANSITION_Z * PI_OVER_FOUR
+    -ONE_OVER_TRANSITION_Z * FRAC_PI_4
   } else { // positive slope
-    ONE_OVER_TRANSITION_Z * PI_OVER_FOUR
+    ONE_OVER_TRANSITION_Z * FRAC_PI_4
   };
   let w0 = 1.0 - z0.pow2();
   let r = 1.0 - eucl_cone_radius.pow2().half();
@@ -181,9 +181,9 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
   let north_point = z0 < 0.0;
   // Compute constants
   let cte = if north_point {
-    -ONE_OVER_TRANSITION_Z * PI_OVER_FOUR
+    -ONE_OVER_TRANSITION_Z * FRAC_PI_4
   } else {
-    ONE_OVER_TRANSITION_Z * PI_OVER_FOUR
+    ONE_OVER_TRANSITION_Z * FRAC_PI_4
   };
   // Remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
   let w0 = 1.0 - z0.pow2();
@@ -292,7 +292,7 @@ pub fn cone_special_point_in_pc(mut z: f64, cone_center_lon_mod_half_pi: f64,
     north_value = !north_value;
   }
   // Compute constants
-  let cte = if north_value { -PI_OVER_FOUR.half() } else { PI_OVER_FOUR.half() };
+  let cte = if north_value { -FRAC_PI_8 } else { FRAC_PI_8 };
   let  w0 = 1.0 - z0.pow2();
   let r = 1.0 - eucl_cone_radius.pow2().half();
   let direction = if east_value { 1.0 } else { -1.0 };
@@ -323,10 +323,10 @@ pub fn arc_special_point_in_pc<'a>(
     p2 = tmp;
   }
   // Check if great-circle arc overlap several base cells
-  debug_assert!(p1.lon() % HALF_PI >= 0.0);
-  debug_assert!(p2.lon() % HALF_PI >= 0.0);
-  let lon1_div_half_pi = p1.lon().div_eucl(HALF_PI) as u8;
-  let lon2_div_half_pi = p2.lon().div_eucl(HALF_PI) as u8;
+  debug_assert!(p1.lon() % FRAC_PI_2 >= 0.0);
+  debug_assert!(p2.lon() % FRAC_PI_2 >= 0.0);
+  let lon1_div_half_pi = p1.lon().div_eucl(FRAC_PI_2) as u8;
+  let lon2_div_half_pi = p2.lon().div_eucl(FRAC_PI_2) as u8;
   debug_assert!(lon1_div_half_pi < 4);
   debug_assert!(lon2_div_half_pi < 4);
   debug_assert!(lon1_div_half_pi <= lon2_div_half_pi);
@@ -340,7 +340,7 @@ pub fn arc_special_point_in_pc<'a>(
     if p2.lon() - p1.lon() > PI {
       // Cross lon = 0
       let p2p1_n = cross_product(p2, p1).normalized();
-      if p2.lon() % HALF_PI > 0.0 { // First quarter, [p2.lon, ((p2.lon % PI/2) + 1) * PI/2]
+      if p2.lon() % FRAC_PI_2 > 0.0 { // First quarter, [p2.lon, ((p2.lon % PI/2) + 1) * PI/2]
         debug_assert!(lon2_div_half_pi > 0);
         let n2_y = lon2_div_half_pi & 1;
         let n2 = Coo3D::from_vec3((n2_y ^ 1) as f64, n2_y as f64, 0.0);
@@ -357,7 +357,7 @@ pub fn arc_special_point_in_pc<'a>(
       res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
     } else {
       let p1p2_n = cross_product(p1, p2).normalized();
-      if p1.lon() % HALF_PI > 0.0 { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
+      if p1.lon() % FRAC_PI_2 > 0.0 { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
         debug_assert!(lon1_div_half_pi < 3);
         let n1_y = lon1_div_half_pi & 1;
         let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
@@ -388,11 +388,11 @@ pub fn arc_special_point_in_pc<'a>(
 fn arc_special_point_in_pc_same_quarter( 
   p1: &Coo3D, p2: &Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
   debug_assert!(p1.lon() < p2.lon());
-  let mut p2_mod_half_pi = p2.lon() % HALF_PI;
+  let mut p2_mod_half_pi = p2.lon() % FRAC_PI_2;
   if p2_mod_half_pi == 0.0 {
-    p2_mod_half_pi = HALF_PI;
+    p2_mod_half_pi = FRAC_PI_2;
   }
-  let v1 = Coo3D::from_sph_coo(p1.lon() % HALF_PI, p1.lat());
+  let v1 = Coo3D::from_sph_coo(p1.lon() % FRAC_PI_2, p1.lat());
   let v2 = Coo3D::from_sph_coo(p2_mod_half_pi, p2.lat());
   let mut cone_center = cross_product(&v1, &v2).normalized();
   let lonlat = cone_center.lonlat();
@@ -419,7 +419,7 @@ fn arc_special_point_in_pc_same_quarter(
   }
   // Compute constants
   //  - remark: r = 1 - 2 sin^2(pi/2 / 2) = 1 - 2 * (sqrt(2)/2)^2 = 0
-  let cte = if north_value { -PI_OVER_FOUR.half() } else { PI_OVER_FOUR.half() };
+  let cte = if north_value { -FRAC_PI_8 } else { FRAC_PI_8 };
   let w0 = 1.0 - z0.pow2();
   let direction = if east_value { 1.0 } else { -1.0 };
   // Test if we start the method or not
@@ -490,7 +490,7 @@ fn f_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, d
   let arccos = (n / d2.sqrt()).acos();
   let dalphadz = (z0 - qn) / sqrt_d2_minus_n2;
   let f = direction * w * dalphadz
-    - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - PI_OVER_FOUR) + cte;
+    - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - FRAC_PI_4) + cte;
   f
 }
 
@@ -507,7 +507,7 @@ fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte
   let arccos = (n / d2.sqrt()).acos();
   let dalphadz = (z0 - qn) / sqrt_d2_minus_n2;
   let f = direction * w * dalphadz
-    - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - PI_OVER_FOUR) + cte;
+    - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - FRAC_PI_4) + cte;
   let df = -ONE_OVER_TRANSITION_Z * direction * dalphadz
     + (direction * w / sqrt_d2_minus_n2)
     * (q * (z0.twice() - 3.0 * qn) - n * (1.0 / w2 + dalphadz.pow2()));

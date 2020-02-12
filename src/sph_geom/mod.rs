@@ -269,7 +269,7 @@ fn is_in_lon_range(coo: &Coo3D, v1: &Coo3D, v2: &Coo3D) -> bool {
   //
   // So the previous code was bugged in this very specific case: 
   // - `lon0` has the same value as a vertex being part of:
-  // - one segment that do not cross RA=0
+  //   - one segment that do not cross RA=0
   //   - plus one segment crossing RA=0.
   //   - the point have an odd number of intersections with the polygon 
   //     (since it will be counted 0 or 2 times instead of 1).
@@ -282,8 +282,24 @@ fn is_in_lon_range(coo: &Coo3D, v1: &Coo3D, v2: &Coo3D) -> bool {
 }
 
 /// Returns `true` if the two given great_circle arcs have their longitudes ranges which overlaps.
+/// # WARNING:
+/// We **MUST** have:
+/// * `pa.lon() <= pb.lon()`
+/// * `a.lon() <= b.lon()`
 fn great_circle_arcs_are_overlapping_in_lon(a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb: &Coo3D) -> bool {
- (pb.lon() - pa.lon() > PI) ^ (a.lon() <= pb.lon() && b.lon() >= pa.lon() && (b.lon() - a.lon()) <= PI)
+  debug_assert!( a.lon() <=  b.lon());
+  debug_assert!(pa.lon() <= pb.lon());
+  /*match (b.lon() - a.lon() < PI, pb.lon() - pa.lon() <= PI) {
+    (true, true)   => pb.lon() >= a.lon() && pa.lon() <= b.lon(), //  a - b  AND  pa - pb
+    (true, false)  => pb.lon() <= b.lon() || pa.lon() >= a.lon(), //  a - b  AND pb -|- pa
+    (false, true)  => pb.lon() >= b.lon() || pa.lon() <= a.lon(), // b -|- a AND  pa - pb
+    (false, false) => true, // b -|- a AND pb -|- pa
+  } Which leads to the following code: */
+  if b.lon() - a.lon() < PI {
+    (pb.lon() - pa.lon() <= PI) == (a.lon() <= pb.lon() && b.lon() >= pa.lon())
+  } else {
+    (pb.lon() - pa.lon() > PI) || pb.lon() >= b.lon() || pa.lon() <= a.lon()
+  }
 }
 
 /// Returns `true` if the line at constant `(x, y)` and decreasing `z` going from the given point

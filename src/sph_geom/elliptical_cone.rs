@@ -1,7 +1,7 @@
 use std::f64::NAN;
+use std::f64::consts::FRAC_PI_2;
 
 use super::proj::*;
-use super::super::HALF_PI;
 use super::super::xy_geom::ellipse::*;
 use super::super::Customf64;
 
@@ -25,7 +25,7 @@ impl EllipticalCone {
   /// - `pa` position angle (east of north), in radians
   pub fn new(lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> EllipticalCone {
     let center = ProjSIN::new(lon, lat);
-    let theta_sin_cos = (HALF_PI - pa).sin_cos();
+    let theta_sin_cos = (FRAC_PI_2 - pa).sin_cos();
     let ellipse = Ellipse::from_oriented(a.sin(), b.sin(), theta_sin_cos);
     EllipticalCone {
       center,
@@ -149,7 +149,7 @@ impl EllipticalCone {
 
   pub fn path_along_edge(lon: f64, lat: f64, a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
     let center = ProjSIN::new(lon, lat);
-    let mut ar = Ellipse::path_along_edge(a.sin(), b.sin(), HALF_PI - theta, half_num_points);
+    let mut ar = Ellipse::path_along_edge(a.sin(), b.sin(), FRAC_PI_2 - theta, half_num_points);
     for coo in ar.iter_mut() {
       *coo = match center.unproj(coo.0, coo.1) {
         Some(lonlat) => lonlat,

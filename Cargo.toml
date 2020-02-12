@@ -32,7 +32,8 @@ rustflags = ["-C", "target-cpu=native"]
 
 [dependencies]
 katex-doc = "0.1.0"
-base64 = "0.11.0"
+base64 = "0.11.0"   # Added for Compressed MOC
+num = "0.2.1"       # Added for MOC
 
 [dev-dependencies]
 criterion = "0.3"
