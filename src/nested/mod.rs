@@ -680,8 +680,6 @@ impl Layer {
     //  - deals with numerical inaccuracies, rare so branch miss-prediction negligible
     let i = if i == self.nside { self.nside_minus_1 } else { i };
     let j = if j == self.nside { self.nside_minus_1 } else { j };
-    eprintln!("x: {:.16}; y: {:.16}; i: {}; j: {}; xbits: {}; ybits: {}", x, y, i, j, x.to_bits(), y.to_bits());
-    eprintln!("xmi: {}; ymj: {}", x - (i as f64), y - (j as f64));
     (
       self.build_hash_from_parts(d0h, i, j),
       (x - (i as f64)),
@@ -1644,10 +1642,8 @@ impl Layer {
 	  direction_from_neighbour(h_parts.d0h, &direction)
         } else {
           let dir_in_basce_cell_border = self.direction_in_base_cell_border(h_bits.i, h_bits.j);
-          // println!("B: {:?}, {}, {:?}", &direction, &hash_value, &dir_in_basce_cell_border);
           edge_cell_direction_from_neighbour(h_parts.d0h, &dir_in_basce_cell_border, &direction)
         };
-        // println!("{:?}, {}, {:?}", &direction, &hash_value, &dir_from_neig);
         add_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &direction,&mut res);
       }
     } else {
@@ -2514,7 +2510,6 @@ impl Layer {
       let mut left= &vertices[vertices.len() - 1];
       for right in vertices {
         let special_lonlats = arc_special_points(left, right, 1.0e-14, 20);
-        // println!("special_lonlats: {:?}", &special_lonlats);
         sorted_poly_vertices_hash.append(&mut self.hashs_vec(&special_lonlats));
         left = right;
       }
@@ -2546,18 +2541,6 @@ impl Layer {
       }
     } else {
       let (n_vertices_in_poly, poly_vertices) = n_vertices_in_poly(depth, hash, poly);
-
-      /*// TODO REMOVE!!
-      if depth == 7 && hash == 77882 {
-        eprintln!("COUCOU {} {}", n_vertices_in_poly, has_intersection(poly, poly_vertices.clone()));
-        for v in poly_vertices.clone().iter() {
-          eprintln!("-- l: {}; b: {}", v.lon().to_degrees(), v.lat().to_degrees());
-        }
-      } else {
-        eprintln!("----");
-      }*/
-      
-      
       if n_vertices_in_poly == 4 {
         moc_builder.push(depth, hash, true);
       } else if n_vertices_in_poly > 0 || has_intersection(poly, poly_vertices) {
@@ -3692,14 +3675,14 @@ mod tests {
     to_radians(&mut vertices);
 
     let actual_res_approx = polygon_coverage(depth, &vertices, false);
-    println!("draw moc 3/ {:?}", actual_res_approx.to_flat_array());
+    // println!("draw moc 3/ {:?}", actual_res_approx.to_flat_array());
     assert_eq!(expected_res_approx.len(), actual_res_approx.deep_size());
     for (h1, h2) in actual_res_approx.flat_iter().zip(expected_res_approx.iter()) {
       assert_eq!(h1, *h2);
     }
     
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
-    println!("draw moc 3/ {:?}", actual_res_exact.to_flat_array());
+    // println!("draw moc 3/ {:?}", actual_res_exact.to_flat_array());
     assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
     for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
       assert_eq!(h1, *h2);
@@ -3831,15 +3814,15 @@ mod tests {
   #[test]
   fn testok_bmoc_not() {
     let actual_res = cone_coverage_approx_custom(3, 4, 36.80105218_f64.to_radians(), 56.78028536_f64.to_radians(), 14.93_f64.to_radians());
-    println!("@@@@@ HIERARCH VIEW");
+    /*println!("@@@@@ HIERARCH VIEW");
     for cell in actual_res.into_iter() {
       println!("@@@@@ cell a: {:?}", cell);
     }
-    println!("@@@@@ HIERARCH VIEW, NOT");
+    println!("@@@@@ HIERARCH VIEW, NOT");*/
     let complement: BMOC = actual_res.not();
-    for cell in complement.into_iter() {
+    /*for cell in complement.into_iter() {
       println!("@@@@@ cell a: {:?}", cell);
-    }
+    }*/
     let org = complement.not();
     assert!(actual_res.equals(&org));
     /*println!("@@@@@ FLAT VIEW");
@@ -3912,18 +3895,18 @@ mod tests {
     let lat_deg = 41.810314895778546_f64; //41.81031489577857_f64;
 
     let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
-    println!("proj_x: {:.17}, proj_y: {:.17}", xy.0, xy.1);
+    // println!("proj_x: {:.17}, proj_y: {:.17}", xy.0, xy.1);
     xy.0 = ensures_x_is_positive(xy.0);
     let layer_0 = get_or_create(0);
     layer_0.shift_rotate_scale(&mut xy);
-    println!("x: {}, y: {}", xy.0, xy.1);
+    // println!("x: {}, y: {}", xy.0, xy.1);
     let ij = discretize(xy);
-    println!("i: {}, j: {}", ij.0, ij.1);
+    // println!("i: {}, j: {}", ij.0, ij.1);
     let ij_d0c = layer_0.base_cell_coos(&ij);
-    println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
+    // println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
     let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
-    println!("d0h_bits: {}", d0h_bits);*/
-    println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
+    // println!("d0h_bits: {}", d0h_bits);*/
+    // println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
 
     let layer_2 = get_or_create(2);
     assert_eq!(56, layer_2.hash(lon_deg.to_radians(), lat_deg.to_radians()));
@@ -3944,8 +3927,8 @@ mod tests {
     let lon_deg = 89.18473162_f64; // 322.99297784_f64;// 324.8778822_f64
     let lat_deg = -28.04159707_f64;// 39.9302924_f64;// -41.08635508_f64
     let res = bilinear_interpolation(1, lon_deg.to_radians(), lat_deg.to_radians());
-    println!("{:?}", res);
-    /* Result with previous version of hash_dxdy_v1 !
+    /*println!("{:?}", res);
+    // Result with previous version of hash_dxdy_v1 !
     assert_eq!(res, [
       (20, 0.0), 
       (38, 0.1661686383097217), 
@@ -3966,8 +3949,8 @@ mod tests {
     let lon_deg = 83.633478_f64;
     let lat_deg = 22.015110_f64;
     let res = bilinear_interpolation(18, lon_deg.to_radians(), lat_deg.to_radians());
-    // println!("{:?}", res);
-    /* Result with previous version of hash_dxdy_v1 !
+    /* println!("{:?}", res);
+    // Result with previous version of hash_dxdy_v1 !
     assert_eq!(res, [
       (405766747916, 0.5757471135241182), 
       (405766747917, 0.3604806280107034), 
@@ -4023,12 +4006,12 @@ mod tests {
     }
   }
 
-  #[test]
+  /*#[test]
   fn test_xpm1_and_q () {
     let a = Layer::d0h_lh_in_d0c(std::f64::NAN, 0.0);
     eprintln!("{:?}", &a);
     let a = Layer::d0h_lh_in_d0c(std::f64::INFINITY, 0.0);
     eprintln!("{:?}", &a);
-  }
+  }*/
 
 }
