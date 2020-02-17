@@ -8,6 +8,8 @@
 [![](https://meritbadge.herokuapp.com/cdshealpix)](https://crates.io/crates/cdshealpix)
 [![](https://img.shields.io/crates/d/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
 [![API Documentation on docs.rs](https://docs.rs/cdshealpix/badge.svg)](https://docs.rs/cdshealpix/)
+![Rust](https://github.com/cds-astro/cds-healpix-rust/workflows/Rust/badge.svg)
+
 
 About
 -----
