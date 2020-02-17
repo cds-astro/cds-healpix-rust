@@ -3904,7 +3904,7 @@ mod tests {
     // println!("i: {}, j: {}", ij.0, ij.1);
     let ij_d0c = layer_0.base_cell_coos(&ij);
     // println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);/*
-    let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
+    let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
     // println!("d0h_bits: {}", d0h_bits);*/
     // println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
 
