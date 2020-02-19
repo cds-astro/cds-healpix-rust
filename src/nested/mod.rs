@@ -600,19 +600,19 @@ impl Layer {
     let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
     let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
     let x = lon_abs * FOUR_OVER_PI;
-    let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(q < 8);
+    let q = (x as u8 | 1_u8);
     // Remark: to avoid the branch, we could have copied lon_sign on x - q, 
     //         but I so far lack of idea to deal with q efficiently.
     //         And we are not supposed to have negative longitudes in ICRS 
     //         (the most used reference system in astronomy).
     if lon_sign == 0 { // => lon >= 0
-      (x - (q as f64), q >> 1)
+      (x - (q as f64), (q & 7_u8) >> 1)
     } else { // case lon < 0 should be rare => few risks of branch miss-prediction
       // Since q in [0, 3]: 3 - (q >> 1)) <=> 3 & !(q >> 1)
       // WARNING: BE SURE TO HANDLE THIS CORRECTLY IN THE REMAINING OF THE CODE!
       //  - Case lon =  3/4 pi = 270 deg => x = -1, q=3
       //  - Case lon = -1/2 pi = -90 deg => x =  1, q=2
-      (q as f64 - x, 3 - (q >> 1))
+      (q as f64 - x, 3 - ((q & 7_u8) >> 1))
     }
   }
   
@@ -735,7 +735,7 @@ impl Layer {
 
   #[inline]
   fn build_hash(&self, d0h_bits: u64, i: u32, j: u32) -> u64 {
-    debug_assert!(i < self.nside && j < self.nside);
+    debug_assert!(i < self.nside && j < self.nside, "nside: {}; i: {}, j: {}", self.nside, i, j);
     d0h_bits | self.z_order_curve.ij2h(i, j)
   }
 
@@ -3797,6 +3797,38 @@ mod tests {
     for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
       assert_eq!(h1, *h2);
     }*/
+  }
+
+  #[test]
+  fn testok_polygone_exact_4() {
+    // In Aladin: draw polygon(353.8156714, -56.33202193, 6.1843286, -56.33202193, 5.27558041, -49.49378172, 354.72441959, -49.49378172)
+
+    let depth = 3;
+    
+    let mut vertices = [(353.8156714, -56.33202193),
+                        (6.1843286, -56.33202193),
+                        (5.27558041, -49.49378172),
+                        (354.72441959, -49.49378172)];
+    let expected_res_exact: [u64; 4] =[546, 552, 721, 724];
+    
+    to_radians(&mut vertices);
+    
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    
+    to_aladin_moc(&actual_res_exact);
+    
+    /*println!("@@@@@ FLAT VIEW");
+    for cell in actual_res_exact.flat_iter() {
+    println!("@@@@@ cell a: {:?}", cell);
+    }*/
+    
+    assert!(actual_res_exact.deep_size() > 0);
+    
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    
   }
   
   fn to_radians(lonlats: &mut [(f64, f64)]) {
