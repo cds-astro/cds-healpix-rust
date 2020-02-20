@@ -3786,41 +3786,10 @@ mod tests {
 
     to_aladin_moc(&actual_res_exact);
 
-    /*println!("@@@@@ FLAT VIEW");
+    println!("@@@@@ FLAT VIEW");
     for cell in actual_res_exact.flat_iter() {
     println!("@@@@@ cell a: {:?}", cell);
-    }*/
-    
-    assert!(actual_res_exact.deep_size() > 0);
-    
-    /*assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
-    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
-      assert_eq!(h1, *h2);
-    }*/
-  }
-
-  #[test]
-  fn testok_polygone_exact_4() {
-    // In Aladin: draw polygon(353.8156714, -56.33202193, 6.1843286, -56.33202193, 5.27558041, -49.49378172, 354.72441959, -49.49378172)
-
-    let depth = 3;
-    
-    let mut vertices = [(353.8156714, -56.33202193),
-                        (6.1843286, -56.33202193),
-                        (5.27558041, -49.49378172),
-                        (354.72441959, -49.49378172)];
-    let expected_res_exact: [u64; 4] =[546, 552, 721, 724];
-    
-    to_radians(&mut vertices);
-    
-    let actual_res_exact = polygon_coverage(depth, &vertices, true);
-    
-    to_aladin_moc(&actual_res_exact);
-    
-    /*println!("@@@@@ FLAT VIEW");
-    for cell in actual_res_exact.flat_iter() {
-    println!("@@@@@ cell a: {:?}", cell);
-    }*/
+    }
     
     assert!(actual_res_exact.deep_size() > 0);
     
@@ -3828,7 +3797,25 @@ mod tests {
     for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
       assert_eq!(h1, *h2);
     }
-    
+  }
+
+  #[test]
+  fn testok_polygone_exact_4() {
+    // In Aladin: draw polygon(353.8156714, -56.33202193, 6.1843286, -56.33202193, 5.27558041, -49.49378172, 354.72441959, -49.49378172)
+    let depth = 3;
+    let mut vertices = [(353.8156714, -56.33202193),
+                        (6.1843286, -56.33202193),
+                        (5.27558041, -49.49378172),
+                        (354.72441959, -49.49378172)];
+    let expected_res_exact: [u64; 4] =[546, 552, 721, 724];
+    to_radians(&mut vertices);
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
   }
   
   fn to_radians(lonlats: &mut [(f64, f64)]) {
