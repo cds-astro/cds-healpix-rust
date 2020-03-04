@@ -19,6 +19,7 @@ cdshealpix = { version = "0.4.1", path = ".." }
 serde = "1.0.85"
 serde_derive = "1.0.85"  # Serialization/Deserialisation lib macros
 serde_json = "1.0.37"
+base64 = "0.11.0"   # Added for Compressed MOC
 
 [features]
 nightly = []

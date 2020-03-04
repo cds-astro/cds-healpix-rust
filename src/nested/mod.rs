@@ -138,7 +138,7 @@ pub fn get_or_create(depth: u8) -> &'static Layer {
 }
 */
 
-// pub mod moc;
+pub mod moc;
 
 pub const fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
   let twice_delta_depth = delta_depth << 1;
@@ -600,7 +600,7 @@ impl Layer {
     let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
     let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
     let x = lon_abs * FOUR_OVER_PI;
-    let q = (x as u8 | 1_u8);
+    let q = x as u8 | 1_u8;
     // Remark: to avoid the branch, we could have copied lon_sign on x - q, 
     //         but I so far lack of idea to deal with q efficiently.
     //         And we are not supposed to have negative longitudes in ICRS 
@@ -1639,7 +1639,7 @@ impl Layer {
        let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
           direction.opposite()
         } else if self.depth == 0 {
-	  direction_from_neighbour(h_parts.d0h, &direction)
+	        direction_from_neighbour(h_parts.d0h, &direction)
         } else {
           let dir_in_basce_cell_border = self.direction_in_base_cell_border(h_bits.i, h_bits.j);
           edge_cell_direction_from_neighbour(h_parts.d0h, &dir_in_basce_cell_border, &direction)
@@ -1707,14 +1707,21 @@ impl Layer {
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.drain(..) {
+ println!("val: {}, dir: {:?}", &hash_value, &direction);
         let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
+          println!("A");
           direction.opposite()
         } else if self.depth == 0 {
+          println!("B");
           direction_from_neighbour(h_parts.d0h, &direction)
         }  else {
+          println!("C");
           edge_cell_direction_from_neighbour(h_parts.d0h, &self.direction_in_base_cell_border(h_bits.i, h_bits.j), &direction)
         };
+        println!("- hash_value: {}, dir_from_neig: {:?}", hash_value, dir_from_neig);
         append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut edge);
+        println!("- edges: {:?}", &edge);
+
       }
     } else {
       // Easy: always use the opposite direction
@@ -3322,7 +3329,7 @@ mod tests {
   
   
   #[test]
-  fn testok_external_edge_struct() {
+  fn testok_external_edge_struct_v1() {
     let depth = 1;
     let hash = 10;
     let delta_depth = 2;
@@ -3360,12 +3367,13 @@ mod tests {
     let delta_depth = 2;
     // draw moc 3/63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255
     let actual_res = external_edge_sorted(depth, hash, delta_depth);
-    //let expected_res: [u64; 20] = [63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255];
-    println!("{:?}", &actual_res);
-    /*for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
+    let expected_res: [u64; 18] = [26, 27, 30, 31, 47, 53, 55, 61, 63, 69, 71, 77, 79, 90, 91, 94, 95, 143];
+    // let expected_res: [u64; 20] = [63, 95, 117, 119, 125, 127, 143, 154, 155, 158, 159, 165, 167, 173, 175, 239, 250, 251, 254, 255];
+    //println!("{:?}", &actual_res);
+    for (h1, h2) in actual_res.iter().zip(expected_res.iter()) {
       assert_eq!(h1, h2);
     }
-    assert_eq!(expected_res.len(), actual_res.len());*/
+    assert_eq!(expected_res.len(), actual_res.len());
   }
  
   #[test]

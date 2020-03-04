@@ -1,5 +1,20 @@
 # `cdshealpix` Change Log
 
+
+## 0.5.0
+
+Released 2020-03-04.
+
+### Added
+
+* Add a MOC module for testing purpose
+    + Add MOC compression/decompression iterators
+    + Add logical MOC operations (not, and, or) taking iterators and returning iterators
+    + Add Cells to Range and Range to Cells conversion (iterator based too)
+
+--------------------------------------------------------------------------------
+
+
 ## 0.4.1
 
 Released 2020-02-11.
@@ -15,7 +30,7 @@ Released 2020-02-11.
 
 * `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle 
   uniq hash notation (i.e. uniq value for all possible (depth, hash) tuples).
-* Add MOC compression/decompression
+* Add BMOC lossy compression/decompression
 
 
 ### Bug correction

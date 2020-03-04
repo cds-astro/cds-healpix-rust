@@ -381,7 +381,6 @@ impl Cell {
   }
 }
 
-
 impl BMOC {
   
   /* Use this for a BMOC builder!
@@ -1654,10 +1653,10 @@ impl CompressedMOC {
           // take next hash
           hash += 1;
         } else {
+          debug_assert!(depth < depth_max);
           // go down of 1 level
           hash <<= 2;
           depth += 1;
-          debug_assert!(depth < depth_max);
         }
       }
     }
