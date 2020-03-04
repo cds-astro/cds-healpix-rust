@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use std::cmp::max;
 
 use cdshealpix::nested::bmoc::*;
-use cdshealpix::nested::moc::{self, HpxCell, BasicMOCIter, MOCIterator, RangeMOCIterator};
+use cdshealpix::nested::moc::{self, HpxCell, LazyMOCIter, OwnedRangeMOC, MOCIterator, RangeMOCIterator};
 use cdshealpix::nested::moc::op::{not, not_unchecked, and, and_unchecked, or, or_unchecked};
 use cdshealpix::nested::moc::compressed::{compress_unchecked, uncompress};
 
@@ -27,7 +27,7 @@ fn test_sdss_not() {
   let depth_max = sdss.get_depth_max();
   let mut builder = BMOCBuilderUnsafe::new(depth_max, sdss.size());
   for HpxCell {depth, hash} in not_unchecked(
-    BasicMOCIter::new(depth_max, sdss.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))) {
+    LazyMOCIter::new(depth_max, sdss.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))) {
     builder.push(depth, hash, true);
   }
   let not_sdss = builder.to_bmoc();
@@ -52,7 +52,7 @@ fn test_glimpse_not() {
   let depth_max = glimpse.get_depth_max();
   let mut builder = BMOCBuilderUnsafe::new(depth_max, glimpse.size());
   for HpxCell {depth, hash} in not_unchecked(
-    BasicMOCIter::new(depth_max, glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))) {
+    LazyMOCIter::new(depth_max, glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))) {
     builder.push(depth, hash, true);
   }
   let glimpse_not = builder.to_bmoc();
@@ -78,8 +78,8 @@ fn test_and() {
   let now = Instant::now();
   let mut builder = BMOCBuilderUnsafe::new(glimpse.get_depth_max().max(sdss.get_depth_max()), sdss.size());
   for HpxCell {depth, hash} in and_unchecked(
-    BasicMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) })),
-    BasicMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
+    LazyMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) })),
+    LazyMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
   ) {
     builder.push(depth, hash, true);
   }
@@ -122,8 +122,8 @@ fn test_or() {
     i += 1;
   }*/
   for HpxCell {depth, hash} in or_unchecked(
-    BasicMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) })),
-    BasicMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
+    LazyMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) })),
+    LazyMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
   ) {
     builder.push(depth, hash, true);
   }
@@ -185,7 +185,7 @@ fn test_compress_glimpse() {
   // Iteartor version
   let now = Instant::now();
   let compressed_2: Vec<u8> = compress_unchecked(
-    BasicMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
+    LazyMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
   ).collect();
   println!("GLIMPSE moc compression from iterator done in {} ms. Out size: {} bytes",
            now.elapsed().as_millis(), compressed_2.len());
@@ -228,7 +228,7 @@ fn test_compress_sdss() {
   // Iteartor version
   let now = Instant::now();
   let compressed_2: Vec<u8> = compress_unchecked(
-    BasicMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
+    LazyMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| { HpxCell::new(c.depth, c.hash) }))
   ).collect();
   println!("SDSS moc compression from iterator done in {} ms. Out size: {} bytes",
            now.elapsed().as_millis(), compressed_2.len());
@@ -257,19 +257,19 @@ fn test_and_compressed_iterators() {
   let s_and_g = load_s_and_g().unwrap().to_bmoc();
   
   let compressed_glimpse: Vec<u8> = compress_unchecked(
-    BasicMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
+    LazyMOCIter::new(glimpse.get_depth_max(), glimpse.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
   ).collect();
 
   let compressed_sdss: Vec<u8> = compress_unchecked(
-    BasicMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
+    LazyMOCIter::new(sdss.get_depth_max(), sdss.into_iter().map(|c| HpxCell::new(c.depth, c.hash)))
   ).collect();
 
   // Decompress both MOCs while performing the AND operation and compressing on the fly the result
   let now = Instant::now();
   let compressed_and: Vec<u8> = compress_unchecked(
     and_unchecked(
-      BasicMOCIter::new(glimpse.get_depth_max(), uncompress::<u64>(&compressed_glimpse[..])),
-      BasicMOCIter::new(sdss.get_depth_max(), uncompress::<u64>(&compressed_sdss[..]))
+      LazyMOCIter::new(glimpse.get_depth_max(), uncompress::<u64>(&compressed_glimpse[..])),
+      LazyMOCIter::new(sdss.get_depth_max(), uncompress::<u64>(&compressed_sdss[..]))
     )
   ).collect();
   println!("SDSS/GLIMPSE 'and' operation from compressed MOCs done in {} ms. \
@@ -281,11 +281,33 @@ fn test_and_compressed_iterators() {
 fn test_ranges() {
   let moc = load_sdss().unwrap().to_bmoc();
   let moc1: Vec<HpxCell<u64>> = moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)).collect();
-  let moc2 = BasicMOCIter::new(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
+  let moc2 = LazyMOCIter::new(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
   // println!("N ranges: {} {}", moc1.len(), &moc2.to_range_iter().count());
   let now = Instant::now();
   let moc3: Vec<HpxCell<u64>> = moc2.to_range_iter().to_moc_iter().collect();
   println!("To range/to cells/collect of size: {} in {} ms", moc1.len(), now.elapsed().as_millis());
+  assert_eq!(moc1.len(), moc3.len());
+  for (HpxCell {depth, hash}, HpxCell {depth: depth2, hash: hash2}) in
+    moc1.into_iter().zip(&mut moc3.into_iter()) {
+    assert_eq!(depth, depth2);
+    assert_eq!(hash, hash2);
+  }
+}
+
+fn test_ranges_2() {
+  let moc = load_sdss().unwrap().to_bmoc();
+  let moc1: Vec<HpxCell<u64>> = moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)).collect();
+  let moc2 = OwnedRangeMOC::from_it(
+    moc.get_depth_max(),
+    LazyMOCIter::new(
+      moc.get_depth_max(),
+      moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash))
+    ).to_range_iter()
+  );
+  // println!("N ranges: {} {}", moc1.len(), &moc2.to_range_iter().count());
+  let now = Instant::now();
+  let moc3: Vec<HpxCell<u64>> = moc2.into_range_moc_iter().to_moc_iter().collect();
+  println!("To range + collect of size: {} done in {} ms", moc1.len(), now.elapsed().as_millis());
   assert_eq!(moc1.len(), moc3.len());
   for (HpxCell {depth, hash}, HpxCell {depth: depth2, hash: hash2}) in
     moc1.into_iter().zip(&mut moc3.into_iter()) {
@@ -309,4 +331,5 @@ pub fn main() {
   test_and_compressed_iterators();
 
   test_ranges();
+  test_ranges_2();
 }

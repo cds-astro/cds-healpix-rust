@@ -541,13 +541,13 @@ fn consume_overlapped_cells<H, T2>(it: &mut T2, low_res_cell: &HpxCell<H>) -> Op
 #[cfg(test)]
 mod tests {
   use super::*;
-  use super::super::BasicMOCIter;
+  use super::super::LazyMOCIter;
   
   #[test]
   pub fn test_not_empty() {
     for depth in 0..30 {
       let empty_it = std::iter::empty::<HpxCell<u64>>();
-      let mut full_it = not_unchecked(BasicMOCIter::new(depth, empty_it));
+      let mut full_it = not_unchecked(LazyMOCIter::new(depth, empty_it));
       for hash in 0..12_u64 {
         assert_eq!(full_it.next(), Some(HpxCell { depth: 0, hash }));
       }
@@ -559,7 +559,7 @@ mod tests {
   pub fn test_not_full() {
     for depth in 0..30 {
       let mut empty_it = 
-        not_unchecked(BasicMOCIter::new(depth, 
+        not_unchecked(LazyMOCIter::new(depth, 
                    (0..12_u64).into_iter().map(|hash| HpxCell{depth: 0, hash}))
       );
       assert_eq!(empty_it.next(), None);
@@ -574,8 +574,8 @@ mod tests {
       let mut full_2: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut full_it = and_unchecked(
-        BasicMOCIter::new(depth, full_1.into_iter()),
-        BasicMOCIter::new(depth, full_2.into_iter())
+        LazyMOCIter::new(depth, full_1.into_iter()),
+        LazyMOCIter::new(depth, full_2.into_iter())
       );
       for hash in 0..12_u64 {
         assert_eq!(full_it.next(), Some(HpxCell { depth: 0, hash }));
@@ -591,8 +591,8 @@ mod tests {
       let mut full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut emtpy_res = and_unchecked(
-        BasicMOCIter::new(depth, empty_it),
-        BasicMOCIter::new(depth, full.into_iter()),
+        LazyMOCIter::new(depth, empty_it),
+        LazyMOCIter::new(depth, full.into_iter()),
       );
       assert_eq!(emtpy_res.next(), None);
     }
@@ -605,8 +605,8 @@ mod tests {
       let mut full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut full_it = or_unchecked(
-        BasicMOCIter::new(depth, empty_it),
-        BasicMOCIter::new(depth, full.into_iter()),
+        LazyMOCIter::new(depth, empty_it),
+        LazyMOCIter::new(depth, full.into_iter()),
       );
       for hash in 0..12_u64 {
         assert_eq!(full_it.next(), Some(HpxCell { depth: 0, hash }));
@@ -621,8 +621,8 @@ mod tests {
       let empty_it_1 = std::iter::empty::<HpxCell<u64>>();
       let empty_it_2 = std::iter::empty::<HpxCell<u64>>();
       let mut emtpy_res = and_unchecked(
-        BasicMOCIter::new(depth, empty_it_1),
-        BasicMOCIter::new(depth, empty_it_2),
+        LazyMOCIter::new(depth, empty_it_1),
+        LazyMOCIter::new(depth, empty_it_2),
       );
       assert_eq!(emtpy_res.next(), None);
     }

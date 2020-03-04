@@ -12,10 +12,10 @@ Additional tests for cdshealpix.
 """
 
 [build-dependencies]
-cdshealpix = { version = "0.4.1", path = ".." }
+cdshealpix = { version = "0.5.0", path = ".." }
 
 [dependencies]
-cdshealpix = { version = "0.4.1", path = ".." }
+cdshealpix = { version = "0.5.0", path = ".." }
 serde = "1.0.85"
 serde_derive = "1.0.85"  # Serialization/Deserialisation lib macros
 serde_json = "1.0.37"

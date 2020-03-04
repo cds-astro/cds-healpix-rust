@@ -20,6 +20,7 @@ use std::cmp::{min, max};
 use std::mem::{self, replace};
 use std::fmt::{Display, Debug};
 use std::ops::{ShlAssign, ShrAssign};
+use std::vec::{Vec, IntoIter};
 
 
 pub mod op;
@@ -158,23 +159,27 @@ pub trait MOCIterator<H: HpxHash>: Sized + HasMaxDepth + Iterator<Item=HpxCell<H
 }
 impl<H: HpxHash, T> MOCIterator<H> for T where T:  Sized + HasMaxDepth + Iterator<Item=HpxCell<H>> {}
 
-/// A very basic, unchecked, MOC iterator. 
-pub struct BasicMOCIter<H, T>
+/// A very basic, unchecked, MOC iterator.
+/// We call it lazy because if the stored iterator is the result of a operation,
+/// the operation will be performed only as we iterate over the LazyIterator: this
+/// is an important point to be aware of when performing benches.
+/// For an structure actually performing the operation, see `OwnedMOC`.
+pub struct LazyMOCIter<H, T>
   where H: HpxHash,
         T: Iterator<Item=HpxCell<H>> {
   depth_max: u8,
   it: T
 }
 
-impl<H, T> BasicMOCIter<H, T>
+impl<H, T> LazyMOCIter<H, T>
   where H: HpxHash,
         T: Iterator<Item=HpxCell<H>> {
-  pub fn new(depth_max: u8, it: T) -> BasicMOCIter<H, T> {
-    BasicMOCIter{ depth_max, it}
+  pub fn new(depth_max: u8, it: T) -> LazyMOCIter<H, T> {
+    LazyMOCIter{ depth_max, it}
   }
 }
 
-impl<H, T> HasMaxDepth for BasicMOCIter<H, T>
+impl<H, T> HasMaxDepth for LazyMOCIter<H, T>
   where H: HpxHash,
         T: Iterator<Item=HpxCell<H>> {
   fn depth_max(&self) -> u8 {
@@ -182,7 +187,7 @@ impl<H, T> HasMaxDepth for BasicMOCIter<H, T>
   }
 }
 
-impl<H, T> Iterator for BasicMOCIter<H, T>
+impl<H, T> Iterator for LazyMOCIter<H, T>
   where H: HpxHash,
         T: Iterator<Item=HpxCell<H>> {
 
@@ -193,6 +198,26 @@ impl<H, T> Iterator for BasicMOCIter<H, T>
   }
 }
 
+/// A very basic, unchecked, MOC.
+pub struct OwnedMOC<H>
+  where H: HpxHash {
+  depth_max: u8,
+  it: Vec<HpxCell<H>>
+}
+
+impl<H> OwnedMOC<H>
+  where H: HpxHash {
+
+  /// Internally, a `collect()` is performed.
+  pub fn from_it<I>(depth_max: u8, it: I) -> OwnedMOC<H>
+    where I: Iterator<Item=HpxCell<H>>{
+    OwnedMOC{ depth_max, it: it.collect() }
+  }
+  
+  pub fn into_moc_iter(self) -> LazyMOCIter<H, IntoIter<HpxCell<H>>> {
+    LazyMOCIter::new(self.depth_max, self.it.into_iter())
+  }
+}
 
 /// Here we define a MOC as a simple sequence of HEALPix ranges having the following properties:
 /// * teh range bounds are expressed at the MAX_DEPTH
@@ -213,6 +238,65 @@ pub trait RangeMOCIterator<H: HpxHash>: Sized + HasMaxDepth + Iterator<Item=HpxR
 impl<H: HpxHash, T> RangeMOCIterator<H> for T where T:  Sized + HasMaxDepth + Iterator<Item=HpxRange<H>> {}
 
 
+/// A very basic, unchecked, Range MOC iterator.
+/// We call it lazy because if the stored iterator is the result of a operation,
+/// the operation will be performed only as we iterate over the LazyIterator: this
+/// is an important point to be aware of when performing benches.
+/// For an structure actually performing the operation, see `OwnedRangeMOC`.
+pub struct LazyRangeMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=HpxRange<H>> {
+  depth_max: u8,
+  it: T
+}
+
+impl<H, T> LazyRangeMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=HpxRange<H>> {
+  pub fn new(depth_max: u8, it: T) -> LazyRangeMOCIter<H, T> {
+    LazyRangeMOCIter{ depth_max, it}
+  }
+}
+
+impl<H, T> HasMaxDepth for LazyRangeMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=HpxRange<H>> {
+  fn depth_max(&self) -> u8 {
+    self.depth_max
+  }
+}
+
+impl<H, T> Iterator for LazyRangeMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=HpxRange<H>> {
+
+  type Item = HpxRange<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.it.next()
+  }
+}
+
+/// A very basic, unchecked, MOC.
+pub struct OwnedRangeMOC<H>
+  where H: HpxHash {
+  depth_max: u8,
+  it: Vec<HpxRange<H>>
+}
+
+impl<H> OwnedRangeMOC<H>
+  where H: HpxHash {
+
+  /// Internally, a `collect()` is performed.
+  pub fn from_it<I>(depth_max: u8, it: I) -> OwnedRangeMOC<H>
+    where I: Iterator<Item=HpxRange<H>>{
+    OwnedRangeMOC{ depth_max, it: it.collect() }
+  }
+
+  pub fn into_range_moc_iter(self) -> LazyRangeMOCIter<H, IntoIter<HpxRange<H>>> {
+    LazyRangeMOCIter::new(self.depth_max, self.it.into_iter())
+  }
+}
 
 /// Transforms a `MOCIterator` into a `RangeMOCIterator`
 pub struct RangesFromMOCIterator<H, T>
