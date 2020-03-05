@@ -22,7 +22,6 @@ use std::fmt::{Display, Debug};
 use std::ops::{ShlAssign, ShrAssign};
 use std::vec::{Vec, IntoIter};
 
-
 pub mod op;
 pub mod compressed;
 
@@ -37,11 +36,10 @@ pub trait HpxHash: NumAssign + PrimInt + ToPrimitive + Unsigned + ShlAssign<u8> 
   // 4 bits reserved for base cells 
   // + 1 bit for the sentinel bit
   // + 1 bit for the flag in BMOCs
-  const MAX_DEPTH: u8 = (((mem::size_of::<Self>() as u8) << 3 )- 6) >> 1;
+  const MAX_DEPTH: u8 = (((mem::size_of::<Self>() as u8) << 3) - 6) >> 1;
   
 }
 impl<H> HpxHash for H where H: NumAssign + PrimInt + ToPrimitive + Unsigned + ShlAssign<u8> + ShrAssign<u8> + Copy + Display + Debug{}
-
 
 /// Represents an HEALPix cell with its depth and hash value.
 #[derive(Debug, PartialEq)]
@@ -82,6 +80,34 @@ pub struct HpxRange<H: HpxHash> {
 impl<H: HpxHash> HpxRange<H> {
   pub fn new(from: H, to: H) -> HpxRange<H> {
     HpxRange { from, to}
+  }
+
+  /// # Args:
+  /// * `depth_max`: the maximum depth of cell in the range (the RangeMOC depth max).
+  /// * `twice_dd`: twice the depth difference between DEPTH_MAX and RangeMOC `depth_max`
+  /// * `range_len_min`: the length of a range of one cell (depends on the RangeMOC depth max).
+  /// * `mask`: a mask allowing to know if the first element of the range if a cell of `depth_max`
+  /// # Remark: 
+  /// We can deduce `twice_dd` and `range_len_min` from `H` and `depth_max`, but we pass them to avoid
+  /// recomputing them (even if it is fast)
+  fn next_with_knowledge(&mut self, depth_max: u8, twice_dd: usize, range_len_min: H, mask: H) -> Option<HpxCell<H>> {
+    let len = self.to - self.from;
+    if len < H::one() {
+      None
+    } else if len == range_len_min || self.from & mask != H::zero() {
+      // A range of 1 cell a depth_max
+      let c = HpxCell::new(depth_max, self.from >> twice_dd);
+      self.from += range_len_min;
+      Some(c)
+    } else {
+      let dd_max_from_len = (H::N_BITS - 1 - len.leading_zeros() as u8) >> 1;
+      let dd_max_from_low = (self.from.trailing_zeros() as u8) >> 1;
+      let dd = min(H::MAX_DEPTH, min(dd_max_from_len, dd_max_from_low));
+      let twice_dd = (dd << 1) as usize;
+      let c = HpxCell::new(H::MAX_DEPTH - dd, self.from >> twice_dd);
+      self.from += H::one() << twice_dd;
+      Some(c)
+    }
   }
 }
 
@@ -356,6 +382,10 @@ pub struct MOCIteratorFromRanges<H, R>
         R: RangeMOCIterator<H> {
   it: R,
   curr: Option<HpxRange<H>>,
+  depth_max: u8,
+  twice_dd: usize,
+  range_len_min: H,
+  mask: H,
 }
 
 impl<H, R> MOCIteratorFromRanges<H, R>
@@ -364,9 +394,17 @@ impl<H, R> MOCIteratorFromRanges<H, R>
 
   fn new(mut it: R) -> MOCIteratorFromRanges<H, R> {
     let curr = it.next();
+    let depth_max = it.depth_max();
+    let twice_dd = ((H::MAX_DEPTH - depth_max) << 1) as usize;
+    let range_len_min = H::one() << twice_dd;
+    let mask = (H::one() << 1 | H::one()) << twice_dd;
     MOCIteratorFromRanges {
       it,
       curr,
+      depth_max,
+      twice_dd,
+      range_len_min,
+      mask,
     }
   }
 }
@@ -387,7 +425,8 @@ impl<H, R> Iterator for MOCIteratorFromRanges<H, R>
 
   fn next(&mut self) -> Option<Self::Item> {
     if let Some(c) = &mut self.curr {
-      let res = c.next();
+      // let res = c.next();
+      let res = c.next_with_knowledge(self.depth_max, self.twice_dd, self.range_len_min, self.mask);
       if res.is_none() {
         self.curr = self.it.next();
         self.next()
