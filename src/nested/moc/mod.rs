@@ -21,6 +21,10 @@ use std::mem::{self, replace};
 use std::fmt::{Display, Debug};
 use std::ops::{ShlAssign, ShrAssign};
 use std::vec::{Vec, IntoIter};
+use std::iter::Map;
+use std::slice::Iter;
+
+use super::{internal_edge_sorted, append_external_edge, append_external_edge_sorted};
 
 pub mod op;
 pub mod compressed;
@@ -95,7 +99,7 @@ impl<H: HpxHash> HpxRange<H> {
     if len < H::one() {
       None
     } else if len == range_len_min || self.from & mask != H::zero() {
-      // A range of 1 cell a depth_max
+      // A range of 1 cell at depth_max
       let c = HpxCell::new(depth_max, self.from >> twice_dd);
       self.from += range_len_min;
       Some(c)
@@ -224,26 +228,111 @@ impl<H, T> Iterator for LazyMOCIter<H, T>
   }
 }
 
+/// 
+pub struct FlatLazyMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=H> {
+  depth_max: u8,
+  it: T
+}
+
+impl<H, T> FlatLazyMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=H> {
+  pub fn new(depth_max: u8, it: T) -> FlatLazyMOCIter<H, T> {
+    FlatLazyMOCIter{ depth_max, it}
+  }
+}
+
+impl<H, T> HasMaxDepth for FlatLazyMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=H> {
+  fn depth_max(&self) -> u8 {
+    self.depth_max
+  }
+}
+
+impl<H, T> Iterator for FlatLazyMOCIter<H, T>
+  where H: HpxHash,
+        T: Iterator<Item=H> {
+
+  type Item = HpxCell<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.it.next().map(|hash |HpxCell{ depth: self.depth_max, hash })
+  }
+}
+
 /// A very basic, unchecked, MOC.
 pub struct OwnedMOC<H>
   where H: HpxHash {
   depth_max: u8,
-  it: Vec<HpxCell<H>>
+  moc: Vec<HpxCell<H>>
 }
 
 impl<H> OwnedMOC<H>
   where H: HpxHash {
 
-  /// Internally, a `collect()` is performed.
+  pub fn new_unchecked(depth_max: u8, moc: Vec<HpxCell<H>>) -> OwnedMOC<H> {
+    OwnedMOC { depth_max, moc}
+  }
+  
+  /*/// Internally, a `collect()` is performed.
   pub fn from_it<I>(depth_max: u8, it: I) -> OwnedMOC<H>
     where I: Iterator<Item=HpxCell<H>>{
-    OwnedMOC{ depth_max, it: it.collect() }
+    OwnedMOC{ depth_max, it: CheckedIterator::new(it).collect() }
+  }*/
+  
+  /// Internally, a `collect()` is performed.
+  pub fn from_it_unchecked<I>(depth_max: u8, it: I) -> OwnedMOC<H>
+    where I: Iterator<Item=HpxCell<H>>{
+    OwnedMOC{ depth_max, moc: it.collect() }
   }
   
   pub fn into_moc_iter(self) -> LazyMOCIter<H, IntoIter<HpxCell<H>>> {
-    LazyMOCIter::new(self.depth_max, self.it.into_iter())
+    LazyMOCIter::new(self.depth_max, self.moc.into_iter())
+  }
+  
+  pub fn len(&self) -> usize {
+    self.moc.len()
+  }
+  
+}
+
+
+impl OwnedMOC<u64> {
+  
+  pub fn expand(self) -> OrMocIter<u64, 
+    LazyMOCIter<u64, IntoIter<HpxCell<u64>>>,
+    MergeIter<u64, FlatLazyMOCIter<u64, IntoIter<u64>>>
+  > {
+    let mut ext: Vec<u64> = Vec::with_capacity(10 * self.moc.len()); // constant to be adjusted
+    for HpxCell { depth, hash } in &self.moc {
+      append_external_edge(*depth, *hash, self.depth_max - *depth, &mut ext);
+    }
+    ext.sort_unstable(); // parallelize with rayon? It is the slowest part!!
+    ext.dedup();
+    let depth = self.depth_max;
+    self.into_moc_iter().or(
+      MergeIter::new(
+        FlatLazyMOCIter::new(depth, ext.into_iter())
+      )
+    )
+  }
+
+  pub fn external_border(self) -> MinusOnSingleDepthCellsIter<u64,  IntoIter<u64>,  IntoIter<u64>> {
+    let mut ext: Vec<u64> = Vec::with_capacity(10 * self.moc.len()); // constant to be adjusted
+    let mut int: Vec<u64> = Vec::with_capacity(4 * self.moc.len()); // constant to be adjusted
+    for HpxCell { depth, hash } in &self.moc {
+      append_external_edge(*depth, *hash, self.depth_max - *depth, &mut ext);
+      int.append(&mut internal_edge_sorted(*depth, *hash, self.depth_max - *depth));
+    }
+    ext.sort_unstable(); // parallelize with rayon? It is the slowest part!!
+    ext.dedup();
+    MinusOnSingleDepthCellsIter::new(self.depth_max, ext.into_iter(), int.into_iter())
   }
 }
+
 
 /// Here we define a MOC as a simple sequence of HEALPix ranges having the following properties:
 /// * teh range bounds are expressed at the MAX_DEPTH
@@ -254,6 +343,7 @@ pub trait RangeMOCIterator<H: HpxHash>: Sized + HasMaxDepth + Iterator<Item=HpxR
   fn to_moc_iter(self) -> MOCIteratorFromRanges<H, Self> {
     MOCIteratorFromRanges::new(self)
   }
+
   // not
   // and
   // or
@@ -303,26 +393,93 @@ impl<H, T> Iterator for LazyRangeMOCIter<H, T>
   }
 }
 
+
+pub struct LazyRangeMOCVecIter<'a, H>
+  where H: HpxHash {
+  depth_max: u8,
+  iter: Iter<'a, HpxRange<H>>
+}
+
+impl<'a, H> LazyRangeMOCVecIter<'a, H>
+  where H: HpxHash {
+  pub fn new(depth_max: u8, iter: Iter<'a, HpxRange<H>>) -> LazyRangeMOCVecIter<'a, H> {
+    LazyRangeMOCVecIter{ depth_max, iter}
+  }
+}
+
+impl<'a, H> HasMaxDepth for LazyRangeMOCVecIter<'a, H>
+  where H: HpxHash {
+  fn depth_max(&self) -> u8 {
+    self.depth_max
+  }
+}
+
+impl<'a, H> Iterator for LazyRangeMOCVecIter<'a, H>
+  where H: HpxHash {
+
+  type Item = HpxRange<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.iter.next().map(| HpxRange{ from, to} | HpxRange{ from: *from, to: *to})
+  }
+}
+
+
 /// A very basic, unchecked, MOC.
 pub struct OwnedRangeMOC<H>
   where H: HpxHash {
   depth_max: u8,
-  it: Vec<HpxRange<H>>
+  ranges: Vec<HpxRange<H>>
 }
 
 impl<H> OwnedRangeMOC<H>
   where H: HpxHash {
 
+  pub fn new_unchecked(depth_max: u8, ranges: Vec<HpxRange<H>>) -> OwnedRangeMOC<H> {
+    OwnedRangeMOC{ depth_max, ranges}
+  }
+  
   /// Internally, a `collect()` is performed.
   pub fn from_it<I>(depth_max: u8, it: I) -> OwnedRangeMOC<H>
     where I: Iterator<Item=HpxRange<H>>{
-    OwnedRangeMOC{ depth_max, it: it.collect() }
+    OwnedRangeMOC{ depth_max, ranges: it.collect() }
   }
 
   pub fn into_range_moc_iter(self) -> LazyRangeMOCIter<H, IntoIter<HpxRange<H>>> {
-    LazyRangeMOCIter::new(self.depth_max, self.it.into_iter())
+    LazyRangeMOCIter::new(self.depth_max, self.ranges.into_iter())
+  }
+
+  pub fn range_moc_iter(&self) -> LazyRangeMOCVecIter<'_, H> {
+    LazyRangeMOCVecIter::new(self.depth_max, self.ranges.iter())
   }
 }
+
+impl OwnedRangeMOC<u64> {
+  pub fn expand(self) -> OrMocIter<u64,
+    MOCIteratorFromRanges<u64, LazyRangeMOCIter<u64, IntoIter<HpxRange<u64>>>>,
+    MergeIter<u64, FlatLazyMOCIter<u64, IntoIter<u64>>>
+  > {
+    let mut ext: Vec<u64> = Vec::with_capacity(10 * self.ranges.len()); // constant to be adjusted
+    for HpxCell { depth, hash } in MOCIteratorFromRanges::new(self.range_moc_iter()) {
+      append_external_edge(depth, hash, self.depth_max - depth, &mut ext);
+    }
+    ext.sort_unstable(); // parallelize with rayon? It is the slowest part!!
+    ext.dedup();
+    let depth = self.depth_max;
+    MOCIteratorFromRanges::new(self.into_range_moc_iter())
+      .or(MergeIter::new(FlatLazyMOCIter::new(depth, ext.into_iter())
+      )
+    )
+  }
+}
+
+impl<H> HasMaxDepth for OwnedRangeMOC<H>
+  where H: HpxHash {
+  fn depth_max(&self) -> u8 {
+    self.depth_max
+  }
+}
+
 
 /// Transforms a `MOCIterator` into a `RangeMOCIterator`
 pub struct RangesFromMOCIterator<H, T>
@@ -373,8 +530,6 @@ impl<H, T> Iterator for RangesFromMOCIterator<H, T>
     }
   }
 }
-
-
 
 /// Transforms a `RangeMOCIterator` into a `MOCIterator`.
 pub struct MOCIteratorFromRanges<H, R>
@@ -439,6 +594,68 @@ impl<H, R> Iterator for MOCIteratorFromRanges<H, R>
   }
 }
 
+/// Transforms a ref on `RangeMOCIterator` into a `MOCIterator`.
+pub struct MOCIteratorFromRefRanges<'a, H, R>
+  where H: HpxHash,
+        R: RangeMOCIterator<H> {
+  it: &'a mut R,
+  curr: Option<HpxRange<H>>,
+  depth_max: u8,
+  twice_dd: usize,
+  range_len_min: H,
+  mask: H,
+}
+
+impl<'a, H, R> MOCIteratorFromRefRanges<'a, H, R>
+  where H: HpxHash ,
+        R: RangeMOCIterator<H> {
+
+  fn new(mut it: &mut R) -> MOCIteratorFromRefRanges<H, R> {
+    let curr = it.next();
+    let depth_max = it.depth_max();
+    let twice_dd = ((H::MAX_DEPTH - depth_max) << 1) as usize;
+    let range_len_min = H::one() << twice_dd;
+    let mask = (H::one() << 1 | H::one()) << twice_dd;
+    MOCIteratorFromRefRanges {
+      it,
+      curr,
+      depth_max,
+      twice_dd,
+      range_len_min,
+      mask,
+    }
+  }
+}
+
+impl<'a, H, R> HasMaxDepth for MOCIteratorFromRefRanges<'a, H, R>
+  where H: HpxHash ,
+        R: RangeMOCIterator<H> {
+  fn depth_max(&self) -> u8 {
+    self.it.depth_max()
+  }
+}
+
+impl<'a, H, R> Iterator for MOCIteratorFromRefRanges<'a, H, R>
+  where H: HpxHash,
+        R: RangeMOCIterator<H> {
+
+  type Item = HpxCell<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if let Some(c) = &mut self.curr {
+      // let res = c.next();
+      let res = c.next_with_knowledge(self.depth_max, self.twice_dd, self.range_len_min, self.mask);
+      if res.is_none() {
+        self.curr = self.it.next();
+        self.next()
+      } else {
+        res
+      }
+    } else {
+      None
+    }
+  }
+}
 
 
 /// Iterator decorator made to ensure that the decorated iterator returns NESTED HEALPix cells
@@ -533,15 +750,8 @@ mod tests {
   fn test_range() {
     let c = HpxCell::new(1_u8, 10_u64);
     let mut r = c.range();
-    // let r = HpxRange::new(1_u64 << 28, 9_u64 << 28);
-    /*for ran in r {
-      println!("range: {:?}", ran);
-      i += 1;
-      // if i > 10 { break; }
-    } */
     assert_eq!(r.next(), Some(c));
     assert_eq!(r.next(), None);
   }
 
 }
-

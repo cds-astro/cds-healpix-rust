@@ -5,7 +5,11 @@ use std::time::{Duration, Instant};
 use std::cmp::max;
 
 use cdshealpix::nested::bmoc::*;
-use cdshealpix::nested::moc::{self, HpxCell, LazyMOCIter, OwnedRangeMOC, MOCIterator, RangeMOCIterator};
+use cdshealpix::nested::moc::{
+  self,
+  HpxCell, OwnedMOC, LazyMOCIter, MOCIterator,
+  OwnedRangeMOC, RangeMOCIterator
+};
 use cdshealpix::nested::moc::op::{not, not_unchecked, and, and_unchecked, or, or_unchecked};
 use cdshealpix::nested::moc::compressed::{compress_unchecked, uncompress};
 
@@ -316,6 +320,41 @@ fn test_ranges_2() {
   }
 }
 
+fn test_expand() {
+  let moc = load_sdss().unwrap().to_bmoc();
+  // let moc1: Vec<HpxCell<u64>> = moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)).collect();
+  let moc1 = OwnedMOC::from_it_unchecked(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
+  let len = moc1.len();
+  let now = Instant::now();
+  let moc2: Vec<HpxCell<u64>> = moc1.expand().collect();
+  println!("Expand + collect of sizes: {} => {} at depth {} done in {} ms", 
+           len, moc2.len(), moc.get_depth_max(), now.elapsed().as_millis());
+}
+
+
+fn test_expand_v2() {
+  let moc = load_sdss().unwrap().to_bmoc();
+  // let moc1: Vec<HpxCell<u64>> = moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)).collect();
+  let moc1 = OwnedMOC::from_it_unchecked(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
+  let moc2 = OwnedMOC::from_it_unchecked(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
+  let len = moc1.len();
+  let now = Instant::now();
+  let moc3: Vec<HpxCell<u64>> = or(moc1.into_moc_iter(), moc2.external_border()).collect();
+  println!("Expand + collect of sizes: {} => {} at depth {} done in {} ms",
+           len, moc3.len(), moc.get_depth_max(), now.elapsed().as_millis());
+}
+
+fn test_expand_ranges() {
+  let moc = load_sdss().unwrap().to_bmoc();
+  let moc1 = OwnedMOC::<u64>::from_it_unchecked(moc.get_depth_max(), moc.into_iter().map(|c| HpxCell::new(c.depth, c.hash)));
+  let len = moc1.len();
+  let ranges = OwnedRangeMOC::from_it(moc.get_depth_max(), moc1.into_moc_iter().to_range_iter());
+  let now = Instant::now();
+  let moc2: Vec<HpxCell<u64>> = ranges.expand().collect();
+  println!("Expand from ranges + collect of sizes: {} => {} at depth {} done in {} ms",
+           len, moc2.len(), moc.get_depth_max(), now.elapsed().as_millis());
+}
+
 pub fn main() {
   test_sdss_not();
   test_glimpse_not();
@@ -328,8 +367,12 @@ pub fn main() {
 
   test_sdss_build_from_ordered_input();
 
-  test_and_compressed_iterators();
+ test_and_compressed_iterators();
 
   test_ranges();
   test_ranges_2();
+
+  test_expand();
+  test_expand_v2();
+  test_expand_ranges();
 }

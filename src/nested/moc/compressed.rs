@@ -252,10 +252,10 @@ impl <H, T> Iterator for CompressMocIter<H, T>
             }
             self.next()
           } else if self.has_last_byte() {
-            debug_assert!(self.d == 0 && self.h == twelve);
+            debug_assert!(self.d == 0 && self.h == eleven, "d: {}, h: {}", self.d, self.h);
             Some(self.take_last_byte())
           } else {
-            debug_assert!(self.d == 0 && self.h == twelve);
+            debug_assert!(self.d == 0 && self.h == eleven, "d: {}, h: {}", self.d, self.h);
             None
           }
         } else { // go up to depth 0
@@ -393,8 +393,8 @@ impl <'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
       } else if self.depth == self.depth_max { // bit == 0
           self.increment();
       } else { // bit == 0
-        self.go_down_of_1_depth();
         debug_assert!(self.depth < self.depth_max);
+        self.go_down_of_1_depth();
       }
     }
     None

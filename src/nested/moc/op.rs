@@ -6,7 +6,6 @@ use std::mem::replace;
 
 use super::{HpxHash, HpxCell, HasMaxDepth, MOCIterator, CheckedIterator};
 
-
 ///
 /// # Panic
 /// * this method panics if at least one of the two input iterator is not ordered following
@@ -65,6 +64,298 @@ pub fn or_unchecked<H, T1, T2>(left_it: T1, right_it: T2) -> OrMocIter<H, T1, T2
         T1: MOCIterator<H>,
         T2: MOCIterator<H> {
   OrMocIter::new_unchecked(left_it, right_it)
+}
+
+/// Possibly merge successive ordered HEALPix cells into lower resolution cells.
+/// WARNING: the input iterator **MUST NOT** contains duplicates!!
+pub struct MergeIter<H, T> 
+  where H: HpxHash,
+        T: MOCIterator<H> {
+  it: T,
+  to_be_possibly_packed: Vec<HpxCell<H>>,
+  flush_stack: u8,
+}
+
+impl<H, T> MergeIter<H, T>
+  where H: HpxHash,
+        T: MOCIterator<H> {
+
+  pub fn new(it: T) -> MergeIter<H, T> {
+    let depth_max = it.depth_max();
+    MergeIter {
+      it,
+      to_be_possibly_packed: Vec::with_capacity(3 * depth_max as usize), //Default::default(),
+      flush_stack: 0
+    }
+  }
+  
+  fn pack_stack(&mut self) {
+    let h0 = H::zero();
+    let h1 = H::one();
+    let h2 = h1 << 1;
+    let h3 = h2 | h1;
+    while self.to_be_possibly_packed.len() >= 4 {
+      let len = &self.to_be_possibly_packed.len();
+      let one = &self.to_be_possibly_packed[len - 4];
+      let two = &self.to_be_possibly_packed[len - 3];
+      let thr = &self.to_be_possibly_packed[len - 2];
+      let fou = &self.to_be_possibly_packed[len - 1];
+      if one.hash & h3 == h0
+        && one.depth == two.depth
+        && one.depth == thr.depth
+        && one.depth == fou.depth
+        && one.hash + h1 == two.hash
+        && one.hash + h2 == thr.hash
+        && one.hash + h3 == fou.hash {
+        let depth = one.depth - 1;
+        let hash = one.hash >> 2;
+        self.to_be_possibly_packed.truncate(len - 4);
+        self.to_be_possibly_packed.push(HpxCell { depth, hash });
+        if depth == 0 {
+          debug_assert_eq!(self.to_be_possibly_packed.len(), 1);
+          self.flush_stack = 1;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+}
+
+impl<H, T> HasMaxDepth for MergeIter<H, T>
+  where H: HpxHash ,
+        T: MOCIterator<H> {
+  fn depth_max(&self) -> u8 {
+    self.it.depth_max()
+  }
+}
+
+impl<H, T> Iterator for MergeIter<H, T>
+  where H: HpxHash,
+        T: MOCIterator<H> {
+  
+  type Item = HpxCell<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.flush_stack > 0 {
+      self.flush_stack -= 1;
+      Some(self.to_be_possibly_packed.remove(0))
+    } else {
+      let h0 = H::zero();
+      let h1 = H::one();
+      let h2 = h1 << 1;
+      let h3 = h2 & h1;
+      let new = self.it.next();
+      match new {
+        Some(curr) =>
+          if self.to_be_possibly_packed.len() > 0 {
+            // Unwrapping is safe since we first test that len() > 0
+            let prev = self.to_be_possibly_packed.last().unwrap();
+            if curr.depth == prev.depth && curr.hash == prev.hash + H::one() {
+              let pack = curr.hash & h3 == h3;
+              self.to_be_possibly_packed.push(curr);
+              if pack {
+                self.pack_stack();
+              }
+            } else if curr.depth > prev.depth && curr.hash == (prev.hash + h1) << (((curr.depth - prev.depth) << 1) as usize) {
+              debug_assert_eq!(curr.hash & h3, h0);
+              self.to_be_possibly_packed.push(curr);
+            } else {
+              let curr_d = curr.depth;
+              let curr_h = curr.hash;
+              self.to_be_possibly_packed.push(curr);
+              self.flush_stack = if curr_d > 0 && curr_h & h3 == h0 {
+                self.to_be_possibly_packed.len() - 1
+              } else {
+                self.to_be_possibly_packed.len()
+              } as u8;
+            }
+            self.next()
+          } else if curr.depth > 0 && curr.hash & h3 == h0 {
+            self.to_be_possibly_packed.push(curr);
+            self.next()
+          } else {
+            Some(curr)
+          },
+        None =>
+          if self.to_be_possibly_packed.len() > 0 {
+            self.flush_stack = self.to_be_possibly_packed.len() as u8;
+            self.next()
+          } else {
+            None
+          },
+      }
+    }
+  }
+}
+
+/// Struct used to perform the `minus` operation between two sorted list of HEALPix cells at
+/// the same depth.
+/// It implements `MOCIterator`, it means that in output the result is sorted (easy since inputs are 
+/// sorted) and cells possibly aggregable into a super-cell **MUST** be aggregated!
+/// # Remark:
+/// If this iterator would be only used as one of the inputs of an **OR** operation, the *pack*
+/// operation could be omitted (since it is performed in the **OR**).
+// Here we introduce redundant code with the Or operation: we should make an iterator which only packs!
+// But as often, I want a quick and dirty test of the new idea on EXPAND... to be cleaned latter!! 
+pub struct MinusOnSingleDepthCellsIter<H, T1, T2>
+  where H: HpxHash,
+        T1: Iterator<Item=H>,
+        T2: Iterator<Item=H> {
+  depth: u8,
+  left_it: T1,
+  right_it: T2,
+  left: Option<HpxCell<H>>,
+  right: Option<HpxCell<H>>,
+  to_be_possibly_packed: Vec<HpxCell<H>>,
+  flush_stack: u8,
+}
+
+impl<H, T1, T2> MinusOnSingleDepthCellsIter<H, T1, T2>
+  where H: HpxHash,
+        T1: Iterator<Item=H>,
+        T2: Iterator<Item=H> {
+  pub fn new(depth: u8, mut left_it: T1, mut right_it: T2) -> MinusOnSingleDepthCellsIter<H, T1, T2> {
+    let left = left_it.next().map(|hash| HpxCell{ depth, hash});
+    let right = right_it.next().map(|hash| HpxCell{ depth, hash});
+    MinusOnSingleDepthCellsIter { 
+      depth, 
+      left_it, 
+      right_it,
+      left,
+      right,
+      to_be_possibly_packed:  Default::default(),
+      flush_stack: 0,
+    }
+  }
+
+  fn pack_stack(&mut self) {
+    let h0 = H::zero();
+    let h1 = H::one();
+    let h2 = h1 << 1;
+    let h3 = h2 | h1;
+    while self.to_be_possibly_packed.len() >= 4 {
+      let len = &self.to_be_possibly_packed.len();
+      let one = &self.to_be_possibly_packed[len - 4];
+      let two = &self.to_be_possibly_packed[len - 3];
+      let thr = &self.to_be_possibly_packed[len - 2];
+      let fou = &self.to_be_possibly_packed[len - 1];
+      if one.hash & h3 == h0
+        && one.depth == two.depth
+        && one.depth == thr.depth
+        && one.depth == fou.depth
+        && one.hash + h1 == two.hash
+        && one.hash + h2 == thr.hash
+        && one.hash + h3 == fou.hash {
+        let depth = one.depth - 1;
+        let hash = one.hash >> 2;
+        self.to_be_possibly_packed.truncate(len - 4);
+        self.to_be_possibly_packed.push(HpxCell { depth, hash });
+        if depth == 0 {
+          debug_assert_eq!(self.to_be_possibly_packed.len(), 1);
+          self.flush_stack = 1;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  fn unpacked_next(&mut self) -> Option<HpxCell<H>> {
+    let depth = self.depth;
+    match (&self.left, &self.right) {
+      (Some(l), Some(r)) =>
+        match l.hash.cmp(&r.hash) {
+          Ordering::Less => replace(
+            &mut self.left, 
+            self.left_it.next().map(|hash| HpxCell{ depth, hash})
+          ),
+          Ordering::Greater => {
+            self.right = self.right_it.next().map(|hash| HpxCell{ depth, hash});
+            self.unpacked_next()
+          },
+          Ordering::Equal => {
+            self.left = self.left_it.next().map(|hash| HpxCell{ depth, hash});
+            self.right = self.right_it.next().map(|hash| HpxCell{ depth, hash});
+            self.unpacked_next()
+          }, 
+        }
+      (Some(_l), None) => replace(
+        &mut self.left, 
+        self.left_it.next().map(|hash| HpxCell{ depth, hash})
+      ),
+      (None, _) => None,
+    }
+  }
+}
+
+impl<H, T1, T2> HasMaxDepth for MinusOnSingleDepthCellsIter<H, T1, T2>
+  where H: HpxHash,
+        T1: Iterator<Item=H>,
+        T2: Iterator<Item=H>  {
+  fn depth_max(&self) -> u8 {
+    self.depth
+  }
+}
+
+impl<H, T1, T2> Iterator for MinusOnSingleDepthCellsIter<H, T1, T2>
+  where H: HpxHash,
+        T1: Iterator<Item=H>,
+        T2: Iterator<Item=H> {
+  type Item = HpxCell<H>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    // All this mess to handle cases in which the cells have to be merged in a cell of lower resolution
+    let h0 = H::zero();
+    let h1 = H::one();
+    let h2 = h1 << 1;
+    let h3 = h2 & h1;
+    if self.flush_stack > 0 {
+      self.flush_stack -= 1;
+      Some(self.to_be_possibly_packed.remove(0))
+    } else {
+      let new = self.unpacked_next();
+      match new {
+        Some(curr) =>
+          if self.to_be_possibly_packed.len() > 0 {
+            // Unwrapping is safe since we first test that len() > 0
+            let prev = self.to_be_possibly_packed.last().unwrap();
+            if curr.depth == prev.depth && curr.hash == prev.hash + H::one() {
+              let pack = curr.hash & h3 == h3;
+              self.to_be_possibly_packed.push(curr);
+              if pack {
+                self.pack_stack();
+              }
+            } else if curr.depth > prev.depth && curr.hash == (prev.hash + h1) << (((curr.depth - prev.depth) << 1) as usize) {
+              debug_assert_eq!(curr.hash & h3, h0);
+              self.to_be_possibly_packed.push(curr);
+            } else {
+              let curr_d = curr.depth;
+              let curr_h = curr.hash;
+              self.to_be_possibly_packed.push(curr);
+              self.flush_stack = if curr_d > 0 && curr_h & h3 == h0 {
+                self.to_be_possibly_packed.len() - 1
+              } else {
+                self.to_be_possibly_packed.len()
+              } as u8;
+            }
+            self.next()
+          } else if curr.depth > 0 && curr.hash & h3 == h0 {
+            self.to_be_possibly_packed.push(curr);
+            self.next()
+          } else {
+            Some(curr)
+          },
+        None =>
+          if self.to_be_possibly_packed.len() > 0 {
+            self.flush_stack = self.to_be_possibly_packed.len() as u8;
+            self.next()
+          } else {
+            None
+          },
+      }
+    }
+  }
 }
 
 
