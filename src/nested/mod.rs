@@ -291,6 +291,14 @@ pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64
   get_or_create(depth).neighbours(hash, include_center)
 }
 
+/// Conveniency function simply calling the [append_bulk_neighbours](struct.Layer.html#method.append_bulk_neighbours) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn append_bulk_neighbours(depth: u8, hash: u64, mut dest: &mut Vec<u64>) {
+  get_or_create(depth).append_bulk_neighbours(hash, &mut dest);
+}
+
+
 /// Conveniency function simply calling the [internal_edge](struct.Layer.html#method.internal_edge) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -302,7 +310,7 @@ pub fn internal_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
 /// Conveniency function simply calling the [internal_edge_sorted](struct.Layer.html#method.internal_edge_sorted) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn internal_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
+pub fn internal_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Vec<u64> {
   assert!(depth + delta_depth < DEPTH_MAX);
   Layer::internal_edge_sorted(hash, delta_depth)
 }
@@ -326,6 +334,20 @@ pub fn external_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
 #[inline]
 pub fn external_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
   get_or_create(depth).external_edge_sorted(hash, delta_depth)
+}
+
+/// Conveniency function simply calling the [append_external_edge](struct.Layer.html#method.append_external_edge) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn append_external_edge(depth: u8, hash: u64, delta_depth: u8, dest: &mut Vec<u64>) {
+  get_or_create(depth).append_external_edge(hash, delta_depth, dest)
+}
+
+/// Conveniency function simply calling the [append_external_edge_sorted](struct.Layer.html#method.append_external_edge_sorted) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn append_external_edge_sorted(depth: u8, hash: u64, delta_depth: u8, dest: &mut Vec<u64>) {
+  get_or_create(depth).append_external_edge_sorted(hash, delta_depth, dest)
 }
 
 /// Conveniency function simply calling the [bilinear_interpolation](struct.Layer.html#method.bilinear_interpolation) method
@@ -1495,6 +1517,18 @@ impl Layer {
     result_map
   }
   
+  /// Same method as [neighbours](#method.neighbours) except that neighbours are appended
+  /// to the given vector.
+  pub fn append_bulk_neighbours(&self, hash: u64, mut dest: &mut Vec<u64>) {
+    self.check_hash(hash);
+    let h_bits: HashBits = self.pull_bits_appart(hash);
+    if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
+      self.append_bulk_edge_cell_neighbours(hash, &mut dest);
+    } else {
+      self.append_bulk_inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut dest);
+    }
+  }
+
   /// Returns the hash values corresponding to the internal bounds of the given `hash` at 
   /// the hash depth + the given `delta_depth`:
   /// - the first quarter contains the southeast border (the z-order curve x-axis with y = 0); 
@@ -1550,7 +1584,13 @@ impl Layer {
   }
 
   /// Same as method [internal_edge](#method.internal_edge) except that the returned array is sorted.
-  pub fn internal_edge_sorted(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
+  pub fn internal_edge_sorted(mut hash: u64, delta_depth: u8) -> Vec<u64> {
+    if delta_depth == 0 {
+      return vec![hash; 1];
+    } else if delta_depth == 1 {
+      hash <<= 2;
+      return vec![hash, hash | 1, hash | 2, hash | 3];
+    }
     // Compute the x and y part masks for deltaDepth.
     let zoc = get_zoc(delta_depth);
     let twice_dd = delta_depth << 1;
@@ -1606,21 +1646,21 @@ impl Layer {
       result[size - k3] = hash | (xn >> 1);
       // Change k0, k1 and limit if x== limit.
       // The following lines of code are equivalent to:
-      /* if (x == lim) {
-              k0 = k1;
-              k1 += lim; // +2 +4 +8
-              lim <<= 1; // 4 8 16 32 ...
-          } */
+      if x == lim {
+        k0 = k1;
+        k1 += lim as usize; // +2 +4 +8
+        lim <<= 1; // 4 8 16 32 ...
+      }
       // To be tested if they are faster (since no risk of branch miss-prediction):
       // probably true for small deltaDepth but not for large deltaDepth.
-      let mut tmp = x & lim;  debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == x));
+     /* let mut tmp = x & lim;  debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == x));
       k0 += (tmp >> 1) as usize;
       k1 += tmp as usize;
       tmp -= x;           debug_assert!((x < lim            ) || (x == lim && tmp == 0));
       tmp = 1 >> tmp;     debug_assert!((x < lim && tmp == 0) || (x == lim && tmp == 1));
-      lim <<= tmp;
+      lim <<= tmp;*/
     }
-    result.into_boxed_slice()
+    result
   }
   
   /// Similar to [external_edge](#method.external_edge) except that the returned structure allow
@@ -1688,17 +1728,45 @@ impl Layer {
   /// 
   /// ```
   pub fn external_edge(&self, hash: u64, delta_depth: u8) -> Box<[u64]> {
-    self.external_edge_generic(hash, delta_depth, false)
+    let mut dest = Vec::with_capacity((4 + (self.nside << 2)) as usize); // 4 borders (nside) + 4 corners (1)
+    self.external_edge_generic(hash, delta_depth, false, &mut dest);
+    dest.into_boxed_slice()
   }
   
   /// Similar to [external_edge](#method.external_edge) except that the returned list of cells is ordered.
   pub fn external_edge_sorted(&self, hash: u64, delta_depth: u8) -> Box<[u64]> {
-    self.external_edge_generic(hash, delta_depth, true)
+    let mut dest = Vec::with_capacity((4 + (self.nside << 2)) as usize); // 4 borders (nside) + 4 corners (1)
+    self.external_edge_generic(hash, delta_depth, true, &mut dest);
+    dest.into_boxed_slice()
   }
 
-  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool) -> Box<[u64]> {
+  /// Similar to [external_edge](#method.external_edge) except that the result is appended to the
+  /// provided  `dest` list.
+  pub fn append_external_edge(&self, hash: u64, delta_depth: u8, dest: &mut  Vec<u64>) {
+    self.external_edge_generic(hash, delta_depth, false, dest);
+  }
+
+  /// Similar to [external_edge_sorted](#method.external_edge_sorted) except that the result is appended to the
+  /// provided  `dest` list.
+  pub fn append_external_edge_sorted(&self, hash: u64, delta_depth: u8,  dest: &mut Vec<u64>) {
+    self.external_edge_generic(hash, delta_depth, true, dest);
+  }
+
+  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool, mut dest: &mut Vec<u64>) { //} -> Box<[u64]> {
     self.check_hash(hash);
-    let mut edge = Vec::with_capacity((4 + (self.nside << 2)) as usize); // 4 borders (nside) + 4 corners (1)
+    if delta_depth == 0 {
+      if sorted {
+        let mut tmp: Vec<u64> = Vec::with_capacity(8);
+        self.append_bulk_neighbours(hash, &mut tmp);
+        tmp.sort_unstable();
+        dest.append(&mut tmp);
+      } else {
+        self.append_bulk_neighbours(hash, &mut dest);
+      }
+      return;
+    }
+    
+    // let mut edge = Vec::with_capacity((4 + (self.nside << 2)) as usize); // 4 borders (nside) + 4 corners (1)
     let h_bits: HashBits = self.pull_bits_appart(hash);
     if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
       // Not easy: opposite directions depends on base cell neighbours
@@ -1707,21 +1775,14 @@ impl Layer {
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.drain(..) {
- println!("val: {}, dir: {:?}", &hash_value, &direction);
         let dir_from_neig = if h_parts.d0h == self.h_2_d0h(hash_value) {
-          println!("A");
           direction.opposite()
         } else if self.depth == 0 {
-          println!("B");
           direction_from_neighbour(h_parts.d0h, &direction)
         }  else {
-          println!("C");
           edge_cell_direction_from_neighbour(h_parts.d0h, &self.direction_in_base_cell_border(h_bits.i, h_bits.j), &direction)
         };
-        println!("- hash_value: {}, dir_from_neig: {:?}", hash_value, dir_from_neig);
-        append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut edge);
-        println!("- edges: {:?}", &edge);
-
+        append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut dest);
       }
     } else {
       // Easy: always use the opposite direction
@@ -1729,10 +1790,10 @@ impl Layer {
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       for (direction, hash_value) in neighbours.drain(..) {
-        append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut edge);
+        append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut dest);
       }
     }
-    edge.into_boxed_slice()
+    // edge.into_boxed_slice()
   }
   
   #[inline]
@@ -1788,6 +1849,34 @@ impl Layer {
     result_map.put(N, bits_2_hash(d0h_bits, ip1_bits, jp1_bits));
   }
 
+  fn append_bulk_inner_cell_neighbours(&self, d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64,
+                           dest: &mut Vec<u64>) {
+    let ij = self.z_order_curve.h2ij(i_in_d0h_bits | j_in_d0h_bits);
+    let i = self.z_order_curve.ij2i(ij);
+    let j = self.z_order_curve.ij2j(ij);
+    // Compute i-1 and j-1 bits.
+    // Depending to the FillingCurve implementation, calling 2 x fc.i02hash(...) twice could result
+    // in making fewer operations
+    let ij = self.z_order_curve.ij2h(i - 1, j - 1);
+    let im1_bits = ij & self.x_mask;
+    let jm1_bits = ij & self.y_mask;
+    // Compute i+1 and j+1 bits.
+    // Again, depending to the FillingCurve implementation, calling 2 x fc.i02hash(...) twice could
+    // result in making fewer operations
+    let ij = self.z_order_curve.ij2h(i + 1, j + 1);
+    let ip1_bits = ij & self.x_mask;
+    let jp1_bits = ij & self.y_mask;
+    // Unrolled for loop an MainWind enumset
+    dest.push(bits_2_hash(d0h_bits, im1_bits, jm1_bits));
+    dest.push(bits_2_hash(d0h_bits, i_in_d0h_bits, jm1_bits));
+    dest.push(bits_2_hash(d0h_bits, ip1_bits, jm1_bits));
+    dest.push(bits_2_hash(d0h_bits, im1_bits, j_in_d0h_bits));
+    dest.push(bits_2_hash(d0h_bits, ip1_bits, j_in_d0h_bits));
+    dest.push(bits_2_hash(d0h_bits, im1_bits, jp1_bits));
+    dest.push(bits_2_hash(d0h_bits, i_in_d0h_bits, jp1_bits));
+    dest.push(bits_2_hash(d0h_bits, ip1_bits, jp1_bits));
+  }
+
   fn edge_cell_neighbours(&self, hash: u64, result_map: &mut MainWindMap<u64>) {
     // Could have simply been edgeCellNeighbours(hash, EnumSet.allOf(MainWind.class) result)
     // but we prefered to unroll the for loop.
@@ -1803,6 +1892,21 @@ impl Layer {
     result_map.put_opt(W, self.neighbour_from_parts(d0h, i, j, W));
     result_map.put_opt(NW, self.neighbour_from_parts(d0h, i, j, NW));
     result_map.put_opt(N, self.neighbour_from_parts(d0h, i, j, N));
+  }
+
+  fn append_bulk_edge_cell_neighbours(&self, hash: u64, dest: &mut Vec<u64>) {
+    let h_parts: HashParts = self.decode_hash(hash);
+    let d0h = h_parts.d0h;
+    let i = h_parts.i;
+    let j = h_parts.j;
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, S) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, SE) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, E) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, SW) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, NE) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, W) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, NW) { dest.push(n); }
+    if let Some(n) = self.neighbour_from_parts(d0h, i, j, N) { dest.push(n); }
   }
 
   fn neighbour_from_parts(&self, d0h: u8, i: u32, j: u32, dir: MainWind) -> Option<u64> {
