@@ -11,6 +11,7 @@ Released 2020-03-04.
     + Add MOC compression/decompression iterators
     + Add logical MOC operations (not, and, or) taking iterators and returning iterators
     + Add Cells to Range and Range to Cells conversion (iterator based too)
+* Add the method `test_coo` in `BMOC`
 
 --------------------------------------------------------------------------------
 

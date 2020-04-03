@@ -276,13 +276,7 @@ impl<H> OwnedMOC<H>
   pub fn new_unchecked(depth_max: u8, moc: Vec<HpxCell<H>>) -> OwnedMOC<H> {
     OwnedMOC { depth_max, moc}
   }
-  
-  /*/// Internally, a `collect()` is performed.
-  pub fn from_it<I>(depth_max: u8, it: I) -> OwnedMOC<H>
-    where I: Iterator<Item=HpxCell<H>>{
-    OwnedMOC{ depth_max, it: CheckedIterator::new(it).collect() }
-  }*/
-  
+
   /// Internally, a `collect()` is performed.
   pub fn from_it_unchecked<I>(depth_max: u8, it: I) -> OwnedMOC<H>
     where I: Iterator<Item=HpxCell<H>>{

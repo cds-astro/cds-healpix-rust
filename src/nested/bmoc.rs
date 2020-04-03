@@ -10,7 +10,7 @@ use std::slice::Iter;
 use std::cmp::max;
 // use std::opt::Range;
 
-use super::{to_range};
+use super::{to_range, hash};
 use super::super::{nside_square_unsafe};
 
 /// A very basic and simple BMOC Builder: we push elements in it assuming that we provide them
@@ -213,6 +213,15 @@ impl BMOCBuilderUnsafe {
   fn get_depth_no_flag(&self, raw_value_no_flag: u64) -> u8 {
     self.depth_max - (raw_value_no_flag.trailing_zeros() >> 1) as u8
   }
+}
+
+pub enum Status {
+  /// The point is in the MOC
+  IN,
+  /// The point is out of the MOC
+  OUT,
+  /// The point may be in or out of the MOC
+  UNKNOWN,
 }
 
 /// Builder taking cell at the MOC maximum depth.
@@ -436,7 +445,39 @@ impl BMOC {
       panic!("Depths are different");
     }
   }
-  
+
+  /// Test the given point and return its "Status": in, out of the MOC or maybe.
+  pub fn test_coo(&self, lon: f64, lat: f64) -> Status {
+    let h_raw = build_raw_value(self.depth_max, hash(self.depth_max, lon, lat), true, self.depth_max);
+    match self.entries.binary_search(&h_raw) {
+      Ok(i) =>
+        if is_partial(self.entries[i]) {
+          Status::UNKNOWN
+        } else {
+          Status::IN
+        },
+      Err(i) => {
+        let cell = Cell::new(h_raw, self.depth_max);
+        // look in next or previous cels
+        if i > 0 && is_in(&self.from_raw_value(self.entries[i - 1]), &cell) {
+          if is_partial(self.entries[i - 1]) {
+            Status::UNKNOWN
+          } else {
+            Status::IN
+          }
+        } else if i < self.entries.len() && is_in(&self.from_raw_value(self.entries[i]), &cell) {
+          if is_partial(self.entries[i]) {
+            Status::UNKNOWN
+          } else {
+            Status::IN
+          }
+        } else {
+          Status::OUT
+        }
+      },
+    }
+  }
+
   /// Returns the BMOC complement:
   /// - cells with flag set to 1 (fully covered) are removed
   /// - cells with flag set to 0 (partially covered) are kept
