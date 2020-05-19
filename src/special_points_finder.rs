@@ -352,11 +352,17 @@ pub fn arc_special_point_in_pc<'a>(
       }
       // Second quarter [(p1.lon % PI/2) * PI/2, p1.lon]
       debug_assert!(lon1_div_half_pi < 3);
-      let n1_y = lon1_div_half_pi & 1;
-      let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
+      let n1_x = lon1_div_half_pi & 1;
+      let n1 = Coo3D::from_vec3(n1_x as f64, (n1_x ^ 1) as f64, 0.0);
       let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p2p1_n, &n1));
-      debug_assert!(p1.lon() < intersect1.lon());
-      res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
+      debug_assert!(intersect1.lon() < p1.lon(),
+        "p1: ({}, {}); p2: ({}, {}); intersect: ({}, {}); n; ({}, {})",
+        p1.lon().to_degrees(), p1.lat().to_degrees(),
+        p2.lon().to_degrees(), p2.lat().to_degrees(),
+        intersect1.lon().to_degrees(), intersect1.lat().to_degrees(),
+        n1.lon().to_degrees(), n1.lat().to_degrees()
+      );
+      res_z1 = arc_special_point_in_pc_same_quarter(&intersect1, p1, z_eps_max, n_iter_max);
     } else {
       let p1p2_n = cross_product(p1, p2).normalized();
       if p1.lon() % FRAC_PI_2 > 0.0 { // First quarter, [p1.lon, ((p1.lon % PI/2) + 1) * PI/2]
@@ -389,7 +395,8 @@ pub fn arc_special_point_in_pc<'a>(
 // (i.e. (p1.lon % pi/2) == (p2.lon % pi/2) (except if one of the two point is on a border n * pi/2)  
 fn arc_special_point_in_pc_same_quarter( 
   p1: &Coo3D, p2: &Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
-  debug_assert!(p1.lon() < p2.lon());
+  debug_assert!(p1.lon() < p2.lon(), "p1: ({}, {}); p2: ({}, {})",
+                p1.lon().to_degrees(), p1.lat().to_degrees(), p2.lon().to_degrees(), p2.lat().to_degrees());
   let mut p2_mod_half_pi = p2.lon() % FRAC_PI_2;
   if p2_mod_half_pi == 0.0 {
     p2_mod_half_pi = FRAC_PI_2;
