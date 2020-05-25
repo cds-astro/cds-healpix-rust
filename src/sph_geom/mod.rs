@@ -12,6 +12,7 @@ use super::TWICE_PI;
 
 
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
+use crate::sph_geom::coo3d::UnitVec3;
 
 
 trait ContainsSouthPoleComputer {
@@ -65,6 +66,7 @@ impl ContainsSouthPoleComputer for Basic {
 static PROVIDED_TRUE: ProvidedTrue = ProvidedTrue;
 static PROVIDED_FALSE: ProvidedFalse = ProvidedFalse;
 static BASIC: Basic = Basic;
+// Centre gravite des 3 premier points est dans le Polygone
 
 pub enum ContainsSouthPoleMethod {
   TRUE,
@@ -105,6 +107,14 @@ impl Polygon {
       vertices,
       cross_products,
       contains_south_pole,
+    }
+  }
+
+  /// Control point must be in the polygon.
+  /// We typically use the gravity center.
+  pub fn must_contain(&mut self, control_point: &UnitVect3) {
+    if !self.contains(&Coo3D::from_ref(control_point)) {
+      self.contains_south_pole = !self.contains_south_pole;
     }
   }
 

@@ -6,6 +6,7 @@
 /libpsql_test/
 /test/target/
 /resources/gnuplot
+src/nested/vmoc/
 
 # Ignore files
 Notes.txt

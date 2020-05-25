@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+## 0.5.1
+
+Released 2020-05-25.
+
+### Bug correction
+
+* When polygons are very large, previous code sometimes returned the complementary
+  polygon. We now decided that for large polygons the gravity center should be inside
+  the polygon.
+
+
+--------------------------------------------------------------------------------
+
 
 ## 0.5.0
 

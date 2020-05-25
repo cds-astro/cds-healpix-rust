@@ -397,7 +397,11 @@ impl Coo3D {
   pub fn from<T: UnitVec3>(v: T) -> Coo3D {
     Coo3D::from_vec3(v.x(), v.y(), v.z())
   }
-  
+
+  pub fn from_ref<T: UnitVec3>(v: &T) -> Coo3D {
+    Coo3D::from_vec3(v.x(), v.y(), v.z())
+  }
+
   pub fn from_vec3(x: f64, y: f64, z: f64) -> Coo3D {
     let (lon, lat) = lonlat_of(x, y, z);
     Coo3D {x, y, z, lon, lat}

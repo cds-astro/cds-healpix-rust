@@ -2596,13 +2596,14 @@ impl Layer {
   /// }
   /// ```
   pub fn polygon_coverage(&self, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
-    let poly = Polygon::new(
+    let mut poly = Polygon::new(
       vertices.iter().map(|(lon, lat)| LonLat { lon: *lon, lat: *lat} )
         .collect::<Vec<LonLat>>().into_boxed_slice()
     );
     let bounding_cone: Cone = Cone::bounding_cone(poly.vertices());
     let mut depth_start = 0;
     let neigs: Vec<u64> = if !has_best_starting_depth(bounding_cone.radius()) {
+      poly.must_contain(bounding_cone.center());
       (0..12).collect()
     } else {
       depth_start = best_starting_depth(bounding_cone.radius()).min(self.depth);
@@ -3968,7 +3969,34 @@ mod tests {
     }
     println!(")");*/
   }
-  
+
+  #[test]
+  fn testok_polygone_exact_6() {
+    // In Aladin: draw polygon(268.84102386, -45.73283624, 299.40278164, 38.47909742, 66.0951825, 38.76894431, 96.66953469, -45.43470273)
+    let depth = 0;
+    let mut vertices = [
+      (268.84102386, -45.73283624),
+      (299.40278164, 38.47909742),
+      (66.0951825, 38.76894431),
+      (96.66953469, -45.43470273),
+    ];
+    let expected_res_exact: [u64; 9] =[0, 3, 4, 5, 7, 8, 9, 10, 11];
+    to_radians(&mut vertices);
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    /*to_degrees(&mut vertices);
+    print!("\ndraw polygon(");
+    for (lon, lat) in vertices.iter() {
+      print!(",{}, {}", lon, lat);
+    }
+    println!(")");*/
+  }
+
   fn to_radians(lonlats: &mut [(f64, f64)]) {
     for (lon, lat) in lonlats.iter_mut() {
       *lon = lon.to_radians();
