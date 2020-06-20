@@ -3,8 +3,8 @@ extern crate cdshealpix;
 
 // use cdshealpix::proj;
 use cdshealpix::nested::{get_or_create, hash, center, neighbours, vertices,
-                         cone_overlap_approx, cone_overlap_approx_custom, 
-                         polygon_overlap_approx};
+                         cone_coverage_approx, cone_coverage_approx_custom, 
+                         polygon_coverage};
 use cdshealpix::nested::bmoc::*;
 use cdshealpix::compass_point::{MainWind};
 
@@ -181,7 +181,7 @@ pub extern "C" fn length(ptr: *const BMOCCell) -> f64 {
 
 #[no_mangle]
 pub extern "C" fn hpx_query_cone_approx(depth: u8, lon: f64, lat: f64, radius: f64) -> *mut PyBMOC {
-  let mut cells = to_bmoc_cell_array(cone_overlap_approx(depth, lon, lat, radius));
+  let mut cells = to_bmoc_cell_array(cone_coverage_approx(depth, lon, lat, radius));
   let len = cells.len() as u32;
   let bmoc = Box::new(PyBMOC {
     len,
@@ -192,7 +192,7 @@ pub extern "C" fn hpx_query_cone_approx(depth: u8, lon: f64, lat: f64, radius: f
 
 #[no_mangle]
 pub extern "C" fn hpx_query_cone_approx_custom(depth: u8, delta_depth: u8, lon: f64, lat: f64, radius: f64) -> *mut PyBMOC {
-  let mut cells = to_bmoc_cell_array(cone_overlap_approx_custom(depth, delta_depth, lon, lat, radius));
+  let mut cells = to_bmoc_cell_array(cone_coverage_approx_custom(depth, delta_depth, lon, lat, radius));
   let len = cells.len() as u32;
   let bmoc = Box::new(PyBMOC {
     len,
@@ -212,7 +212,7 @@ pub extern "C" fn hpx_query_polygon_approx(depth: u8, n_vertices: u32, vertices_
     vertices.push((vertices_coos[i], vertices_coos[i + 1]));
   }
 
-  let cells = to_bmoc_cell_array(polygon_overlap_approx(depth, &vertices.into_boxed_slice()));
+  let cells = to_bmoc_cell_array(polygon_coverage(depth, &vertices.into_boxed_slice(), true));
   let len = cells.len() as u32;
 
   let bmoc = Box::new(PyBMOC {

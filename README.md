@@ -54,6 +54,15 @@ If the result of `ZOrderCurve/BMI` is slower thatn `ZOrderCurve/LUPT`, compile w
 cargo build --release
 ```
 
+Target 32 bit on a 64 bit linux
+-------------------------------
+
+```rust
+rustup target install i686-unknown-linux-gnu
+sudo apt-get install gcc-multilib
+cargo build --target=i686-unknown-linux-gnu
+```
+
 Features
 --------
 

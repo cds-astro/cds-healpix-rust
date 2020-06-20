@@ -1,14 +1,14 @@
 [package]
 name = "cdshealpix_ffi"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 
 [build-dependencies]
-cdshealpix = { version = "0.1.0", path = ".." }
+cdshealpix = { version = "0.5.1", path = ".." }
 
 [dependencies]
-cdshealpix = { version = "0.1.0", path = ".." }
+cdshealpix = { version = "0.5.1", path = ".." }
 
 [lib]
 name = "cdshealpix_ffi"

@@ -555,13 +555,13 @@ impl ZOrderCurve for LargeZOCbmi {
   }
   fn h2ij(&self, h: u64) -> u64 {
     #[cfg(target_arch = "x86")]
-    use std::arch::x86::_pext_32;
+    use std::arch::x86::_pext_u32;
     #[cfg(target_arch = "x86")]
     unsafe {
           (_pext_u32(h as u32, 0x55555555u32) as u64)
-        | (_pext_u32(h >> 32, 0x55555555u32) as u64) << 16
+        | (_pext_u32((h >> 32) as u32, 0x55555555u32) as u64) << 16
         | (_pext_u32(h as u32, 0xAAAAAAAAu32) as u64) << 32
-        | (_pext_u32(h >> 32, 0xAAAAAAAAu32) as u64) << 48
+        | (_pext_u32((h >> 32) as u32, 0xAAAAAAAAu32) as u64) << 48
     }
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::_pext_u64;
@@ -576,7 +576,7 @@ impl ZOrderCurve for LargeZOCbmi {
     #[cfg(target_arch = "x86")]
     unsafe {
           (_pext_u32(h as u32, 0x55555555u32) as u64) 
-        | (_pext_u32(h >> 32, 0x55555555u32) as u64) << 16
+        | (_pext_u32((h >> 32) as u32, 0x55555555u32) as u64) << 16
     }
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::_pext_u64;
