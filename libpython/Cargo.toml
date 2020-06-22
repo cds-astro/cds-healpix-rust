@@ -5,10 +5,10 @@ authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 
 [build-dependencies]
-cdshealpix = { version = "0.5.1", path = ".." }
+cdshealpix = { version = "0.5.2", path = ".." }
 
 [dependencies]
-cdshealpix = { version = "0.5.1", path = ".." }
+cdshealpix = { version = "0.5.2", path = ".." }
 
 [lib]
 name = "cdshealpix_ffi"

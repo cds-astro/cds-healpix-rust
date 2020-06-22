@@ -203,11 +203,9 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
     z -= z_eps;
     n_iter += 1;
   }
-  // z must be in the [z1, z2] range
-  debug_assert!((z1 <= z2 && z1 <= z && z <= z2) || (z2 < z1 &&  z2 <= z && z <= z1));
-  if z.abs() < TRANSITION_Z {
-    let v = intersect_small_circle(p1, p2, z).unwrap();
-    Some(v.lonlat())
+  // z must be in the [z1, z2] range except if Newton-Raphson method fails (divergence or to slow convergence)
+  if z.abs() < TRANSITION_Z && ((z1 <= z2 && z1 <= z && z <= z2) || (z2 < z1 &&  z2 <= z && z <= z1)) {
+    intersect_small_circle(p1, p2, z).map(|v| v.lonlat())
   } else {
     None
   }

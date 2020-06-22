@@ -60,7 +60,7 @@ Target 32 bit on a 64 bit linux
 ```rust
 rustup target install i686-unknown-linux-gnu
 sudo apt-get install gcc-multilib
-cargo build --target=i686-unknown-linux-gnu
+RUSTFLAGS='-C target-cpu=native' cargo build --target=i686-unknown-linux-gnu --release
 ```
 
 Features

@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+## 0.5.2
+
+Released 2020-06-22.
+
+### Bug correction
+
+* When Newton-Raphson method fails when looking for "special points" in polygons 
+  (due to divergence or too slow convergence) the method failed.
+  Now returns None (i.e. no special point found).
+
+--------------------------------------------------------------------------------
+
+
 ## 0.5.1
 
 Released 2020-05-25.

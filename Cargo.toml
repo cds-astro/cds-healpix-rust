@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
@@ -26,9 +26,6 @@ test = true
 doctest = true
 bench = true
 doc = true
-
-[build]
-rustflags = ["-C", "target-cpu=native"]
 
 [dependencies]
 katex-doc = "0.1.0"
