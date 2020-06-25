@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+## 0.5.3
+
+Released 2020-06-25.
+
+### Changed
+
+* Remove dead code (not all dead code, but large parts).
+* Fix compilation warnings
+* Fix clippy warnings
+
+--------------------------------------------------------------------------------
+
+
 ## 0.5.2
 
 Released 2020-06-22.

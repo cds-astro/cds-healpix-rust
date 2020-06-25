@@ -5,6 +5,7 @@ use super::proj::*;
 use super::super::xy_geom::ellipse::*;
 use super::super::Customf64;
 
+/// TODO: Look at the Java code for a more robust approach!!
 #[derive(Debug)]
 pub struct EllipticalCone {
   center: ProjSIN, // the center of the projection is the center of the cone 
@@ -87,7 +88,7 @@ impl EllipticalCone {
   /// 
   pub fn overlap_cone(&self, lon: f64, lat: f64, radius: f64) -> bool {
     assert!(radius > 0.0);
-    let ((x, y), ang_dist, top_hemisphere) =  self.center.forced_proj_and_distance(lon, lat);
+    let ((x, y), ang_dist, _top_hemisphere) =  self.center.forced_proj_and_distance(lon, lat);
     if self.a + radius < ang_dist { // Quick rejection test
         return false;
     }
@@ -113,7 +114,7 @@ impl EllipticalCone {
     let proj_ell_dist = 0.5 * (proj_d_max + proj_d_min); // distance from (0, 0) to ellipse center
     let proj_ell_x = proj_ell_dist * cos_phi;
     let proj_ell_y = proj_ell_dist * sin_phi;
-    if top_hemisphere {
+    /*if top_hemisphere {
       self.ellipse.overlap(proj_ell_x, proj_ell_y, &proj_ell)
     } else {
       // The projection of the center of the cone is in the back hemisphere
@@ -121,7 +122,8 @@ impl EllipticalCone {
       // So far we apply the same algo, knowing that at deeper depth cells will have less changes
       // to spuriously overlap
       self.ellipse.overlap(proj_ell_x, proj_ell_y, &proj_ell)
-    }
+    }*/
+    self.ellipse.overlap(proj_ell_x, proj_ell_y, &proj_ell)
   }
 
   /// Returns `true` if the given cone is fully inside the elliptical cone.
@@ -147,6 +149,7 @@ impl EllipticalCone {
     }
   }
 
+  #[allow(dead_code)]
   pub fn path_along_edge(lon: f64, lat: f64, a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
     let center = ProjSIN::new(lon, lat);
     let mut ar = Ellipse::path_along_edge(a.sin(), b.sin(), FRAC_PI_2 - theta, half_num_points);

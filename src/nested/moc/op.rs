@@ -148,7 +148,7 @@ impl<H, T> Iterator for MergeIter<H, T>
       let new = self.it.next();
       match new {
         Some(curr) =>
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             // Unwrapping is safe since we first test that len() > 0
             let prev = self.to_be_possibly_packed.last().unwrap();
             if curr.depth == prev.depth && curr.hash == prev.hash + H::one() {
@@ -178,7 +178,7 @@ impl<H, T> Iterator for MergeIter<H, T>
             Some(curr)
           },
         None =>
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             self.flush_stack = self.to_be_possibly_packed.len() as u8;
             self.next()
           } else {
@@ -317,7 +317,7 @@ impl<H, T1, T2> Iterator for MinusOnSingleDepthCellsIter<H, T1, T2>
       let new = self.unpacked_next();
       match new {
         Some(curr) =>
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             // Unwrapping is safe since we first test that len() > 0
             let prev = self.to_be_possibly_packed.last().unwrap();
             if curr.depth == prev.depth && curr.hash == prev.hash + H::one() {
@@ -347,7 +347,7 @@ impl<H, T1, T2> Iterator for MinusOnSingleDepthCellsIter<H, T1, T2>
             Some(curr)
           },
         None =>
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             self.flush_stack = self.to_be_possibly_packed.len() as u8;
             self.next()
           } else {
@@ -384,7 +384,7 @@ impl <H, T> NotMocIter<H, T>
   /// If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version. 
   fn new_unchecked(mut it: T) -> NotMocIter<H, T> {
-    let mut curr = it.next();
+    let curr = it.next();
     NotMocIter {
       it,
       curr,
@@ -430,7 +430,7 @@ impl <H, T> Iterator for NotMocIter<H, T>
     match &self.curr {
       Some(c) => {
         // while the current cell contains the target cell, go down
-        while self.curr_d < c.depth && self.curr_h == (c.hash >> (((c.depth - self.curr_d) << 1)) as usize) {
+        while self.curr_d < c.depth && self.curr_h == (c.hash >> ((c.depth - self.curr_d) << 1) as usize) {
           self.curr_d += 1;
           self.curr_h <<= 2;
         }
@@ -757,7 +757,7 @@ impl <H, T1, T2> Iterator for OrMocIter<H, T1, T2>
       let new = self.unpacked_next();
       match new {
         Some(curr) => 
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             // Unwrapping is safe since we first test that len() > 0
             let prev = self.to_be_possibly_packed.last().unwrap();
             if curr.depth == prev.depth && curr.hash == prev.hash + H::one() {
@@ -787,7 +787,7 @@ impl <H, T1, T2> Iterator for OrMocIter<H, T1, T2>
             Some(curr)
           },
         None => 
-          if self.to_be_possibly_packed.len() > 0 {
+          if !self.to_be_possibly_packed.is_empty() {
             self.flush_stack = self.to_be_possibly_packed.len() as u8;
             self.next()
           } else {
@@ -860,9 +860,9 @@ mod tests {
   #[test]
   pub fn test_and_full_full() {
     for depth in 0..30 {
-      let mut full_1: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
+      let full_1: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
-      let mut full_2: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
+      let full_2: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut full_it = and_unchecked(
         LazyMOCIter::new(depth, full_1.into_iter()),
@@ -879,7 +879,7 @@ mod tests {
   pub fn test_and_empty_full() {
     for depth in 0..30 {
       let empty_it = std::iter::empty::<HpxCell<u64>>();
-      let mut full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
+      let full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut emtpy_res = and_unchecked(
         LazyMOCIter::new(depth, empty_it),
@@ -893,7 +893,7 @@ mod tests {
   pub fn test_or_full_empty() {
     for depth in 0..30 {
       let empty_it = std::iter::empty::<HpxCell<u64>>();
-      let mut full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
+      let full: Vec<HpxCell<u64>> = (0..12_u64).into_iter()
         .map(|hash| HpxCell{depth: 0, hash}).collect();
       let mut full_it = or_unchecked(
         LazyMOCIter::new(depth, empty_it),

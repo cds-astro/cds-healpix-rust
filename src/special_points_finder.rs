@@ -21,9 +21,7 @@ use super::sph_geom::coo3d::*;
 pub fn arc_special_points<'a>(mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f64, n_iter_max: u8) -> Box<[LonLat]> {
   // Ensure p1.z() < p2.z()
   if p1.z() > p2.z() {
-    let tmp = p1;
-    p1 = p2;
-    p2 = tmp;
+    std::mem::swap(&mut p1, &mut p2);
   }
   if TRANSITION_Z <= p1.z() || p2.z() <= -TRANSITION_Z { // NPC only or SPC only
     match arc_special_point_in_pc(p1, p2, z_eps_max, n_iter_max) {
@@ -123,6 +121,7 @@ pub fn arc_special_points<'a>(mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f
 /// - `Some(z)` the sine of the latitude of the point such that the tangent line to the cone
 ///       on the projection plane has a slope equals to `+-1`.
 /// - `None` if the computed latitude is out of the Equatorial Region
+#[allow(dead_code)]
 pub fn cone_special_point_in_eqr(mut z: f64, z0: f64, eucl_cone_radius: f64, north_point: bool,
   z_eps_max: f64, n_iter_max: u8) -> Option<f64> {
   // Compute constants
@@ -204,6 +203,8 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
     n_iter += 1;
   }
   // z must be in the [z1, z2] range except if Newton-Raphson method fails (divergence or to slow convergence)
+  // TODO: if the condition ((z1 <= z2 && z1 <= z && z <= z2) || (z2 < z1 &&  z2 <= z && z <= z1))
+  // TODO: is not met, then try a binary/dichotomic approach (slower, but more robust)
   if z.abs() < TRANSITION_Z && ((z1 <= z2 && z1 <= z && z <= z2) || (z2 < z1 &&  z2 <= z && z <= z1)) {
     intersect_small_circle(p1, p2, z).map(|v| v.lonlat())
   } else {
@@ -213,6 +214,7 @@ pub fn arc_special_point_in_eqr(p1: &Coo3D, p2: &Coo3D,
 
 /// Computes dX / dY in the equatorial region
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn f_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
   let w = 1.0 - z.pow2(); // in equatortial region, -2/3 < z < 2/3
   let q = z / w;          // so q is always defined
@@ -222,6 +224,7 @@ fn f_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
 
 /// Computes the ratio (dX / dY) / (d^2X / dY^2) in the equatorial region
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn f_over_df_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
   let w = 1.0 - z.pow2();
   let q = z / w;
@@ -280,6 +283,8 @@ fn f_over_df_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
 ///   - case `north_value = false`
 ///     - `cone_center_lon_mod_half_pi - pi/2` and still South-East in case of `east_value = true`
 ///     - `cone_center_lon_mod_half_pi + pi/2` and still South-West in case of `east_value = false`
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 pub fn cone_special_point_in_pc(mut z: f64, cone_center_lon_mod_half_pi: f64,
   mut z0: f64, eucl_cone_radius: f64, east_value: bool, mut north_value: bool,
   z_eps_max: f64, n_iter_max: u8) -> Option<f64> {
@@ -316,9 +321,7 @@ pub fn arc_special_point_in_pc<'a>(
   mut p1: &'a Coo3D, mut p2: &'a Coo3D, z_eps_max: f64, n_iter_max: u8) -> Option<LonLat> {
   // Ensure p1.lon() < p2.lon()
   if p1.lon() > p2.lon() {
-    let tmp = p1;
-    p1 = p2;
-    p2 = tmp;
+    std::mem::swap(&mut p1, &mut p2);
   }
   // Check if great-circle arc overlap several base cells
   debug_assert!(p1.lon() % FRAC_PI_2 >= 0.0);
@@ -486,6 +489,7 @@ fn intersect_point_pc(p1: &Coo3D, p2: &Coo3D, p1_x_p2: &UnitVect3, n: &Coo3D) ->
 
 /// Computes dX / dY in the north polar cap
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn f_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, direction: f64, r: f64) -> f64 {
   let w = 1.0 - z ;
   let w2 = 1.0 - z.pow2();
@@ -496,13 +500,12 @@ fn f_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, d
   let qn = q * n;
   let arccos = (n / d2.sqrt()).acos();
   let dalphadz = (z0 - qn) / sqrt_d2_minus_n2;
-  let f = direction * w * dalphadz
-    - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - FRAC_PI_4) + cte;
-  f
+  direction * w * dalphadz - 0.5 * (direction * arccos + cone_center_lon_mod_half_pi - FRAC_PI_4) + cte
 }
 
 /// Computes the ratio (dX / dY) / (d^2X / dY^2) in the north polar cap
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte: f64, direction: f64, r: f64) -> f64 {
   let w = 1.0 - z ;
   let w2 = 1.0 - z.pow2();
@@ -582,10 +585,10 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
       let y2 = -y1;
       if p1.x() * x + p1.y() * y1 + p1.z() * z >= p1_dot_p2
         && p2.x() * x + p2.y() * y1 + p2.z() * z >= p1_dot_p2 {
-        return Some(UnitVect3::new_unsafe(x, y1, z));
+        Some(UnitVect3::new_unsafe(x, y1, z))
       } else if p1.x() * x + p1.y() * y2 + p1.z() * z >= p1_dot_p2
              && p2.x() * x + p2.y() * y2 + p2.z() * z >= p1_dot_p2 {
-        return Some(UnitVect3::new_unsafe(x, y2, z));
+        Some(UnitVect3::new_unsafe(x, y2, z))
       } else {
         unreachable!();
       }
@@ -602,10 +605,10 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
       let y2 = -x2 * x0_y0 - zz0_y0;
       if   p1.x() * x1 + p1.y() * y1 + p1.z() * z >= p1_dot_p2
         && p2.x() * x1 + p2.y() * y1 + p2.z() * z >= p1_dot_p2 {
-        return Some(UnitVect3::new_unsafe(x1, y1, z));
+        Some(UnitVect3::new_unsafe(x1, y1, z))
       } else if p1.x() * x2 + p1.y() * y2 + p1.z() * z >= p1_dot_p2
              && p2.x() * x2 + p2.y() * y2 + p2.z() * z >= p1_dot_p2 {
-        return Some(UnitVect3::new_unsafe(x2, y2, z));
+        Some(UnitVect3::new_unsafe(x2, y2, z))
       } else {
         unreachable!();
       }

@@ -23,7 +23,7 @@ pub fn compress_unchecked<H, T>(it: T) -> CompressMocIter<H, T>
 
 /// Uncompress on-the-fly, while iterating, the MOC compressed in the given slice.
 /// For more information, see the `decompress` method in BMOCs.
-pub fn uncompress<'a, H: HpxHash>(compressed: &'a [u8]) -> UncompressMocIter<'a, H> {
+pub fn uncompress<H: HpxHash>(compressed: &[u8]) -> UncompressMocIter<H> {
   UncompressMocIter::new(compressed)
 }
 
@@ -102,25 +102,25 @@ impl <H, T> CompressMocIter<H, T>
   }
   
   /// Returns true if the first byte of the buffer is full
-  fn push_node_empty(&mut self) -> bool {
+  /*fn push_node_empty(&mut self) -> bool {
     self.push_node_empty_notest();
     self.is_byte_full()
   }
   fn push_node_empty_notest(&mut self) {
     self.push_1();
     self.push_0();
-  }
-  fn push_n_empty_nodes_notest(&mut self, mut n: H) {
+  }*/
+  fn push_n_empty_nodes_notest(&mut self, n: H) {
     for _ in 0..n.to_u8().unwrap() {
       self.push_1();
       self.push_0();
     }
   }
   /// Returns true if the first byte of the buffer is full
-  fn push_node_full(&mut self) -> bool {
+  /*fn push_node_full(&mut self) -> bool {
     self.push_node_full_notest();
     self.is_byte_full()
-  }
+  }*/
   fn push_node_full_notest(&mut self) {
     self.push_1();
     self.push_1();
@@ -135,21 +135,21 @@ impl <H, T> CompressMocIter<H, T>
     self.push_0();
   }
   /// Returns true if the first byte of the buffer is full
-  fn push_leaf_empty(&mut self) -> bool {
+  /*fn push_leaf_empty(&mut self) -> bool {
     self.push_leaf_empty_notest();
     self.is_byte_full()
   }
   fn push_leaf_empty_notest(&mut self) {
     self.push_0();
-  }
+  }*/
   fn push_n_empty_leaves_notest(&mut self, n: H) {
     self.push_0_x(n.to_u8().unwrap());
   }
   /// Returns true if the first byte of the buffer is full
-  fn push_leaf_full(&mut self) -> bool {
+  /*fn push_leaf_full(&mut self) -> bool {
     self.push_leaf_full_notest();
     self.is_byte_full()
-  }
+  }*/
   fn push_leaf_full_notest(&mut self)  {
     self.push_1();
   }
@@ -179,16 +179,16 @@ impl <H, T> Iterator for CompressMocIter<H, T>
         let (curr_d, curr_h) = (hpx.depth, hpx.hash);
         if !self.is_going_down {
           // go up (if needed)!
-          let (mut dd, mut target_h) = if self.d > curr_d {
+          let target_h = if self.d > curr_d {
             // case previous hash deeper that current hash
             let dd = self.d - curr_d;
-            (dd, curr_h << ((dd << 1) as usize))
+            curr_h << ((dd << 1) as usize)
           } else {
             // case current hash deeper (or same depth) that previous hash, need to go up?
             let dd = curr_d - self.d;
-            (dd, curr_h >> ((dd << 1) as usize))
+            curr_h >> ((dd << 1) as usize)
           };
-          dd = ((63 - (self.h ^ target_h).leading_zeros()) >> 1) as u8;
+          let dd = ((63 - (self.h ^ target_h).leading_zeros()) >> 1) as u8;
           let target_d = if dd > self.d { 0 } else { self.d - dd };
           // - go up to common depth (if needed)
           while self.d > target_d {

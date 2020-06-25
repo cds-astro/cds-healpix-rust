@@ -151,17 +151,6 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
   (n * (n + 1)) << 1
 }
 
-// TODO: remove the previous method and the '_u32' below
-/// Four time the [triangular number](https://en.wikipedia.org/wiki/Triangular_number), i.e.
-/// ```math
-/// 4 * \sum_{i=1}^{n} i = 4 * \frac{n (n + 1)}{2} = 2 n (n + 1)
-/// ```
-#[inline]
-pub(crate) const fn triangular_number_x4_u32(n: u32) -> u64 {
-  let n = n as u64;
-  (n * (n + 1)) << 1
-}
-
 /// Returns the cell number (hash value) associated with the given position on the unit sphere
 /// # Inputs
 /// - `nside`: the NSIDE of the RING scheme
@@ -296,18 +285,19 @@ fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
 /// and the index inside the ring (starting at the West, increasing eastward).
 /// WARNING: the index in the ring in polar caps is provided like the index in ring in the euqatorial
 /// region, i.e. like if the projection rectangle was full (no missing triangles).
-// TODO: REMOVE DUPLICATE CODE IN RING HASH() AND NESTED TO_RING() 
+// TODO: REMOVE DUPLICATE CODE IN RING HASH() AND NESTED TO_RING()
+#[allow(dead_code)]
 fn build_hash(nside: u32, i_ring: u32, mut i_in_ring: u32) -> u64 {
   debug_assert!(i_ring < n_isolatitude_rings(nside));
   debug_assert!(i_in_ring <= n_isolatitude_rings(nside));
   if i_ring < nside { // North polar cap
     let off = nside - 1 - i_ring;
     i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
-    triangular_number_x4_u32(i_ring) + i_in_ring as u64
+    triangular_number_x4(i_ring as u64) + i_in_ring as u64
   } else if i_ring >= 3 * nside { // South polar cap
     let off = i_ring + 1 - 3 * nside;
     i_in_ring -= (off >> 1) + (off & 1) + off * (i_in_ring / nside);
-    n_hash(nside) - triangular_number_x4_u32(n_isolatitude_rings(nside) - i_ring) + i_in_ring as u64
+    n_hash(nside) - triangular_number_x4((n_isolatitude_rings(nside) - i_ring) as u64) + i_in_ring as u64
   } else { // Equatorial region
     first_hash_in_eqr(nside)
       + (i_ring - nside) as u64 * (nside << 2) as u64
@@ -592,7 +582,7 @@ mod tests {
   fn test_hash_2() {
     for depth in 0..10 {
       let nside = nside(depth);
-      let layer = nested::get_or_create(depth);
+      let layer = nested::get(depth);
       for icell in 0..layer.n_hash() {
         let (lon, lat) = layer.center(icell);
         assert_eq!(hash(nside, lon, lat), layer.to_ring(icell));
@@ -703,7 +693,7 @@ mod tests {
   #[test]
   fn test_center_3() {
     let nside = 4;
-    let l2 = nested::get_or_create(2);
+    let l2 = nested::get(2);
     // NPC
     let ipix = 7;
     assert_eq!(

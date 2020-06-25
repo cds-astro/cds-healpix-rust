@@ -35,7 +35,13 @@ impl Ellipse {
       one_over_det: 1.0 / det,
     }
   }
-
+  
+  /// Create a new ellipse for the given covariance matrix parameters.
+  /// # Inputs
+  /// - `sig_x` standard deviation along the `x`-axis
+  /// - `sig_y` standard deviation along the `y`-axis
+  /// - `rho` correlation coefficient
+  #[allow(dead_code)]
   pub fn from_cor_matrix(sig_x: f64, sig_y: f64, rho: f64) -> Ellipse {
     let sigx2 = sig_x * sig_x;
     let sigy2 = sig_y * sig_y;
@@ -48,7 +54,13 @@ impl Ellipse {
       one_over_det: 1.0 / det,
     }
   }
-  
+
+  /// Create a new ellipse for the given covariance matrix parameters.
+  /// # Inputs
+  /// - `sig_x` standard deviation along the `x`-axis
+  /// - `sig_y` standard deviation along the `y`-axis
+  /// - `rho_sigx_sigy` covariance
+  #[allow(dead_code)]
   pub fn from_cov_matrix(sigx2: f64, sigy2: f64, rho_sigx_sigy: f64) -> Ellipse {
     let det = sigx2 * sigy2 - rho_sigx_sigy.pow2();
     Ellipse {
@@ -58,7 +70,8 @@ impl Ellipse {
       one_over_det: 1.0 / det,
     }
   }
-  
+
+  #[allow(dead_code)]
   pub fn to_a_b_theta(&self) -> (f64, f64, f64) {
     let val_sqrt = ((self.sigx2 - self.sigy2).pow2() + self.rho_sigx_sigy.twice().pow2()).sqrt();
     let a2 = 0.5 * (self.sigx2 + self.sigy2 + val_sqrt);
@@ -67,7 +80,8 @@ impl Ellipse {
     // let theta =  (a2 - self.sigx2).atan2(self.rho_sigx_sigy);
     (a2.sqrt(), b2.sqrt(), theta)
   }
-  
+
+  #[allow(dead_code)]
   fn extended_stat_by_circle(&self, sig: f64) -> Ellipse {
     Ellipse::from_cov_matrix(
       self.sigx2 + sig.pow2(),
@@ -75,7 +89,8 @@ impl Ellipse {
       self.rho_sigx_sigy,
     )
   }
-  
+
+  #[allow(dead_code)]
   fn extended_stat(&self, other: &Ellipse) -> Ellipse {
     Ellipse::from_cov_matrix(
       self.sigx2 + other.sigx2,
@@ -83,7 +98,8 @@ impl Ellipse {
       self.rho_sigx_sigy + other.rho_sigx_sigy,
     )
   }
-  
+
+  #[allow(dead_code)]
   fn extended_geom_by_circle(&self, sig: f64) -> Ellipse {
     let sigx = self.sigx2.sqrt() + sig;
     let sigy = self.sigy2.sqrt() + sig;
@@ -118,7 +134,9 @@ impl Ellipse {
   pub fn overlap(&self, x: f64, y: f64, other: &Ellipse) -> bool {
     self.extended_geom(other).contains(x, y)
   }
-  
+
+  #[allow(dead_code)]
+  #[allow(clippy::many_single_char_names)]
   pub fn path_along_edge(a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
     
     let step = (2.0 * a) / (half_num_points as f64);
@@ -138,6 +156,7 @@ impl Ellipse {
 }
 
 // TODO: verify the rotation (angle may be the opposite)!
+#[allow(dead_code)]
 fn rotate(x: f64, y: f64, cost: f64, sint: f64) -> (f64, f64) {
   (
     x * cost - y * sint,

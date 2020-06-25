@@ -1,4 +1,3 @@
-use std::sync::Once;
 use std::ops::Shr;
 use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 
@@ -89,54 +88,10 @@ const LAYERS: [Layer; 30] =  [
   Layer::new(29, ZOC::LARGE)
 ];
 
-pub fn get_or_create(depth: u8) -> &'static Layer {
+pub fn get(depth: u8) -> &'static Layer {
   &LAYERS[depth as usize]
 }
 
-/*
-/// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
-/// Info: Unfortunately Default::default(); do no work with static arrays :o/
-static mut LAYERS: [Option<Layer>; 30] =  [
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None
-];
-/// See the get_or_create function, each object is used for the lazy instantiation of the 
-/// layer of the corresponding depth.
-/// Info: Unfortunately Default::default(); do no work with static arrays :o/
-static LAYERS_INIT: [Once; 30] = [
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new()
-];
-
-// const l0: Layer = 
-
-/// Lazy factory method: instantiate a new Layer at the first call for a given depth; after the 
-/// first call, returns an already instantiated Layer.
-/// # Info
-/// This method resort to a double-checked lock, ensuring thread-safety.
-pub fn get_or_create(depth: u8) -> &'static Layer {
-  unsafe {
-    // Inspired from the Option get_or_insert_with method, modified to ensure thread safety with
-    // https://doc.rust-lang.org/std/sync/struct.Once.html
-    // This implements a double-checked lock
-    match LAYERS[depth as usize] {
-      Some(ref v) =>  return v,
-      None => {
-        LAYERS_INIT[depth as usize].call_once(|| {
-          LAYERS[depth as usize] = Some(Layer::new(depth));
-        });
-      },
-    }
-    match LAYERS[depth as usize] {
-      Some(ref v) => v,
-      _ => unreachable!(),
-    }
-  }
-}
-*/
 
 pub mod moc;
 
@@ -165,8 +120,8 @@ pub const fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
 /// # Example
 /// 
 /// ```rust
-/// use cdshealpix::nested::{get_or_create, Layer};
-/// let l0 = get_or_create(0);
+/// use cdshealpix::nested::{get, Layer};
+/// let l0 = get(0);
 /// assert_eq!(l0.to_uniq(0), 16);
 /// ```
 #[inline]
@@ -210,6 +165,7 @@ pub fn from_uniq_ivoa(uniq_hash: u64) -> (u8, u64) {
   (depth as u8, hash)
 }
 
+#[allow(dead_code)]
 const fn highest_one_bit(mut i: u64) -> u64 {
   i |= i >>  1;
   i |= i >>  2;
@@ -224,42 +180,42 @@ const fn highest_one_bit(mut i: u64) -> u64 {
 /// Conveniency function returning the number of hash value in the [Layer] of the given *depth*.
 #[inline]
 pub fn n_hash(depth: u8) -> u64 {
-  get_or_create(depth).n_hash
+  get(depth).n_hash
 }
 
 /// Conveniency function simply calling the [hash](struct.Layer.html#method.hash) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn hash(depth: u8, lon: f64, lat: f64) -> u64 {
-  get_or_create(depth).hash(lon, lat)
+  get(depth).hash(lon, lat)
 }
 
 /// Conveniency function simply calling the [hash](struct.Layer.html#method.hash_with_dxdy) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn hash_with_dxdy(depth: u8, lon: f64, lat: f64) -> (u64, f64, f64) {
-  get_or_create(depth).hash_with_dxdy(lon, lat)
+  get(depth).hash_with_dxdy(lon, lat)
 }
 
 /// Conveniency function simply calling the [center](struct.Layer.html#method.sph_coo) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn sph_coo(depth: u8, hash: u64, dx: f64, dy: f64) -> (f64, f64) { 
-  get_or_create(depth).sph_coo(hash, dx, dy)
+  get(depth).sph_coo(hash, dx, dy)
 }
 
 /// Conveniency function simply calling the [center](struct.Layer.html#method.center) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn center(depth: u8, hash: u64) -> (f64, f64) {
-  get_or_create(depth).center(hash)
+  get(depth).center(hash)
 }
 
 /// Conveniency function simply calling the [vertices](struct.Layer.html#method.vertices) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn vertices(depth: u8, hash: u64) -> [(f64, f64); 4] {
-  get_or_create(depth).vertices(hash)
+  get(depth).vertices(hash)
 }
 
 
@@ -267,35 +223,35 @@ pub fn vertices(depth: u8, hash: u64) -> [(f64, f64); 4] {
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn path_along_cell_side(depth: u8, hash: u64, from_vertex:  &Cardinal, to_vertex: &Cardinal, include_to_vertex: bool, n_segments: u32) -> Box<[(f64, f64)]> {
-  get_or_create(depth).path_along_cell_side(hash, from_vertex, to_vertex, include_to_vertex, n_segments)
+  get(depth).path_along_cell_side(hash, from_vertex, to_vertex, include_to_vertex, n_segments)
 }
 
 /// Conveniency function simply calling the [vertices](struct.Layer.html#method.path_along_cell_edge) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn path_along_cell_edge(depth: u8, hash: u64, starting_vertex: &Cardinal, clockwise_direction: bool, n_segments_by_side: u32) -> Box<[(f64, f64)]> {
-  get_or_create(depth).path_along_cell_edge(hash, starting_vertex, clockwise_direction, n_segments_by_side)
+  get(depth).path_along_cell_edge(hash, starting_vertex, clockwise_direction, n_segments_by_side)
 }
 
 /// Conveniency function simply calling the [vertices](struct.Layer.html#method.grid) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn grid(depth: u8, hash: u64, n_segments_by_side: u16) -> Box<[(f64, f64)]> {
-  get_or_create(depth).grid(hash, n_segments_by_side)
+  get(depth).grid(hash, n_segments_by_side)
 }
 
 /// Conveniency function simply calling the [neighbours](struct.Layer.html#method.neighbours) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64> {
-  get_or_create(depth).neighbours(hash, include_center)
+  get(depth).neighbours(hash, include_center)
 }
 
 /// Conveniency function simply calling the [append_bulk_neighbours](struct.Layer.html#method.append_bulk_neighbours) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn append_bulk_neighbours(depth: u8, hash: u64, mut dest: &mut Vec<u64>) {
-  get_or_create(depth).append_bulk_neighbours(hash, &mut dest);
+  get(depth).append_bulk_neighbours(hash, &mut dest);
 }
 
 
@@ -319,89 +275,89 @@ pub fn internal_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Vec<u64> {
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn external_edge_struct(depth: u8, hash: u64, delta_depth: u8) -> ExternalEdge {
-  get_or_create(depth).external_edge_struct(hash, delta_depth)
+  get(depth).external_edge_struct(hash, delta_depth)
 }
 
 /// Conveniency function simply calling the [external_edge](struct.Layer.html#method.external_edge) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn external_edge(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
-  get_or_create(depth).external_edge(hash, delta_depth)
+  get(depth).external_edge(hash, delta_depth)
 }
 
 /// Conveniency function simply calling the [external_edge_sorted](struct.Layer.html#method.external_edge_sorted) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn external_edge_sorted(depth: u8, hash: u64, delta_depth: u8) -> Box<[u64]> {
-  get_or_create(depth).external_edge_sorted(hash, delta_depth)
+  get(depth).external_edge_sorted(hash, delta_depth)
 }
 
 /// Conveniency function simply calling the [append_external_edge](struct.Layer.html#method.append_external_edge) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn append_external_edge(depth: u8, hash: u64, delta_depth: u8, dest: &mut Vec<u64>) {
-  get_or_create(depth).append_external_edge(hash, delta_depth, dest)
+  get(depth).append_external_edge(hash, delta_depth, dest)
 }
 
 /// Conveniency function simply calling the [append_external_edge_sorted](struct.Layer.html#method.append_external_edge_sorted) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn append_external_edge_sorted(depth: u8, hash: u64, delta_depth: u8, dest: &mut Vec<u64>) {
-  get_or_create(depth).append_external_edge_sorted(hash, delta_depth, dest)
+  get(depth).append_external_edge_sorted(hash, delta_depth, dest)
 }
 
 /// Conveniency function simply calling the [bilinear_interpolation](struct.Layer.html#method.bilinear_interpolation) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn bilinear_interpolation(depth: u8, lon: f64, lat: f64) -> [(u64, f64); 4] {
-  get_or_create(depth).bilinear_interpolation(lon, lat)
+  get(depth).bilinear_interpolation(lon, lat)
 }
 
 /// Conveniency function simply calling the [cone_coverage_approx](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn cone_coverage_approx(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-  get_or_create(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius)
+  get(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius)
 }
 
 /// Conveniency function simply calling the [cone_coverage_flat](struct.Layer.html#method.cone_coverage_approx) method
 /// of the [Layer] of the given *depth* and retrieving a flat array.
 #[inline]
 pub fn cone_coverage_approx_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[u64]> {
-  get_or_create(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius).to_flat_array()
+  get(depth).cone_coverage_approx(cone_lon, cone_lat, cone_radius).to_flat_array()
 }
 
 /// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.cone_coverage_approx_custom) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn cone_coverage_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
-  get_or_create(depth).cone_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
+  get(depth).cone_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
 }
 
 /// Conveniency function simply calling the [elliptical_cone_coverage](struct.Layer.html#method.elliptical_cone_coverage) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn elliptical_cone_coverage(depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
-  get_or_create(depth).elliptical_cone_coverage( lon, lat, a, b, pa)
+  get(depth).elliptical_cone_coverage( lon, lat, a, b, pa)
 }
 
 /// Conveniency function simply calling the [elliptical_cone_coverage_custom](struct.Layer.html#method.elliptical_cone_coverage_custom) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn elliptical_cone_coverage_custom(depth: u8, delta_depth: u8, lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
-  get_or_create(depth).elliptical_cone_coverage_custom(delta_depth, lon, lat, a, b, pa)
+  get(depth).elliptical_cone_coverage_custom(delta_depth, lon, lat, a, b, pa)
 }
 
 /// Conveniency function simply calling the [polygon_coverage_approx](struct.Layer.html#method.polygon_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
-  get_or_create(depth).polygon_coverage(vertices, exact_solution)
+  get(depth).polygon_coverage(vertices, exact_solution)
 }
 
 
 pub mod bmoc;
-mod gpu;
+pub mod gpu;
 
 use self::bmoc::*;
 use super::ring::{triangular_number_x4};
@@ -409,7 +365,7 @@ use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon};
 use super::sph_geom::cone::{Cone};
 use super::sph_geom::elliptical_cone::EllipticalCone;
-use super::{proj, direction_from_neighbour, edge_cell_direction_from_neighbour};
+use super::{direction_from_neighbour, edge_cell_direction_from_neighbour};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
 use super::compass_point::MainWind::{S, SE, E, SW, C, NE, W, NW, N};
 use super::special_points_finder::{arc_special_points};
@@ -428,7 +384,6 @@ pub struct Layer {
   x_mask: u64,
   y_mask: u64,
   xy_mask: u64,
-  nside_remainder_mask: u64, // = nside - 1
   time_half_nside: i64,
   one_over_nside: f64,
   // z_order_curve: &'static dyn ZOrderCurve,
@@ -452,40 +407,11 @@ impl Layer {
       x_mask: nested::x_mask(depth),
       y_mask: nested::y_mask(depth), //x_mask << 1,
       xy_mask: nested::xy_mask(depth),
-      nside_remainder_mask: (nside - 1) as u64, // xy_mask >> depth 
       time_half_nside: (depth as i64 - 1) << 52,
       one_over_nside: ONE_OVER_NSIDE[depth as usize], // f64::from_bits(onef64_to_bits - time_nside),
       z_order_curve
     }
   }
-
-  /*fn new(depth: u8) -> Layer {
-    let twice_depth: u8 = depth << 1u8;
-    let nside: u32 = super::nside_unsafe(depth);
-    let mut x_mask = 0u64;
-    let mut xy_mask = 0u64;
-    let mut time_half_nside = -1_i64 << 52;
-    if depth > 0 {
-      x_mask = 0x5555555555555555u64 >> (64 - twice_depth); // ...0101
-      xy_mask = (1u64 << twice_depth) - 1u64;
-      time_half_nside = ((depth - 1) as i64) << 52;
-    }
-    Layer {
-      depth,
-      nside,
-      nside_minus_1: nside - 1,
-      n_hash: super::n_hash_unsafe(depth),
-      twice_depth,
-      d0h_mask: 15_u64 << twice_depth,
-      x_mask,
-      y_mask: x_mask << 1,
-      xy_mask,
-      nside_remainder_mask: xy_mask >> depth, // = nside - 1
-      time_half_nside,
-      one_over_nside: 1f64 / nside as f64,
-      z_order_curve: get_zoc(depth)
-    }
-  }*/
 
   /// Returns the depth of the Layer (i.e. the HEALPix *order*)
   #[inline]
@@ -511,38 +437,14 @@ impl Layer {
   /// # Examples
   /// ```rust
   /// use cdshealpix::{nside};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 12_u8;
   /// let nside = nside(depth) as u64;
-  /// let nested12: &Layer = get_or_create(depth);
+  /// let nested12: &Layer = get(depth);
   /// assert_eq!(nside * nside - 1, nested12.hash(12.5_f64.to_radians(), 89.99999_f64.to_radians()));
   /// ```
   pub fn hash(&self, lon: f64, lat: f64) -> u64 {
-    self.hash_v2(lon, lat)
-  }
-
-  /* The clean way to do, but changes the API...
-  pub fn hash(&self, lon: f64, lat: f64) -> Result<u64, Error> {
-    check lon, lat
-    hash_uncheked(lon, lat)
-  }
-  pub fn hash_uncheked(&self, lon: f64, lat: f64) -> u64 {
-    ...
-  }*/
-  
-  fn hash_v1(&self, lon: f64, lat: f64) -> u64 {
-    let mut xy = proj(lon, lat);
-    xy.0 = ensures_x_is_positive(xy.0);
-    self.shift_rotate_scale(&mut xy);
-    let mut ij = discretize(xy);
-    let ij_d0c = self.base_cell_coos(&ij);
-    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
-    self.to_coos_in_base_cell(&mut ij);
-    self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32)
-  }
-
-  fn hash_v2(&self, lon: f64, lat: f64) -> u64 {
     check_lat(lat);
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
     // Coords inside the base cell
@@ -554,7 +456,21 @@ impl Layer {
     let j = if j == self.nside { self.nside_minus_1 } else { j };
     self.build_hash_from_parts(d0h, i, j)
   }
+
+  pub fn hash_checked(&self, lon: f64, lat: f64) -> Result<u64, String> {
+    check_lat_res(lat)?;
+    Ok(self.hash(lon, lat))
+  }
   
+  /* The clean way to do, but changes the API...
+  pub fn hash(&self, lon: f64, lat: f64) -> Result<u64, Error> {
+    check lon, lat
+    hash_uncheked(lon, lat)
+  }
+  pub fn hash_uncheked(&self, lon: f64, lat: f64) -> u64 {
+    ...
+  }*/
+
   #[inline]
   fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
     let (x_pm1, q) = Layer::xpm1_and_q(lon);
@@ -657,11 +573,11 @@ impl Layer {
   /// # Examples
   /// ```rust
   /// use cdshealpix::{nside};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 12_u8;
   /// let nside = nside(depth) as u64;
-  /// let nested12: &Layer = get_or_create(depth);
+  /// let nested12: &Layer = get(depth);
   /// let h_org = nside * nside - 1;
   /// let (h_ra, h_dec) = nested12.center(h_org);
   /// let (h, dx, dy) = nested12.hash_with_dxdy(h_ra, h_dec);
@@ -672,24 +588,6 @@ impl Layer {
   /// assert!((dy - 0.5).abs() < 1e-12_f64);
   /// ```
   pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
-    self.hash_with_dxdy_v2(lon, lat)
-  }
-
-  fn hash_with_dxdy_v1(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
-    let mut xy = proj(lon, lat);
-    xy.0 = ensures_x_is_positive(xy.0);
-    self.shift_rotate_scale(&mut xy);
-    let mut ij = discretize(xy);
-    // eprintln!("x: {:.16}; y: {:.16}; i: {}; j: {}", xy.0, xy.1, ij.0, ij.1);
-    let dx = xy.0 - (ij.0 as f64);
-    let dy = xy.1 - (ij.1 as f64);
-    let ij_d0c = self.base_cell_coos(&ij);
-    let d0h_bits = self.depth0_bits(ij_d0c.0, ij_d0c.1, ij, xy/*, lon, lat*/);
-    self.to_coos_in_base_cell(&mut ij);
-    (self.build_hash(d0h_bits, ij.0 as u32, ij.1 as u32), dx, dy)
-  }
-
-  fn hash_with_dxdy_v2(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
     // Coords inside the base cell time nside/2
     let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64);
@@ -710,36 +608,10 @@ impl Layer {
   }
   
   #[inline]
-  fn shift_rotate_scale(&self, xy: &mut (f64, f64)) {
-    let (ref mut x, ref mut y) = *xy;
-    let tmp = 8.0 - *x;
-    *y += 1.0;
-    *x = f64::from_bits((self.time_half_nside + f64::to_bits(*x + *y) as i64) as u64);
-    *y = f64::from_bits((self.time_half_nside + f64::to_bits(*y + tmp) as i64) as u64);
-  }
-
-  #[inline]
-  fn base_cell_coos(&self, ij: &(u64, u64)) -> (u8, u8) {
-    (self.div_by_nside_floor_u8((*ij).0), self.div_by_nside_floor_u8((*ij).1))
-  }
-
-  #[inline]
   fn div_by_nside_floor_u8(&self, val: u64) -> u8 {
     (val >> self.depth) as u8
   }
-
-  #[inline]
-  fn to_coos_in_base_cell(&self, ij: &mut (u64, u64)) {
-    let (ref mut i, ref mut j) = *ij;
-    *i = self.modulo_nside(*i);
-    *j = self.modulo_nside(*j);
-  }
-
-  #[inline]
-  fn modulo_nside(&self, val: u64) -> u64 {
-    val & self.nside_remainder_mask
-  }
-
+  
   #[inline]
   fn modulo_nside_u32(&self, val: u32) -> u32 {
     val & self.nside_minus_1
@@ -760,47 +632,7 @@ impl Layer {
     debug_assert!(i < self.nside && j < self.nside, "nside: {}; i: {}, j: {}", self.nside, i, j);
     d0h_bits | self.z_order_curve.ij2h(i, j)
   }
-
-  ///
-  #[inline]
-  fn depth0_bits(&self, i: u8, j: u8, mut ij: (u64, u64), xy: (f64, f64)/*, lon: f64, lat: f64*/) -> u64 {
-    // self.base_hash_bits_lupt[i as usize][j as usize]
-    let k = 5_i8 - (i + j) as i8;
-    // The two branches -2 and -1 are extremely rare (north pole, NPC cells upper NE and NW borders),
-    // so few risks of branch miss-prediction.
-    // println!("k: {}; i: {}; j: {}; ij: {:?}; xy: {:?}", &k, &i, &j, &ij, &xy);
-    match k {
-      0..=2 => (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u64) << self.twice_depth,
-      -1 => {
-        if xy.0 - ij.0 as f64 > xy.1 - ij.1 as f64 {
-          ((((i - 1u8) & 3u8) as u64) << self.twice_depth) | self.y_mask
-        } else {
-          ((((i + 2u8) & 3u8) as u64) << self.twice_depth) | self.x_mask
-        }
-      },
-      -2 => (((i - 2u8) as u64) << self.twice_depth) | self.xy_mask,
-      3 => { // rare case due to lack of numerical precision 
-        let d0 = (xy.0 - ij.0 as f64).abs();
-        let d1 = (xy.1 - ij.1 as f64).abs();
-        if d0 < d1 {
-          ij.0 += 1;
-          self.depth0_bits(i + 1_u8, j, ij, xy)
-        } else {
-          ij.1 += 1;
-          self.depth0_bits(i, j + 1_u8, ij, xy)
-        }
-      },
-      4 => { // rare case due to lack of numerical precision 
-        ij.0 += 1;
-        ij.1 += 1;
-       self.depth0_bits(i + 1_u8, j + 1_u8, ij, xy)
-      },
-      /*_ => panic!("Algorithm error: case k = {} not supported! depth: {}, lon: {}, lat: {}, x: {}, y: {}", 
-                  k, self.depth, lon, lat, xy.0, xy.1),*/
-      _ => panic!("Algorithm error: case k = {} not supported!", k),
-    }
-  }
-
+  
   /// Conveniency function simply calling the [hash](fn.to_uniq.html) method with this layer *depth*.
   pub fn to_uniq(&self, hash: u64) -> u64 {
     // depth already tested, so we call the unsafe method
@@ -819,9 +651,9 @@ impl Layer {
   /// 
   /// At depth 0, no differences:
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// let depth = 0;
-  /// let n0 = get_or_create(depth);
+  /// let n0 = get(depth);
   /// for h in 0..12 {
   ///   assert_eq!(n0.to_ring(h), h);
   /// }
@@ -829,10 +661,10 @@ impl Layer {
   /// 
   /// At depth 1:
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// 
   /// let depth = 1;
-  /// let n1 = get_or_create(depth);
+  /// let n1 = get(depth);
   /// 
   /// assert_eq!(n1.to_ring(0),  13);
   /// assert_eq!(n1.to_ring(1),   5);
@@ -886,10 +718,10 @@ impl Layer {
   /// 
   /// At depth 2 (non exhaustive test):
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// 
   /// let depth = 2;
-  /// let n2 = get_or_create(depth);
+  /// let n2 = get(depth);
   /// /// NPC
   /// assert_eq!(n2.to_ring(47),  2);
   /// assert_eq!(n2.to_ring(29),  7);
@@ -960,19 +792,19 @@ impl Layer {
   /// 
   /// At depth 0, no differences:
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// let depth = 0;
-  /// let n0 = get_or_create(depth);
+  /// let n0 = get(depth);
   /// for h in 0..12 {
   ///   assert_eq!(n0.from_ring(h), h);
   /// }
   /// ```
   /// At depth 1:
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// 
   /// let depth = 1;
-  /// let n1 = get_or_create(depth);
+  /// let n1 = get(depth);
   /// 
   /// assert_eq!( 3, n1.from_ring(0));
   /// assert_eq!( 7, n1.from_ring(1));
@@ -1027,10 +859,10 @@ impl Layer {
   /// 
   /// At depth 2 (non exhaustive test):
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   /// 
   /// let depth = 2;
-  /// let n2 = get_or_create(depth);
+  /// let n2 = get(depth);
   /// /// NPC
   /// assert_eq!(47, n2.from_ring(2));
   /// assert_eq!(29, n2.from_ring(7));
@@ -1145,7 +977,7 @@ impl Layer {
   /// ```rust
   /// use std::f64::consts::{PI};
   /// use cdshealpix::{TRANSITION_LATITUDE};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
   ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1154,7 +986,7 @@ impl Layer {
   /// }
   /// 
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   /// 
   /// assert!(dist((PI / 4f64, TRANSITION_LATITUDE) , nested0.center(0u64)) < 1e-15);
   /// ```
@@ -1187,7 +1019,7 @@ impl Layer {
   /// 
   /// # Example
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
   ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1196,7 +1028,7 @@ impl Layer {
   /// }
   /// 
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   /// 
   /// assert!(dist(nested0.sph_coo(0, 0.5, 0.5) , nested0.center(0)) < 1e-15);
   /// ```
@@ -1229,7 +1061,7 @@ impl Layer {
   /// ```rust
   /// use std::f64::consts::{PI};
   /// use cdshealpix::compass_point::{Cardinal};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
   ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1238,7 +1070,7 @@ impl Layer {
   /// }
   /// 
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   ///
   /// assert!(dist((PI / 4f64, 0.0) , nested0.vertex(0, Cardinal::S)) < 1e-15);
   /// ```
@@ -1268,7 +1100,7 @@ impl Layer {
   /// ```rust
   /// use std::f64::consts::{PI};
   /// use cdshealpix::compass_point::{Cardinal};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
   ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1277,7 +1109,7 @@ impl Layer {
   /// }
   /// 
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   ///
   /// assert!(dist((PI / 4f64, 0.0) , nested0.vertices(0)[0]) < 1e-15);
   /// ```
@@ -1312,7 +1144,7 @@ impl Layer {
   /// ```rust
   /// use std::f64::consts::{PI};
   /// use cdshealpix::compass_point::{Cardinal, CardinalSet};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// fn dist(p1: (f64, f64), p2: (f64, f64)) -> f64 {
   ///   let sindlon = f64::sin(0.5 * (p2.0 - p1.0));
@@ -1321,7 +1153,7 @@ impl Layer {
   /// }
   /// 
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   ///
   /// assert!(dist((PI / 4f64, 0.0) , *nested0.vertices_map(0, CardinalSet::all()).get(Cardinal::S).unwrap()) < 1e-15);
   /// ```
@@ -1465,10 +1297,10 @@ impl Layer {
   /// # Example
   /// ```rust
   /// use cdshealpix::compass_point::{MainWind};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   ///
   /// assert_eq!(5 , nested0.neighbour(4, MainWind::E).unwrap());
   /// ```
@@ -1495,10 +1327,10 @@ impl Layer {
   /// # Example
   /// ```rust
   /// use cdshealpix::compass_point::{MainWind};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 0u8;
-  /// let nested0 = get_or_create(depth);
+  /// let nested0 = get(depth);
   ///
   /// assert_eq!(5 , *nested0.neighbours(4, false).get(MainWind::E).unwrap());
   /// ```
@@ -2188,10 +2020,10 @@ impl Layer {
   ///
   /// # Example
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 3_u8;
-  /// let nested3 = get_or_create(depth);
+  /// let nested3 = get(depth);
   ///
   /// let lon = 13.158329_f64.to_radians();
   /// let lat = -72.80028_f64.to_radians();
@@ -2230,10 +2062,10 @@ impl Layer {
   /// 
   /// # Example
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 3_u8;
-  /// let nested3 = get_or_create(depth);
+  /// let nested3 = get(depth);
   ///
   /// let lon = 13.158329_f64.to_radians();
   /// let lat = -72.80028_f64.to_radians();
@@ -2250,7 +2082,7 @@ impl Layer {
       self.cone_coverage_approx(cone_lon, cone_lat, cone_radius)
     } else {
       // TODO: change the algo not to put all cell in the MOC and pruning it
-      get_or_create(self.depth + delta_depth)
+      get(self.depth + delta_depth)
         .cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius)
         //.to_lower_depth_bmoc(self.depth)
         .to_lower_depth_bmoc_packing(self.depth)
@@ -2266,9 +2098,9 @@ impl Layer {
     let cos_cone_lat = cone_lat.cos();
     // Special case of very large radius: test the 12 base cells
     if !has_best_starting_depth(cone_radius) {
-      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
+      let distances = largest_center_to_vertex_distances_with_radius(
         0, self.depth + 1, cone_lon, cone_lat, cone_radius);
-      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, distances);
+      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
       for h in 0..12 {
         self.cone_coverage_approx_recur(0, h,
@@ -2282,7 +2114,7 @@ impl Layer {
     if depth_start >= self.depth {
       let shs_max = to_squared_half_segment(cone_radius
         + largest_center_to_vertex_distance_with_radius(depth_start, cone_lon, cone_lat, cone_radius));
-      let root_layer = get_or_create(depth_start);
+      let root_layer = get(depth_start);
       let mut neigs: Vec<u64> = root_layer.neighbours(root_layer.hash(cone_lon, cone_lat), true)
         .values_vec().iter()
         .map(h_to_h_and_shs(cone_lon, cone_lat, cos_cone_lat, root_layer))
@@ -2296,27 +2128,27 @@ impl Layer {
       for neig in neigs {
         bmoc_builder.push(self.depth,neig, false); 
       }
-      return bmoc_builder;
+      bmoc_builder
     } else {
-      let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
+      let distances = largest_center_to_vertex_distances_with_radius(
         depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius);
-      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, distances);
-      let root_layer = get_or_create(depth_start);
+      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
+      let root_layer = get(depth_start);
       let root_center_hash = root_layer.hash(cone_lon, cone_lat);
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
-      for &root_hash in neigs.sorted_values().into_iter() {
+      for &root_hash in neigs.sorted_values().iter() {
         self.cone_coverage_approx_recur(depth_start, root_hash,
                                 &shs_computer(cone_lon, cone_lat, cos_cone_lat),
                                 &minmax_array, 0, &mut bmoc_builder);
       }
-      return bmoc_builder; //.to_bmoc_packing();
+      bmoc_builder
     }
   }
   fn cone_coverage_approx_recur<F>(&self, depth: u8, hash: u64, shs_computer: &F, shs_minmax: &[MinMax],
                            recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe)
     where F: Fn((f64, f64)) -> f64  {
-    let center = get_or_create(depth).center(hash);
+    let center = get(depth).center(hash);
     let shs = shs_computer(center);
     let MinMax{min, max} = shs_minmax[recur_depth as usize];
     if shs <= min {
@@ -2339,6 +2171,7 @@ impl Layer {
   /// cone_radius in radians
   /// TODO: find a better function!!
   #[inline]
+  #[allow(dead_code)]
   fn ncell_in_cone_upper_bound(&self, cone_radius: f64) -> usize {
     // cell_area = 4 pi / ncell
     // cone_area = pi r^2
@@ -2357,7 +2190,7 @@ impl Layer {
 
   #[inline]
   fn n_moc_cell_in_cone_upper_bound(&self, cone_radius: f64) -> usize {
-    const TWICE_SQRT_3: f64 = 2.0_f64 * 1.73205080756887729352_f64; // sqrt(3)
+    const TWICE_SQRT_3: f64 = 2.0_f64 * 1.732_050_807_568_877_2_f64; // sqrt(3)
     // cell_area = 4 * pi / ncell = 4 * pi / (3 * 4 * nside^2) = pi / (3 * nside^2) =  pi * r^2
     // cell_radius = r = 1 / (sqrt(3) * nside)
     // As a very simple and naive rule, we take 4x the number of cells needed to cover
@@ -2407,10 +2240,10 @@ impl Layer {
   /// 
   /// # Example
   /// ```rust
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 3_u8;
-  /// let nested3 = get_or_create(depth);
+  /// let nested3 = get(depth);
   ///
   /// let lon = 36.80105218_f64.to_radians();
   /// let lat = 56.78028536_f64.to_radians();
@@ -2457,7 +2290,7 @@ impl Layer {
       self.elliptical_cone_coverage(lon, lat, a, b, pa)
     } else {
       // TODO: change the algo not to put all cell in the MOC and pruning it
-      get_or_create(self.depth + delta_depth)
+      get(self.depth + delta_depth)
         .elliptical_cone_coverage_internal(lon, lat, a, b, pa)
         .to_lower_depth_bmoc_packing(self.depth)
     }
@@ -2485,7 +2318,7 @@ impl Layer {
     }
     // Normal case
     let depth_start = best_starting_depth(a);
-    let root_layer = get_or_create(depth_start);
+    let root_layer = get(depth_start);
     let root_center_hash = root_layer.hash(lon, lat);
     // Small ellipse case
     if depth_start >= self.depth {
@@ -2497,7 +2330,7 @@ impl Layer {
           let (l, b) = root_layer.center(*h);
           sph_ellipse.contains(l, b) || sph_ellipse.overlap_cone(l, b, distance)
         })
-        .map(|h| h >> ((depth_start - &self.depth) << 1)) // h_to_lower_depth
+        .map(|h| h >> ((depth_start - self.depth) << 1)) // h_to_lower_depth
         .collect();
       neigs.sort_unstable(); // sort the array (unstable is ok since we remove duplicates)
       neigs.dedup();         // remove duplicates (vector must be sorted first)
@@ -2505,23 +2338,23 @@ impl Layer {
       for neig in neigs {
         bmoc_builder.push(self.depth,neig, false);
       }
-      return bmoc_builder;
+      bmoc_builder
     } else {
       let distances: Box<[f64]> = largest_center_to_vertex_distances_with_radius(
         depth_start, self.depth + 1, lon, lat, a);
       let neigs = root_layer.neighbours(root_center_hash, true);
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(a));
-      for &root_hash in neigs.sorted_values().into_iter() {
+      for &root_hash in neigs.sorted_values().iter() {
         self.elliptical_cone_coverage_recur(depth_start, root_hash, &sph_ellipse, &distances, 0, &mut bmoc_builder);
       }
-      return bmoc_builder;
+      bmoc_builder
     }
   }
   
   fn elliptical_cone_coverage_recur(&self, depth: u8, hash: u64, 
                                        ellipse: &EllipticalCone, distances: &[f64],
                                        recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe) {
-    let (lon, lat) = get_or_create(depth).center(hash);
+    let (lon, lat) = get(depth).center(hash);
     let distance = distances[recur_depth as usize];
     /*eprintln!("d: {}; h: {}; lon: {}, lat: {}; dist: {}; contains: {}; overlap: {}", 
              &depth, &hash, &lon.to_degrees(), &lat.to_degrees(), &distance.to_degrees(),
@@ -2583,10 +2416,10 @@ impl Layer {
   /// # Example
   /// ```rust
   /// use cdshealpix::compass_point::{MainWind};
-  /// use cdshealpix::nested::{get_or_create, Layer};
+  /// use cdshealpix::nested::{get, Layer};
   ///
   /// let depth = 3_u8;
-  /// let nested3 = get_or_create(depth);
+  /// let nested3 = get(depth);
   /// 
   /// let actual_res =nested3.polygon_coverage(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
   /// let expected_res: [u64; 8] = [304, 305, 306, 307, 308, 310, 313, 316];
@@ -2607,7 +2440,7 @@ impl Layer {
       (0..12).collect()
     } else {
       depth_start = best_starting_depth(bounding_cone.radius()).min(self.depth);
-      let root_layer = get_or_create(depth_start);
+      let root_layer = get(depth_start);
       let LonLat{lon, lat} = bounding_cone.center().lonlat();
       let center_hash = root_layer.hash(lon, lat);
       let mut neigs: Vec<u64> = root_layer.neighbours(center_hash, true).values_vec();
@@ -2670,19 +2503,10 @@ impl Layer {
       }
     }
   }
-
-  fn hashs<T: LonLatT>(&self, poly_vertices: &[T]) -> Box<[u64]> {
-    poly_vertices.iter().map(|coo| self.hash(coo.lon(), coo.lat()))
-      .collect::<Vec<u64>>().into_boxed_slice()
-  }
-
+  
   fn hashs_vec<T: LonLatT>(&self, poly_vertices: &[T]) -> Vec<u64> {
     poly_vertices.iter().map(|coo| self.hash(coo.lon(), coo.lat()))
       .collect::<Vec<u64>>()
-  }
-  
-  fn allsky_bmoc(&self) -> BMOC {
-    self.allsky_bmoc_builder().to_bmoc()
   }
 
   fn allsky_bmoc_builder(&self) -> BMOCBuilderUnsafe {
@@ -2699,7 +2523,7 @@ impl Layer {
 #[inline]
 fn depth0_hash_unsafe(i: u8, j: u8) -> u8 {
   let k = 5_i8 - (i + j) as i8;
-  (((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u8)
+  ((k << 2) + ( ((i as i8) + ((k - 1) >> 7)) & 3_i8)) as u8
 }
 
 /// Returns the hash value of the cell of depth this layer depth + the given `delta_depth`
@@ -2978,11 +2802,6 @@ struct HashBits {
 }
 
 #[inline]
-const fn discretize(xy: (f64, f64)) -> (u64, u64) {
-  (xy.0 as u64, xy.1 as u64)
-}
-
-#[inline]
 const fn rotate45_scale2(i_in_d0h: u32, j_in_d0h: u32) -> (i32, i32) {
   (i_in_d0h as i32 - j_in_d0h as i32, (i_in_d0h + j_in_d0h) as i32)
 }
@@ -3072,7 +2891,7 @@ pub const fn xy_mask(depth: u8) -> u64 {
 }
 
 #[inline]
-fn to_shs_min_max_array(cone_radius: f64, distances: Box<[f64]>) -> Box<[MinMax]> {
+fn to_shs_min_max_array(cone_radius: f64, distances: &[f64]) -> Box<[MinMax]> {
   let v: Vec<MinMax> = distances.iter()
     .map(|d| to_shs_min_max(cone_radius, *d))
     .collect();
@@ -3115,86 +2934,13 @@ fn shs_computer(cone_lon: f64, cone_lat: f64, cos_cone_lat: f64) -> impl Fn((f64
   }
 }
 
-/* Commented because not used so far
-/// The returned closure computes the squared half segment between 
-/// the center of a given hash (the closure parameter) ,at the depth of the given layer,
-/// and the given point on the unit sphere.
-/// We ask in argument the cosine of the latitude since it is a costly operation that may have already
-/// been performed.
-#[inline]
-fn shs_computer_4layer(lon: f64, lat: f64, cos_lat: f64, layer: &'static Layer) -> impl Fn(u64) -> (f64) {
-  debug_assert!(cos_lat == lat.cos());
-  let func = shs_computer(lon, lat, cos_lat);
-  move |hash| {
-    func(layer.center(hash))
-  }
-}*/
-
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn build_lupt(depth: u8) -> [[u64; 6]; 6] {
-    let depth_x2: u8= depth << 1u8;
-    let mut y_mask = 0u64;
-    let mut xy_mask = 0u64;
-    if depth > 0 {
-      xy_mask = (1u64 << depth_x2) - 1u64;
-      y_mask = 0x5555555555555555u64 >> (64 - depth_x2); // ...0101
-      y_mask <<= 1;                                      // ...1010
-    }
-    let null = 0xFFFFFFFFFFFFFFFFu64;
-    let bc00 =  0u64 << depth_x2;
-    let bc01 =  1u64 << depth_x2;
-    let bc02 =  2u64 << depth_x2;
-    let bc03 =  3u64 << depth_x2;
-    let bc04 =  4u64 << depth_x2;
-    let bc05 =  5u64 << depth_x2;
-    let bc06 =  6u64 << depth_x2;
-    let bc07 =  7u64 << depth_x2;
-    let bc08 =  8u64 << depth_x2;
-    let bc09 =  9u64 << depth_x2;
-    let bc10 = 10u64 << depth_x2;
-    let bc11 = 11u64 << depth_x2;
-    let mg0y = (0u64 << depth_x2) | y_mask;
-    let mg1y = (1u64 << depth_x2) | y_mask;
-    let mg2y = (2u64 << depth_x2) | y_mask;
-    let mg3y = (3u64 << depth_x2) | y_mask;
-    let m0xy = (0u64 << depth_x2) | xy_mask;
-    let m1xy = (1u64 << depth_x2) | xy_mask;
-    let m2xy = (2u64 << depth_x2) | xy_mask;
-    let m3xy = (3u64 << depth_x2) | xy_mask;
-    [
-      [null, null, null, bc08, bc04, null], //   ----> y-axis
-      [null, null, bc09, bc05, bc00, mg0y], //  |
-      [null, bc10, bc06, bc01, mg1y, m0xy], //  |
-      [bc11, bc07, bc02, mg2y, m1xy, null], //  v
-      [bc04, bc03, mg3y, m2xy, null, null], // x-axis
-      [null, mg0y, m3xy, null, null, null]
-    ]
-  }
-  
-  /*#[test]
-  fn testok_d0h_bits() {
-    let depth = 0_u8;
-    let layer = get_or_create(depth);
-    let lupm = build_lupt(depth);
-    let ijs = [
-      (0_u8, 3_u8), (0_u8, 4_u8),
-      (1_u8, 2_u8), (1_u8, 3_u8), (1_u8, 4_u8), (1_u8, 5_u8),
-      (2_u8, 1_u8), (2_u8, 2_u8), (2_u8, 3_u8), (2_u8, 4_u8), (2_u8, 5_u8),
-      (3_u8, 0_u8), (3_u8, 1_u8), (3_u8, 2_u8), (3_u8, 3_u8), (3_u8, 4_u8),
-      (4_u8, 0_u8), (4_u8, 1_u8), (4_u8, 2_u8), (4_u8, 3_u8),
-      (5_u8, 1_u8), (5_u8, 2_u8),
-    ];
-    for (i, j) in ijs.iter() {
-      assert_eq!(lupm[*i as usize][*j as usize], layer.depth0_bits(*i, *j/*, &mut (0_u64, 0_u64)*/, (*i as f64, *j as f64 + 1e-14)/*, 0.0, 0.0*/));
-    }
-  }*/
   
   #[test]
   fn testok_hash_d0() {
-    let layer = get_or_create(0);
+    let layer = get(0);
     assert_eq!(4_u64, layer.hash(0.0_f64.to_radians(), 0.0_f64.to_radians()));
     assert_eq!(5_u64, layer.hash(90.0_f64.to_radians(), 0.0_f64.to_radians()));
     assert_eq!(6_u64, layer.hash(180.0_f64.to_radians(), 0.0_f64.to_radians()));
@@ -3213,14 +2959,14 @@ mod tests {
   
   #[test]
   fn testok_hash() {
-    let layer = get_or_create(3);
+    let layer = get(3);
     let hash = layer.hash(333.5982493968911_f64.to_radians(), -25.919634217871433_f64.to_radians());
     assert_eq!(735_u64, hash);
   }
 
   #[test]
   fn testok_hash_2() {
-    let layer = get_or_create(0);
+    let layer = get(0);
     // ra = 179.99999999999998633839 deg
     // de = -48.13786699999999889561 deg
     let hash = layer.hash(3.141592653589793, -0.8401642740371252);
@@ -3236,7 +2982,7 @@ mod tests {
 
   #[test]
   fn testok_hash_3() {
-    let layer = get_or_create(0);
+    let layer = get(0);
     // ra = 89.99999999999999889877 deg
     // de = -42.68491599999999973256 deg
     let hash = layer.hash(1.5707963267948966, -0.7449923251372079);
@@ -3252,7 +2998,7 @@ mod tests {
 
   #[test]
   fn testok_hash_4() {
-    let layer = get_or_create(3);
+    let layer = get(3);
     let ra = 180.0_f64;
     let dec = -45.85_f64;
     let hash = layer.hash(ra.to_radians(), dec.to_radians());
@@ -3261,7 +3007,7 @@ mod tests {
   
   #[test]
   fn testok_neighbour_d0() {
-    let layer = get_or_create(0);
+    let layer = get(0);
     // North polar cap
     // - 0
     assert_eq!(0_u64, layer.neighbour(0,  C).unwrap());
@@ -3389,7 +3135,7 @@ mod tests {
 
   #[test]
   fn testok_neighbours_d0() {
-    let layer = get_or_create(0);
+    let layer = get(0);
     // North polar cap
     check_equals(layer.neighbours(0_u64, false), [1, 2, 3, 4, 5, 8]);
     check_equals(layer.neighbours(1_u64, false), [0, 2, 3, 5, 6, 9]);
@@ -3412,7 +3158,7 @@ mod tests {
     let depth = 2_u8;
     let hash = 130;
     
-    let layer = get_or_create(depth);
+    let layer = get(depth);
     check_equals_all(layer.neighbours(hash, true), [128, 129, 130, 131, 136, 137, 176, 177, 180]);
   }
   
@@ -3935,7 +3681,7 @@ mod tests {
   fn testok_polygone_exact_5() {
     // In Aladin: draw polygon(,269.0489904481256, 50.93107840310317,256.0142359254377, 13.990475156963315,243.27946433651516, -7.489608522084967,224.32882610807906, -24.613170006428422,181.0522052001408, -32.62716788567398,196.13865549198817, -48.194574021576855,204.11410185161034, -61.679032617555755,204.22079738688976, -75.90259740652621,452.0599233625658, -81.01038799438487,291.81039030880413, -59.94991219586425,298.63694405367926, -35.41386619268488,307.97031962597856, -11.966387215315455,330.9614415037472, 19.1371582387119,310.5212786376428, 20.26388923574062,296.2930605411064, 25.849021337885926,283.4739050648204, 34.80711164805169,269.0489904481256, 50.93107840310317)
     let depth = 6;
-    let mut vertices = [
+    let vertices = [
       (4.695790732486566, 0.8889150097255261),
       (4.4682913488764395, 0.24417985540748033),
       (4.2460276551603116, -0.1307183283958091),
@@ -4009,7 +3755,8 @@ mod tests {
     }
     // let expected_res_exact: [u64; 9] =...
     // Problem was an error in Newtom-Raphson method
-    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    let _actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // So far we are happy if it does not panic :)
     // to_aladin_moc(&actual_res_exact);
   }
 
@@ -4020,6 +3767,7 @@ mod tests {
     }
   }
 
+  #[allow(dead_code)]
   fn to_degrees(lonlats: &mut [(f64, f64)]) {
     for (lon, lat) in lonlats.iter_mut() {
       *lon = lon.to_degrees();
@@ -4058,7 +3806,7 @@ mod tests {
     let lat_deg = 41.813964843754924_f64;
     /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
     xy.0 = ensures_x_is_positive(xy.0);
-    let layer_0 = get_or_create(0);
+    let layer_0 = get(0);
     layer_0.shift_rotate_scale(&mut xy);
     println!("x: {}, y: {}", xy.0, xy.1);
     let mut ij = discretize(xy);
@@ -4067,7 +3815,7 @@ mod tests {
     println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);
     let d0h_bits = layer_0.depth0_bits(ij_d0c.0, ij_d0c.1/*, &mut ij, xy, lon, lat*/);
     println!("d0h_bits: {}", d0h_bits);*/
-    let layer_0 = get_or_create(0);
+    let layer_0 = get(0);
     assert_eq!(1, layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
 
@@ -4077,14 +3825,14 @@ mod tests {
     let lat_deg = 41.81031502783791_f64;
     /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
     xy.0 = ensures_x_is_positive(xy.0);
-    let layer_1 = get_or_create(1);
+    let layer_1 = get(1);
     layer_1.shift_rotate_scale(&mut xy);
     println!("x: {}, y: {}", xy.0, xy.1);
     let mut ij = discretize(xy);
     println!("i: {}, j: {}", ij.0, ij.1);
     let ij_d0c = layer_1.base_cell_coos(&ij);
     println!("i0: {}, j0: {}", ij_d0c.0, ij_d0c.1);*/
-    let layer_1 = get_or_create(1);
+    let layer_1 = get(1);
     assert_eq!(13, layer_1.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
 
@@ -4095,7 +3843,7 @@ mod tests {
 
     /*let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
     xy.0 = ensures_x_is_positive(xy.0);
-    let layer_0 = get_or_create(6);
+    let layer_0 = get(6);
     layer_0.shift_rotate_scale(&mut xy);
     println!("x: {}, y: {}", xy.0, xy.1);
     let mut ij = discretize(xy);
@@ -4106,10 +3854,11 @@ mod tests {
     println!("d0h_bits: {}", d0h_bits);*/
     println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));*/
     
-    let layer_6 = get_or_create(6);
+    let layer_6 = get(6);
     assert_eq!(13653, layer_6.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
 
+  /*
   #[test]
   fn test_prec_4() {
     let lon_deg = 292.49999999999994_f64; //359.99999999999994_f64;
@@ -4118,7 +3867,7 @@ mod tests {
     let mut xy = proj(lon_deg.to_radians(), lat_deg.to_radians());
     // println!("proj_x: {:.17}, proj_y: {:.17}", xy.0, xy.1);
     xy.0 = ensures_x_is_positive(xy.0);
-    let layer_0 = get_or_create(0);
+    let layer_0 = get(0);
     layer_0.shift_rotate_scale(&mut xy);
     // println!("x: {}, y: {}", xy.0, xy.1);
     let ij = discretize(xy);
@@ -4129,14 +3878,15 @@ mod tests {
     // println!("d0h_bits: {}", d0h_bits);*/
     // println!("hash: {}", layer_0.hash(lon_deg.to_radians(), lat_deg.to_radians()));
 
-    let layer_2 = get_or_create(2);
+    let layer_2 = get(2);
     assert_eq!(56, layer_2.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
+   */
 
   #[test]
   fn test_ring() {
     for depth in 0..10 {
-      let layer = get_or_create(depth);
+      let layer = get(depth);
       for h in 0..layer.n_hash {
         assert_eq!(layer.from_ring(layer.to_ring(h)), h);
       }
@@ -4189,11 +3939,10 @@ mod tests {
 
   #[test]
   fn test_gen_file() -> std::io::Result<()> {
-    use std::fs::File;
     use std::io::prelude::*;
     
     let depth = 8;
-    let layer = get_or_create(depth);
+    let layer = get(depth);
     let n_cells = layer.n_hash();
     
     let mut s = String::with_capacity(8 * 1024);

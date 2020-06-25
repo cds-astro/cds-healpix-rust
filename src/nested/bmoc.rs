@@ -7,7 +7,7 @@
 use base64::{encode, decode, DecodeError};
 
 use std::slice::Iter;
-use std::cmp::max;
+use std::cmp::{max, Ordering};
 // use std::opt::Range;
 
 use super::{to_range, hash};
@@ -69,12 +69,14 @@ impl BMOCBuilderUnsafe {
     self
   }
   
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_bmoc(mut self) -> BMOC {
     BMOC::create_unsafe(self.depth_max, self.entries.take().expect("Empty builder!").into_boxed_slice())
   }
 
   /// We consider that the pushed elements are not ordered, but they come from a valid BMOC (i.e.
   /// no cell included in another cell)
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_bmoc_from_unordered(mut self) -> BMOC {
     let mut res = self.entries.take().expect("Empty builder!");
     res.sort_unstable();
@@ -109,7 +111,7 @@ impl BMOCBuilderUnsafe {
         }
         // Look at the 3 siblings
         if i_prev_moc + 2 < prev_to_index
-          && entries[i_prev_moc + 0] == build_raw_value(curr_cell_depth, curr_cell_hash | 1, true, self.depth_max)
+          && entries[i_prev_moc] == build_raw_value(curr_cell_depth, curr_cell_hash | 1, true, self.depth_max)
           && entries[i_prev_moc + 1] == build_raw_value(curr_cell_depth, curr_cell_hash | 2, true, self.depth_max)
           && entries[i_prev_moc + 2] == build_raw_value(curr_cell_depth, curr_cell_hash | 3, true, self.depth_max) {
           entries[i_curr_moc] = build_raw_value(curr_cell_depth - 1, curr_cell_hash >> 2, true, self.depth_max);
@@ -186,18 +188,21 @@ impl BMOCBuilderUnsafe {
     entries.truncate(i_new);
     entries
   }
-  
+
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_bmoc_packing(&mut self) -> BMOC {
     let entries = self.pack();
     BMOC::create_unsafe(self.depth_max, entries.into_boxed_slice())
   }
 
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_lower_depth_bmoc(&mut self, new_depth: u8) -> BMOC {
     let entries = self.entries.take().expect("Empty builder!");
     let entries = self.to_lower_depth(new_depth, entries);
     BMOC::create_unsafe(new_depth, entries.into_boxed_slice())
   }
-  
+
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_lower_depth_bmoc_packing(&mut self, new_depth: u8) -> BMOC {
     let entries = self.pack();
     let entries = self.to_lower_depth(new_depth, entries);
@@ -268,6 +273,7 @@ impl BMOCBuilderFixedDepth {
     }
   }
   
+  #[allow(clippy::wrong_self_convention)]
   pub fn to_bmoc(&mut self) -> Option<BMOC> {
     // if self.buffer.len() > 0 {
       self.drain_buffer();
@@ -338,9 +344,15 @@ impl BMOCBuilderFixedDepth {
     let n = 1_usize << (dd << 1); // number of depth self.depth cells in the low_res_cell = (2^dd)^2 = 2^(2*dd)
     // Look for a sequence
     let n = n.min(entries.len());
-    for i in 1..n {
+    /*for i in 1..n {
       h += 1;
       if entries[i] != h {
+        return i;
+      }
+    }*/
+    for (i, e) in entries.iter().enumerate().take(n).skip(1) {
+      h += 1;
+      if *e != h {
         return i;
       }
     }
@@ -428,7 +440,7 @@ impl BMOC {
       }
       return true;
     }
-    return false;
+    false
   }
 
   pub fn assert_equals(&self, other: &BMOC) {
@@ -558,39 +570,43 @@ impl BMOC {
     // -  3: dL == dR, dL < dR and dR < dL
     // - x3: hL == hR, hL < hR and hR < hL
     while let (Some(l), Some(r)) = (&left, &right) {
-      if l.depth < r.depth {
-        let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
-        if l.hash < hr_at_dl {
-          left = it_left.next();
-        } else if l.hash > hr_at_dl {
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(l.hash, hr_at_dl);
-          builder.push(r.depth, r.hash, r.is_full && l.is_full);
-          right = it_right.next();
-        }
-      } else if l.depth > r.depth {
-        let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
-        if hl_at_dr < r.hash {
-          left = it_left.next();
-        } else if hl_at_dr > r.hash {
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(hl_at_dr, r.hash);
-          builder.push(l.depth, l.hash, r.is_full && l.is_full);
-          left = it_left.next();
-        }
-      } else {
-        debug_assert_eq!(l.depth, r.depth);
-        if l.hash < r.hash {
-          left = it_left.next();
-        } else if l.hash > r.hash  {
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(l.hash, r.hash);
-          builder.push(l.depth, l.hash, r.is_full && l.is_full);
-          left = it_left.next();
-          right = it_right.next();
+      match l.depth.cmp(&r.depth) {
+        Ordering::Less => {
+          let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
+          match l.hash.cmp(&hr_at_dl) {
+            Ordering::Less => left = it_left.next(),
+            Ordering::Greater => right = it_right.next(),
+            Ordering::Equal => {
+              debug_assert_eq!(l.hash, hr_at_dl);
+              builder.push(r.depth, r.hash, r.is_full && l.is_full);
+              right = it_right.next()
+            }
+          }
+        },
+        Ordering::Greater => {
+          let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
+          match hl_at_dr.cmp(&r.hash) {
+            Ordering::Less => left = it_left.next(),
+            Ordering::Greater => right = it_right.next(),
+            Ordering::Equal => {
+              debug_assert_eq!(hl_at_dr, r.hash);
+              builder.push(l.depth, l.hash, r.is_full && l.is_full);
+              left = it_left.next()
+            }
+          }
+        },
+        Ordering::Equal => {
+          debug_assert_eq!(l.depth, r.depth);
+          match l.depth.cmp(&r.depth) {
+            Ordering::Less => left = it_left.next(),
+            Ordering::Greater => right = it_right.next(),
+            Ordering::Equal => {
+              debug_assert_eq!(l.hash, r.hash);
+              builder.push(l.depth, l.hash, r.is_full && l.is_full);
+              left = it_left.next();
+              right = it_right.next()
+            }
+          }
         }
       }
     }
@@ -607,7 +623,7 @@ impl BMOC {
     let mut right = other.entries;
     let mut ileft = 0_usize;
     let mut iright = 0_usize;
-    
+   
   }
   */
   
@@ -630,69 +646,77 @@ impl BMOC {
     // -  3: dL == dR, dL < dR and dR < dL
     // - x3: hL == hR, hL < hR and hR < hL
     while let (Some(l), Some(r)) = (&left, &right) {
-      if l.depth < r.depth {
-        let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
-        if l.hash < hr_at_dl {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if l.hash > hr_at_dl {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else if l.is_full {
-          debug_assert_eq!(l.hash, hr_at_dl);
-          builder.push(l.depth, l.hash, l.is_full);
-          right = consume_while_overlapped(l, &mut it_right);
-          left = it_left.next();
-        } else {
-          debug_assert_eq!(l.hash, hr_at_dl);
-          debug_assert!(!l.is_full);
-          let mut is_overlapped = false;
-          right = consume_while_overlapped_and_partial(l, &mut it_right, &mut is_overlapped);
-          if is_overlapped {
-            right = self.not_in_cell_4_or(l, right.unwrap(), &mut it_right, &mut builder);
-          } else { // all flags set to 0 => put large cell with flag  = 0
-            builder.push(l.depth, l.hash, false);
+      match l.depth.cmp(&r.depth) {
+        Ordering::Less => {
+          let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
+          if l.hash < hr_at_dl {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if l.hash > hr_at_dl {
+            builder.push(r.depth, r.hash, r.is_full);
+            right = it_right.next();
+          } else if l.is_full {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            builder.push(l.depth, l.hash, l.is_full);
+            right = consume_while_overlapped(l, &mut it_right);
+            left = it_left.next();
+          } else {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            debug_assert!(!l.is_full);
+            let mut is_overlapped = false;
+            right = consume_while_overlapped_and_partial(l, &mut it_right, &mut is_overlapped);
+            if is_overlapped {
+              right = self.not_in_cell_4_or(l, right.unwrap(), &mut it_right, &mut builder);
+            } else { // all flags set to 0 => put large cell with flag  = 0
+              builder.push(l.depth, l.hash, false);
+            }
+            left = it_left.next();
           }
-          left = it_left.next();
-        }
-      } else if l.depth > r.depth {
-        let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
-        if hl_at_dr < r.hash {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if hl_at_dr > r.hash {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else if r.is_full {
-          debug_assert_eq!(hl_at_dr, r.hash);
-          builder.push(r.depth, r.hash, r.is_full);
-          left = consume_while_overlapped(r, &mut it_left);
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(hl_at_dr, r.hash);
-          debug_assert!(!r.is_full);
-          let mut is_overlapped = false;
-          left = consume_while_overlapped_and_partial(r, &mut it_left, &mut is_overlapped);
-          if is_overlapped {
-            left = self.not_in_cell_4_or(r, left.unwrap(), &mut it_left, &mut builder);
-          } else { // all flags set to 0 => put large cell with flag  = 0
-            builder.push(r.depth, r.hash, false);
+        },
+        Ordering::Greater => {
+          let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
+          if hl_at_dr < r.hash {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if hl_at_dr > r.hash {
+            builder.push(r.depth, r.hash, r.is_full);
+            right = it_right.next();
+          } else if r.is_full {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            builder.push(r.depth, r.hash, r.is_full);
+            left = consume_while_overlapped(r, &mut it_left);
+            right = it_right.next();
+          } else {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            debug_assert!(!r.is_full);
+            let mut is_overlapped = false;
+            left = consume_while_overlapped_and_partial(r, &mut it_left, &mut is_overlapped);
+            if is_overlapped {
+              left = self.not_in_cell_4_or(r, left.unwrap(), &mut it_left, &mut builder);
+            } else { // all flags set to 0 => put large cell with flag  = 0
+              builder.push(r.depth, r.hash, false);
+            }
+            right = it_right.next();
+          } 
+        }, 
+        Ordering::Equal => {
+          debug_assert_eq!(l.depth, r.depth);
+          match l.hash.cmp(&r.hash) {
+            Ordering::Less => {
+              builder.push(l.depth, l.hash, l.is_full);
+              left = it_left.next();
+            },
+            Ordering::Greater => {
+              builder.push(r.depth, r.hash, r.is_full);
+              right = it_right.next();
+            },
+            Ordering::Equal => {
+              debug_assert_eq!(l.hash, r.hash);
+              builder.push(l.depth, l.hash, r.is_full || l.is_full);
+              left = it_left.next();
+              right = it_right.next();
+            }
           }
-          right = it_right.next();
-        }
-      } else {
-        debug_assert_eq!(l.depth, r.depth);
-        if l.hash < r.hash {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if l.hash > r.hash  {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(l.hash, r.hash);
-          builder.push(l.depth, l.hash, r.is_full || l.is_full);
-          left = it_left.next();
-          right = it_right.next();
         }
       }
     }
@@ -753,60 +777,68 @@ impl BMOC {
     // -  3: dL == dR, dL < dR and dR < dL
     // - x3: hL == hR, hL < hR and hR < hL
     while let (Some(l), Some(r)) = (&left, &right) {
-      if l.depth < r.depth {
-        let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
-        if l.hash < hr_at_dl {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if l.hash > hr_at_dl {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else if l.is_full {
-          debug_assert_eq!(l.hash, hr_at_dl);
-          right = self.not_in_cell_4_xor(l, r, &mut it_right, &mut builder);
-          left = it_left.next();
-        } else {
-          debug_assert_eq!(l.hash, hr_at_dl);
-          debug_assert!(!l.is_full);
-          builder.push(l.depth, l.hash, l.is_full);
-          right = consume_while_overlapped(l, &mut it_right);
-          left = it_left.next();
-        }
-      } else if l.depth > r.depth {
-        let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
-        if hl_at_dr < r.hash {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if hl_at_dr > r.hash {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else if r.is_full {
-          debug_assert_eq!(hl_at_dr, r.hash);
-          left = self.not_in_cell_4_xor(r, l, &mut it_left, &mut builder);
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(hl_at_dr, r.hash);
-          debug_assert!(!r.is_full);
-          builder.push(r.depth, r.hash, r.is_full);
-          left = consume_while_overlapped(r, &mut it_left);
-          right = it_right.next();
-        }
-      } else {
-        debug_assert_eq!(l.depth, r.depth);
-        if l.hash < r.hash {
-          builder.push(l.depth, l.hash, l.is_full);
-          left = it_left.next();
-        } else if l.hash > r.hash  {
-          builder.push(r.depth, r.hash, r.is_full);
-          right = it_right.next();
-        } else {
-          debug_assert_eq!(l.hash, r.hash);
-          let both_fully_covered = r.is_full && l.is_full;
-          if !both_fully_covered {
-            builder.push(l.depth, l.hash, both_fully_covered);
+      match l.depth.cmp(&r.depth) {
+        Ordering::Less => {
+          let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
+          if l.hash < hr_at_dl {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if l.hash > hr_at_dl {
+            builder.push(r.depth, r.hash, r.is_full);
+            right = it_right.next();
+          } else if l.is_full {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            right = self.not_in_cell_4_xor(l, r, &mut it_right, &mut builder);
+            left = it_left.next();
+          } else {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            debug_assert!(!l.is_full);
+            builder.push(l.depth, l.hash, l.is_full);
+            right = consume_while_overlapped(l, &mut it_right);
+            left = it_left.next();
           }
-          left = it_left.next();
-          right = it_right.next();
+        },
+        Ordering::Greater => {
+          let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
+          if hl_at_dr < r.hash {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if hl_at_dr > r.hash {
+            builder.push(r.depth, r.hash, r.is_full);
+            right = it_right.next();
+          } else if r.is_full {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            left = self.not_in_cell_4_xor(r, l, &mut it_left, &mut builder);
+            right = it_right.next();
+          } else {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            debug_assert!(!r.is_full);
+            builder.push(r.depth, r.hash, r.is_full);
+            left = consume_while_overlapped(r, &mut it_left);
+            right = it_right.next();
+          } 
+        }, 
+        Ordering::Equal => {
+          debug_assert_eq!(l.depth, r.depth);
+          match l.hash.cmp(&r.hash) {
+            Ordering::Less => {
+              builder.push(l.depth, l.hash, l.is_full);
+              left = it_left.next();
+            },
+            Ordering::Greater => {
+              builder.push(r.depth, r.hash, r.is_full);
+              right = it_right.next();
+            },
+            Ordering::Equal => {
+              debug_assert_eq!(l.hash, r.hash);
+              let both_fully_covered = r.is_full && l.is_full;
+              if !both_fully_covered {
+                builder.push(l.depth, l.hash, both_fully_covered);
+              }
+              left = it_left.next();
+              right = it_right.next();
+            }
+          } 
         }
       }
     }
@@ -993,16 +1025,14 @@ if (debug) System.out.println("Add3 " + hh);
           prev_min = range.start;
           prev_max = range.end;
         }
+      } else if cell.hash == prev_max {
+        prev_max += 1;
       } else {
-        if cell.hash == prev_max {
-          prev_max += 1;
-        } else {
-          if prev_min != prev_max { // false only at first call, then always true
-            ranges.push(prev_min..prev_max);
-          }
-          prev_min = cell.hash;
-          prev_max = cell.hash + 1;
+        if prev_min != prev_max { // false only at first call, then always true
+          ranges.push(prev_min..prev_max);
         }
+        prev_min = cell.hash;
+        prev_max = cell.hash + 1;
       }
     }
     if prev_min != prev_max { // false only at first call, then always true
@@ -1023,7 +1053,8 @@ if (debug) System.out.println("Add3 " + hh);
   /// question: was it worth implementing this specific case instead of using an
   /// `Interpolative coding` library?
   /// # Idea
-  /// * The basic idea consists 
+  /// * The basic idea consists
+  #[allow(clippy::many_single_char_names)]
   pub fn compress_lossy(&self) -> CompressedMOC {
     let n = self.entries.len();
     let dm = self.depth_max;
@@ -1040,10 +1071,10 @@ if (debug) System.out.println("Add3 " + hh);
       }
       return b.to_compressed_moc();
     } else if dm == 0 { // Special case of other MOC at depth max = 0
-      let (curr_d, curr_h) = self.get_depth_icell(self.entries[0]);
+      let (curr_d, _) = self.get_depth_icell(self.entries[0]);
       assert_eq!(curr_d, 0);
       let mut h = 0_u64;
-      for (curr_d, curr_h) in self.entries.iter().map(|e| self.get_depth_icell(*e)) {
+      for (_, curr_h) in self.entries.iter().map(|e| self.get_depth_icell(*e)) {
         for _ in h..curr_h {
           b.push_leaf_empty();
         }
@@ -1056,7 +1087,7 @@ if (debug) System.out.println("Add3 " + hh);
       return b.to_compressed_moc();
     }
     // Let's start serious things
-    let mut d = 0;
+    let mut d;
     let mut h = 0;
     let (curr_d, curr_h) = self.get_depth_icell(self.entries[0]);
     // go down to curr hash
@@ -1082,14 +1113,14 @@ if (debug) System.out.println("Add3 " + hh);
     while i < n {
       let (curr_d, curr_h) = self.get_depth_icell(self.entries[i]);
       // go up (if needed)!
-      let (mut dd, mut target_h) = if d > curr_d { // case previous hash deeper that current hash
+      let target_h = if d > curr_d { // case previous hash deeper that current hash
         let dd =  d - curr_d;
-        (dd,  curr_h << (dd << 1))
+        curr_h << (dd << 1)
       } else { // case current hash deeper that previous hash, need to go up?
         let dd = curr_d - d;
-        (dd,  curr_h >> (dd << 1))
+        curr_h >> (dd << 1)
       };
-      dd = ((63 - (h ^ target_h).leading_zeros()) >> 1) as u8;
+      let mut dd = ((63 - (h ^ target_h).leading_zeros()) >> 1) as u8;
       if dd > d {
         dd = d;
       }
@@ -1568,6 +1599,7 @@ impl CompressedMOCBuilder {
     }
   }
 
+  #[allow(clippy::wrong_self_convention)]
   fn to_compressed_moc(mut self) -> CompressedMOC {
     self.moc.resize(if self.ibit == 0 { self.ibyte } else { self.ibyte + 1 } , 0);
     CompressedMOC {

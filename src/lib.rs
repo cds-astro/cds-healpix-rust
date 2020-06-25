@@ -22,8 +22,8 @@ use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 /// use cdshealpix::{SQRT6};
 /// assert_eq!(6_f64.sqrt(), SQRT6);
 /// ```
-pub const SQRT6: f64 = 2.44948974278317809819_f64;
-const ONE_OVER_SQRT6: f64 = 0.40824829046386301636_f64;
+pub const SQRT6: f64 = 2.449_489_742_783_178_f64;
+const ONE_OVER_SQRT6: f64 = 0.408_248_290_463_863_f64;
 const HALF: f64 = 0.5_f64;
 
 /// Upper limit on sqrt(3(1-|z|)) to consider that we are not near from the poles
@@ -73,7 +73,7 @@ pub const NSIDE_MAX: u32 = 536870912;
 /// use cdshealpix::{TRANSITION_LATITUDE};
 /// assert_eq!(f64::asin(2f64 / 3f64), TRANSITION_LATITUDE);
 /// ```
-pub const TRANSITION_LATITUDE: f64 = 0.72972765622696636344_f64; // asin(2/3)
+pub const TRANSITION_LATITUDE: f64 = 0.729_727_656_226_966_3_f64; // asin(2/3)
 /// Limit on |z|=|sin(lat)| between the equatorial region and the polar caps.
 /// Equals 2/3, see Eq. (1) in Gorsky2005.
 pub const TRANSITION_Z: f64 = 2_f64 / 3_f64;
@@ -151,9 +151,9 @@ static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] =  [
 /// use cdshealpix::{TRANSITION_Z, FOUR_OVER_PI, LAT_OF_SQUARE_CELL};
 /// assert!(f64::abs(f64::acos(f64::sqrt(TRANSITION_Z * FOUR_OVER_PI)) - LAT_OF_SQUARE_CELL) < 1e-15_f64);
 /// ```
-pub static LAT_OF_SQUARE_CELL: f64 = 0.39934019947897773410_f64;
+pub static LAT_OF_SQUARE_CELL: f64 = 0.399_340_199_478_977_75_f64;
 /// Simply the consine of LAT_OF_SQUARE_CELL
-static COS_LAT_OF_SQUARE_CELL: f64 = 0.92131773192356127804_f64;
+static COS_LAT_OF_SQUARE_CELL: f64 = 0.921_317_731_923_561_3_f64;
 
 /// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
 /// Info: I would have prefered to compute those quantities at compilation time, and thus have
@@ -284,7 +284,8 @@ impl ConstantsC2V {
 }
 
 #[inline]
-fn haversine_dist(p1_lon: f64, p1_lat: f64, p2_lon: f64, p2_lat: f64) -> f64 {
+// #[allow(dead_code)]
+pub fn haversine_dist(p1_lon: f64, p1_lat: f64, p2_lon: f64, p2_lat: f64) -> f64 {
   let shs = squared_half_segment(
     p2_lon - p1_lon, p2_lat - p1_lat, 
     p1_lat.cos(), p2_lat.cos());
@@ -1270,6 +1271,16 @@ pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
 #[inline]
 fn check_lat(lat: f64) {
     assert!(-FRAC_PI_2 <= lat && lat <= FRAC_PI_2);
+}
+
+/// Verify that the latitude is in [-PI/2, PI/2], panics if not.
+#[inline]
+fn check_lat_res(lat: f64) -> Result<(), String> {
+  if -FRAC_PI_2 <= lat && lat <= FRAC_PI_2 {
+    Ok(())
+  } else {
+    Err(format!("Wrong latitude. Expected value in [-pi/2, pi/2]. Actual: {}", lat))
+  }
 }
 
 /// Verify that the projected y coordinate is in [-2, 2], panics if not.

@@ -9,20 +9,16 @@ pub(super) mod proj;
 use std::f64::consts::{PI};
 use super::TWICE_PI;
 
-
-
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
-use crate::sph_geom::coo3d::UnitVec3;
-
 
 trait ContainsSouthPoleComputer {
-  fn contains_south_pole(&self, vertices: &Box<[Coo3D]>, cross_products: &Box<[Vect3]>) -> bool;
+  fn contains_south_pole(&self, vertices: &[Coo3D], cross_products: &[Vect3]) -> bool;
 }
 /// We explicitly tell that the south pole is inside the polygon.
 struct ProvidedTrue;
 impl ContainsSouthPoleComputer for ProvidedTrue {
   #[inline]
-  fn contains_south_pole(&self, _vertices: &Box<[Coo3D]>, _cross_products: &Box<[Vect3]>) -> bool {
+  fn contains_south_pole(&self, _vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
     true
   }
 }
@@ -30,7 +26,7 @@ impl ContainsSouthPoleComputer for ProvidedTrue {
 struct ProvidedFalse;
 impl ContainsSouthPoleComputer for ProvidedFalse {
   #[inline]
-  fn contains_south_pole(&self, _vertices: &Box<[Coo3D]>, _cross_products: &Box<[Vect3]>) -> bool {
+  fn contains_south_pole(&self, _vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
     false
   }
 }
@@ -39,11 +35,12 @@ impl ContainsSouthPoleComputer for ProvidedFalse {
 /// north hemisphere.
 struct Basic;
 impl ContainsSouthPoleComputer for Basic {
-  fn contains_south_pole(&self, vertices: &Box<[Coo3D]>, _cross_products: &Box<[Vect3]>) -> bool {
+  fn contains_south_pole(&self, vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
     let mut n_vertices_in_south_hemisphere = 0_usize;
     let mut sum_delta_lon = 0.0_f64;
     let mut j = (vertices.len() - 1) as usize;
-    for i in 0..=j {
+    let to = j; // variable defined to remove a clippy warning
+    for i in 0..=to {
       let delta_lon = vertices[i].lon() - vertices[j].lon();
       let abs_delta_lon = delta_lon.abs();
       if abs_delta_lon <= PI {
@@ -58,8 +55,8 @@ impl ContainsSouthPoleComputer for Basic {
       }
       j = i;
     }
-    return sum_delta_lon.abs() > PI // sumDeltaLon = 0 or -2PI or 2PI
-      && (n_vertices_in_south_hemisphere << 1) > vertices.len(); // more vertices in south than in north  
+    sum_delta_lon.abs() > PI // sumDeltaLon = 0 or -2PI or 2PI
+      && (n_vertices_in_south_hemisphere << 1) > vertices.len() // more vertices in south than in north  
   }
 }
 
@@ -75,7 +72,7 @@ pub enum ContainsSouthPoleMethod {
 }
 
 impl ContainsSouthPoleComputer for ContainsSouthPoleMethod {
-  fn contains_south_pole(&self, vertices: &Box<[Coo3D]>, cross_products: &Box<[Vect3]>) -> bool {
+  fn contains_south_pole(&self, vertices: &[Coo3D], cross_products: &[Vect3]) -> bool {
     match self {
       ContainsSouthPoleMethod::TRUE    => PROVIDED_TRUE.contains_south_pole(vertices, cross_products),
       ContainsSouthPoleMethod::FALSE   => PROVIDED_FALSE.contains_south_pole(vertices, cross_products),
@@ -100,8 +97,8 @@ impl Polygon {
   }
 
   pub fn new_custom(vertices: Box<[LonLat]>, method: ContainsSouthPoleMethod) -> Polygon {
-    let vertices: Box<[Coo3D]> = lonlat2coo3d(vertices);
-    let cross_products: Box<[Vect3]> = compute_cross_products_v2(&vertices);
+    let vertices: Box<[Coo3D]> = lonlat2coo3d(&vertices);
+    let cross_products: Box<[Vect3]> = compute_cross_products(&vertices);
     let contains_south_pole = method.contains_south_pole(&vertices, &cross_products);
     Polygon {
       vertices,
@@ -137,9 +134,7 @@ impl Polygon {
     let mut a = a;
     let mut b = b;
     if a.lon() > b.lon() {
-      let swp = a;
-      a = b;
-      b = swp;
+      std::mem::swap(&mut a, &mut b);
     }
     // 
     let n_vertices = self.vertices.len();
@@ -151,9 +146,7 @@ impl Polygon {
         let mut pa = left;
         let mut pb = right;
         if pa.lon() > pb.lon() {
-          let swp = pa;
-          pa = pb;
-          pb = swp;
+          std::mem::swap(&mut pa, &mut pb);
         }
         if great_circle_arcs_are_overlapping_in_lon(a, b, pa, pb) {
           let ua = dot_product(a, &self.cross_products[i]);
@@ -189,46 +182,17 @@ impl Polygon {
 }
 
 #[inline]
-fn lonlat2coo3d(vertices: Box<[LonLat]>) -> Box<[Coo3D]> {
-  vertices.iter().map(|lonlat| Coo3D::from_sph_coo(lonlat.lon, lonlat.lat))
-    .collect::<Vec<Coo3D>>().into_boxed_slice()
+fn lonlat2coo3d(vertices: &[LonLat]) -> Box<[Coo3D]> {
+  vertices.iter()
+    .map(|lonlat| Coo3D::from_sph_coo(lonlat.lon, lonlat.lat))
+    .collect::<Vec<Coo3D>>()
+    .into_boxed_slice()
 }
 
-#[cfg(test)]
 #[inline]
-fn lonlat2coo3d_v2(vertices: Box<[LonLat]>) -> Vec<Coo3D> {
-  let mut res = Vec::with_capacity(vertices.len());
-  for i in 0..vertices.len() {
-    let ll = &vertices[i];
-    res.push(
-      Coo3D::from_sph_coo(ll.lon, ll.lat)
-    );
-  }
-  res
-}
-
-#[cfg(test)]
-#[inline]
-fn compute_cross_products(vertices: &Box<[Coo3D]>) -> Box<[Vect3]> {
-  let cross_products: Vec<Vect3> = (0..vertices.len()).into_iter()
-    .map(|i| cross_product(
-      vertices.get(i).unwrap(),
-      vertices.get((i + 1) % vertices.len()).unwrap()))
-    .map(|v| 
-      if v.z() < 0.0 {
-        v.opposite()
-      } else {
-        v
-      })
-    .collect();
-  cross_products.into_boxed_slice()
-}
-
-
-#[inline]
-fn compute_cross_products_v2(vertices: &Box<[Coo3D]>) -> Box<[Vect3]> {
+fn compute_cross_products(vertices: &[Coo3D]) -> Box<[Vect3]> {
   let mut i = (vertices.len() - 1) as usize;
-  let cross_products: Vec<Vect3> = (0..=i).into_iter()
+  let cross_products: Vec<Vect3> = (0..=i)
     .map(|j| {
       let v1 = vertices.get(i).unwrap();
       let v2 = vertices.get(j).unwrap();
@@ -349,6 +313,7 @@ fn intersect_point_in_polygon_great_circle_arc(
 }
 
 
+#[allow(clippy::many_single_char_names)]
 fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> UnitVect3 {
   // We note u = a x b
   // Intersection vector i defined by
@@ -361,7 +326,7 @@ fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_do
   let z = b_dot_edge_normal * a.z() - a_dot_edge_normal * b.z();
   let norm = (x * x + y * y + z * z).sqrt();
   // Warning, do not consider the opposite vector!!
-  return UnitVect3::new_unsafe(x / norm, y / norm, z / norm);
+  UnitVect3::new_unsafe(x / norm, y / norm, z / norm)
 }
 
 
@@ -370,10 +335,7 @@ fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_do
 mod tests {
   use super::*;
   use super::super::nested::{vertices};
-  // use test::Bencher;
-  // extern crate test;
-  use std::f64::consts::{PI};
-
+  
   #[test]
   fn test_vec3() {
     let mut v = Vect3::new(1.0, 2.0, 3.0);
@@ -408,88 +370,5 @@ mod tests {
     assert_eq!(poly.contains(&v[3]), true);
     
   }
-  
-  fn make_bench_data(n: u32) -> Box<[LonLat]> {
-    let n2 = n * n;
-    // buil the box
-    let l_min = 0.0_f64;
-    let l_max = 2.0_f64 * PI;
-    let l_step = (l_max - l_min) / n as f64;
-    let b_min = -PI / 2.0_f64;
-    let b_max =  PI / 2.0_f64;
-    let b_step = (b_max - b_min) / n as f64;
-
-    (0..n2).into_iter().map(|k| {
-      let i = k / n;
-      let j = (k - i) as f64;
-      let i = i as f64;
-      LonLat {
-        lon: l_min + l_step * i,
-        lat: b_min + b_step * j,
-      }
-    })
-    .collect::<Vec<LonLat>>()
-    .into_boxed_slice()
-  }
-
-  /*#[bench]
-  fn bench_make_data(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(20_u32);
-      make_bench_data(n)
-    });
-  }
-  
-  #[bench]
-  fn bench_iterator(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(20_u32);
-      let vertices = make_bench_data(n);
-      lonlat2coo3d(vertices)
-    });
-  }
-
-
-  #[bench]
-  fn bench_forloop(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(20_u32);
-      let vertices = make_bench_data(n);
-      lonlat2coo3d_v2(vertices)
-    });
-  }*/
-  
-  /*#[test]
-  fn toto_v2() {
-    let n = test::black_box(20_u32);
-    let vertices = make_bench_data(n);
-    let vertices = lonlat2coo3d(vertices);
-    let cross_products_v1 = compute_cross_products_v2(&vertices);
-    let cross_products_v2 = compute_cross_products(&vertices);
-    cross_products_v1.iter().zip(cross_products_v2.iter())
-      .map(|(v1, v2)| assert_eq!(dot_product(v1, v2), v1.norm() * v2.norm()));
-  }*/
-  
-  /*#[bench]
-  fn bench_crossprod_1(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(20_u32);
-      let vertices = make_bench_data(n);
-      let vertices = lonlat2coo3d(vertices);
-      let cross_products = compute_cross_products(&vertices);
-      assert_eq!(vertices.len(),cross_products.len());
-    });
-  }
-
-  #[bench]
-  fn bench_crossprod_2(b: &mut Bencher) {
-    b.iter(|| {
-      let n = test::black_box(20_u32);
-      let vertices = make_bench_data(n);
-      let vertices = lonlat2coo3d(vertices);
-      let cross_products = compute_cross_products_v2(&vertices);
-      assert_eq!(vertices.len(), cross_products.len());
-    });
-  }*/
   
 }

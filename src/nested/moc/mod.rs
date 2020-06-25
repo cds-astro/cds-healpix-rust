@@ -16,15 +16,14 @@
 use num::{PrimInt, Unsigned, ToPrimitive};
 use num_traits::{NumAssign};
 
-use std::cmp::{min, max};
+use std::cmp::{min, Ordering};
 use std::mem::{self, replace};
 use std::fmt::{Display, Debug};
 use std::ops::{ShlAssign, ShrAssign};
 use std::vec::{Vec, IntoIter};
-use std::iter::Map;
 use std::slice::Iter;
 
-use super::{internal_edge_sorted, append_external_edge, append_external_edge_sorted};
+use super::{internal_edge_sorted, append_external_edge};
 
 pub mod op;
 pub mod compressed;
@@ -291,15 +290,18 @@ impl<H> OwnedMOC<H>
     self.moc.len()
   }
   
+  pub fn is_empty(&self) -> bool {
+    self.moc.is_empty()
+  }
+  
 }
 
+type LazyMoc = LazyMOCIter<u64, IntoIter<HpxCell<u64>>>;
+type MergeMoc = MergeIter<u64, FlatLazyMOCIter<u64, IntoIter<u64>>>;
 
 impl OwnedMOC<u64> {
   
-  pub fn expand(self) -> OrMocIter<u64, 
-    LazyMOCIter<u64, IntoIter<HpxCell<u64>>>,
-    MergeIter<u64, FlatLazyMOCIter<u64, IntoIter<u64>>>
-  > {
+  pub fn expand(self) -> OrMocIter<u64, LazyMoc, MergeMoc> {
     let mut ext: Vec<u64> = Vec::with_capacity(10 * self.moc.len()); // constant to be adjusted
     for HpxCell { depth, hash } in &self.moc {
       append_external_edge(*depth, *hash, self.depth_max - *depth, &mut ext);
@@ -448,11 +450,10 @@ impl<H> OwnedRangeMOC<H>
   }
 }
 
+type LazyRangeMoc = LazyRangeMOCIter<u64, IntoIter<HpxRange<u64>>>;
+
 impl OwnedRangeMOC<u64> {
-  pub fn expand(self) -> OrMocIter<u64,
-    MOCIteratorFromRanges<u64, LazyRangeMOCIter<u64, IntoIter<HpxRange<u64>>>>,
-    MergeIter<u64, FlatLazyMOCIter<u64, IntoIter<u64>>>
-  > {
+  pub fn expand(self) -> OrMocIter<u64, MOCIteratorFromRanges<u64,LazyRangeMoc>, MergeMoc> {
     let mut ext: Vec<u64> = Vec::with_capacity(10 * self.ranges.len()); // constant to be adjusted
     for HpxCell { depth, hash } in MOCIteratorFromRanges::new(self.range_moc_iter()) {
       append_external_edge(depth, hash, self.depth_max - depth, &mut ext);
@@ -604,7 +605,7 @@ impl<'a, H, R> MOCIteratorFromRefRanges<'a, H, R>
   where H: HpxHash ,
         R: RangeMOCIterator<H> {
 
-  fn new(mut it: &mut R) -> MOCIteratorFromRefRanges<H, R> {
+  pub fn new(it: &mut R) -> MOCIteratorFromRefRanges<H, R> {
     let curr = it.next();
     let depth_max = it.depth_max();
     let twice_dd = ((H::MAX_DEPTH - depth_max) << 1) as usize;
@@ -692,15 +693,19 @@ impl<H, T> Iterator for CheckedIterator<H, T>
   fn next(&mut self) -> Option<Self::Item> {
     let prev = replace(&mut self.curr, self.it.next());
     if let (Some(l), Some(r)) = (&prev, &self.curr) {
-      if l.depth < r.depth {
-        let hr_at_dl = r.hash.unsigned_shr(((r.depth - l.depth) << 1) as u32);
-        assert!(l.hash < hr_at_dl)
-      } else if l.depth > r.depth {
-        let hl_at_dr = l.hash.unsigned_shr(((l.depth - r.depth) << 1) as u32);
-        assert!(hl_at_dr < r.hash)
-      } else {
-        debug_assert_eq!(l.depth, r.depth);
-        assert!(l.hash < r.hash)
+      match l.depth.cmp(&r.depth) {
+        Ordering::Less => {
+          let hr_at_dl = r.hash.unsigned_shr(((r.depth - l.depth) << 1) as u32);
+          assert!(l.hash < hr_at_dl)
+        },
+        Ordering::Greater => {
+          let hl_at_dr = l.hash.unsigned_shr(((l.depth - r.depth) << 1) as u32);
+          assert!(hl_at_dr < r.hash)
+        },
+        Ordering::Equal => {
+          debug_assert_eq!(l.depth, r.depth);
+          assert!(l.hash < r.hash)
+        },
       }
     }
     prev

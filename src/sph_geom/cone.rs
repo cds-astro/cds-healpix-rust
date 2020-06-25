@@ -57,13 +57,9 @@ pub fn bounding_cone<T: UnitVec3>(points: &[T]) -> Cone {
   let norm = (pow2(x) + pow2(y) + pow2(z)).sqrt();
   let center = UnitVect3::new(x / norm, y / norm, z / norm);
   // Compute dmax
-  let mut d2_max = center.squared_euclidean_dist(&points[0]);
-  for k in 1..points.len() {
-    let d2 = center.squared_euclidean_dist(&points[k]);
-    if d2 > d2_max {
-      d2_max = d2;
-    }
-  }
+  let d2_max = points.iter()
+    .map(|p| center.squared_euclidean_dist(p))
+    .fold(0.0, f64::max);
   Cone::new(center, 2.0 * (0.5 * d2_max.sqrt()).asin())
 }
 

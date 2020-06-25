@@ -85,6 +85,7 @@ impl Cardinal {
     }
   }
 
+  #[allow(dead_code)]
   pub(super) fn next_clockwise(&self) -> Cardinal {
     match *self {
       Cardinal::S => Cardinal::W,
@@ -94,6 +95,7 @@ impl Cardinal {
     }
   }
 
+  #[allow(dead_code)]
   pub(super) fn next_counter_clockwise(&self) -> Cardinal {
     match *self {
       Cardinal::S => Cardinal::E,
@@ -129,12 +131,17 @@ pub struct CardinalSet {
   byte: u8,
 }
 
+impl Default for CardinalSet {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl CardinalSet {
-  
-  /// Retuns a new empty cardinal set.
+  /// Returns an empty cardinal set
   pub fn new() -> CardinalSet {
     CardinalSet {
-      byte: 0u8,
+      byte: 0_u8,
     }
   }
   
@@ -214,6 +221,12 @@ pub struct CardinalMap<T: Copy> {
   array: [Option<T>; 4],
 }
 
+impl<T: Copy> Default for CardinalMap<T> {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 /// Equivalent of a Java EnumMap for the cardinal points.
 /// We require T to implement the Copy trait since internally we use an array stored on the stack.
 impl<V: Copy> CardinalMap<V> {
@@ -232,10 +245,7 @@ impl<V: Copy> CardinalMap<V> {
 
   /// Get a pointer to the value associated with the given direction
   pub fn get(&self, key: Cardinal) -> Option<&V> {
-    match self.array[key.index() as usize] {
-      Some(ref v) => Some(v),
-      None => None,
-    }
+    self.array[key.index() as usize].as_ref()
   }
   
   /// Replace all values by None
@@ -281,6 +291,12 @@ pub struct OrdinalMap<T: Copy> {
   array: [Option<T>; 4],
 }
 
+impl<T: Copy> Default for OrdinalMap<T> {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 /// Equivalent of a Java EnumMap for the cardinal points.
 /// We require T to implement the Copy trait since internally we use an array stored on the stack.
 impl<V: Copy> OrdinalMap<V> {
@@ -299,10 +315,7 @@ impl<V: Copy> OrdinalMap<V> {
 
   /// Get a pointer to the value associated with the given direction
   pub fn get(&self, key: Ordinal) -> Option<&V> {
-    match self.array[key.index() as usize] {
-      Some(ref v) => Some(v),
-      None => None,
-    }
+    self.array[key.index() as usize].as_ref()
   }
 
   /// Replace all values by None
@@ -582,6 +595,12 @@ pub struct MainWindMap<T: Copy> {
   array: [Option<T>; 9],
 }
 
+impl<T: Copy> Default for MainWindMap<T> {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl<V: Copy> MainWindMap<V> {
 
   /// Creates a new empty map.
@@ -612,10 +631,7 @@ impl<V: Copy> MainWindMap<V> {
   }
 
   fn get_from_index(&self, index: usize) -> Option<&V> {
-    match self.array[index] {
-      Some(ref v) => Some(v),
-      None => None,
-    }
+    self.array[index].as_ref()
   }
   
   /// Replace all values by None 
