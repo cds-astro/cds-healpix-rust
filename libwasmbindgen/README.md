@@ -1,8 +1,20 @@
+CDS implementation of the HEALPix tesselation in Rust compiled to WASM. 
+See [github repo](https://github.com/cds-astro/cds-healpix-rust),
+more particullar [this directory](https://github.com/cds-astro/cds-healpix-rust/tree/master/libwasmbindgen).
+
+## Javascript example 
+
+
+
+
+## Build the library locally from Rust source codes
+
 First install Rust if not already done:
 ```bash
 curl https://sh.rustup.rs -sSf | sh
 ```
 (More details [here](https://www.rust-lang.org/tools/install) if you are not using Linux.)
+
 
 To build the WASM and Javascript files, you need to install [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) in addition to the `nightly` version of Rust:
 
