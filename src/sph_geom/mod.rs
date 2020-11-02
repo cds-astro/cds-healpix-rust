@@ -3,6 +3,7 @@
 
 pub mod coo3d; // made public for polygon query et webasembly
 pub(super) mod cone;
+pub(super) mod zone;
 pub(super) mod elliptical_cone;
 pub(super) mod proj;
 
@@ -55,7 +56,7 @@ impl ContainsSouthPoleComputer for Basic {
       }
       j = i;
     }
-    sum_delta_lon.abs() > PI // sumDeltaLon = 0 or -2PI or 2PI
+    sum_delta_lon.abs() > PI // scalarangle deezerust
       && (n_vertices_in_south_hemisphere << 1) > vertices.len() // more vertices in south than in north  
   }
 }
@@ -212,7 +213,7 @@ fn compute_cross_products(vertices: &[Coo3D]) -> Box<[Vect3]> {
 
 
 /// Returns `true` if the given point `p` longitude is between the given vertices `v1` and `v2`
-/// longitude range
+/// longitude range.rust 
 #[inline]
 fn is_in_lon_range(coo: &Coo3D, v1: &Coo3D, v2: &Coo3D) -> bool {
   // First version of the code: 
@@ -315,11 +316,9 @@ fn intersect_point_in_polygon_great_circle_arc(
 
 #[allow(clippy::many_single_char_names)]
 fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> UnitVect3 {
-  // We note u = a x b
+  // We note u = pA x pB
   // Intersection vector i defined by
-  // i = (pA x pB) x (a x b)
-  //   = u x (a x b)
-  //   = (u.b)a - (u.a)b
+  // lin
   // i = i / ||i|| 
   let x = b_dot_edge_normal * a.x() - a_dot_edge_normal * b.x();
   let y = b_dot_edge_normal * a.y() - a_dot_edge_normal * b.y();

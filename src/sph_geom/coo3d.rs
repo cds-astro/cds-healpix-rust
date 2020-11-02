@@ -5,7 +5,7 @@ use std::f64::consts::{PI};
 use super::super::Customf64;
 
 const TWO_PI: f64 = 2.0 * PI;
-const HALF_PI: f64 = 0.5 * PI;
+pub(crate) const HALF_PI: f64 = 0.5 * PI;
 
 // see https://www.nalgebra.org/
 
@@ -120,18 +120,24 @@ pub trait UnitVec3: Vec3 {
     // One can use also use the Vincenty formula from (lon_a, lat_a), (lon_b, lat_b)
   }
   
-  /// Returns the angular
+  /// Returns the center of the great circle arc defined by this vertex and
+  /// the provided `other` vertex.
   fn arc_center<T: Vec3 + UnitVec3>(&self, other: &T) -> UnitVect3 {
-    let one_over_twice_norm = 1.0 / (1.0 + self.dot_product(other));
-    if one_over_twice_norm.is_infinite() {
+    // norm of v1 + v2:
+    //   sqrt((x1 + x2)^2 + (y1 + y2)^2 + (z1 + z2)^2)
+    // = sqrt((x1^2 + y1^2 + z1^2) + (x2^2 + y2^2 + z2^2) + 2 * v1.v2)
+    // = sqrt(2*(1 + v1.v2))
+    // = sqrt(1 + v1.v2) / sqrt(2)
+    let norm_inv = 1.0 / (2.0 * (1.0 + self.dot_product(other))).sqrt();
+    if norm_inv.is_infinite() {
       UnitVect3 {x: 1.0, y: 0.0, z: 0.0} // any Unit vector is ok
     } else {
-      // Check for numerical inaccuracy in cases where one_over_twice_norm 
+      // Check for numerical inaccuracy in cases where one_over_twice_norm
       // is very large but not infinite?
       UnitVect3 {
-        x: one_over_twice_norm * (self.x() + other.x()),
-        y: one_over_twice_norm * (self.y() + other.y()),
-        z: one_over_twice_norm * (self.z() + other.z()),
+        x: norm_inv * (self.x() + other.x()),
+        y: norm_inv * (self.y() + other.y()),
+        z: norm_inv * (self.z() + other.z()),
       }
     }
   }
@@ -448,4 +454,18 @@ impl Vec3 for Coo3D {
 
 impl UnitVec3 for Coo3D { }
 
+#[cfg(test)]
+mod tests {
+  use super::*;
 
+  #[test]
+  fn test_arc_center() {
+    let v1 = vec3_of(0.25, 0.69);
+    let v2 = vec3_of(0.5, 0.5);
+    let c = v1.arc_center(&v2);
+    eprintln!("Sqaured notrm of: {}", squared_norm_of(c.x, c.y, c.z));
+    assert!((1.0 - squared_norm_of(c.x, c.y, c.z)).abs() < 1e-13);
+  }
+
+
+}

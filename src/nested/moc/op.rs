@@ -472,10 +472,10 @@ impl <H, T> Iterator for NotMocIter<H, T>
 
 /// Performs an `AND` operation between two MOCs on-the-fly, while iterating.
 /// # Remark:
-/// * If you have an array in memoryn the fastest *AND* operation consists in starting with 2 binary
+/// * If you have an array in memory the fastest *AND* operation consists in starting with 2 binary
 /// searches to isolate the smallest common segment. This is not possible when working with iterators.
 /// * Operations on ranges is simpler and faster than operations on unique cells. But when the MOC
-/// is stored in (compressed) uniq cells instead of ranges, we may account for the time needed to
+/// is stored in (compressed) unique cells instead of ranges, we may account for the time needed to
 /// convert from uniq cells to ranges.  
 pub struct AndMocIter<H, T1, T2> 
   where H: HpxHash,
