@@ -362,6 +362,18 @@ pub fn polygon_coverage(depth: u8, vertices: &[(f64, f64)], exact_solution: bool
   get(depth).polygon_coverage(vertices, exact_solution)
 }
 
+/// Conveniency function simply calling the [polygon_coverage](struct.Layer.html#method.polygon_coverage) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn custom_polygon_coverage(
+  depth: u8,
+  vertices: &[(f64, f64)],
+  south_pole_method: &ContainsSouthPoleMethod,
+  exact_solution: bool) -> BMOC
+{
+  get(depth).custom_polygon_coverage(vertices, south_pole_method, exact_solution)
+}
+
 /// Conveniency function simply calling the [zone_coverage](struct.Layer.html#method.zone_coverage) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -376,7 +388,7 @@ pub mod gpu;
 use self::bmoc::*;
 use super::ring::{triangular_number_x4};
 use super::sph_geom::coo3d::*;
-use super::sph_geom::{Polygon};
+use super::sph_geom::{Polygon, ContainsSouthPoleMethod};
 use super::sph_geom::cone::{Cone};
 use super::sph_geom::zone::{Zone};
 use super::sph_geom::elliptical_cone::EllipticalCone;
@@ -2511,6 +2523,7 @@ impl Layer {
   /// > for each polygon segment, we first test if the segment contains a 'special point', 
   /// > if it is the case, we add it to the list of cell number computed from each polygin vertex
   /// > A 'special point' is a point such that in the HEALPix projection Euclidean plane
+  ///
   /// ```math
   /// \mathrm{d}\DeltaX(z) / \mathrm{d}Y = \pm 1
   /// ``` 
@@ -2532,7 +2545,7 @@ impl Layer {
   /// let depth = 3_u8;
   /// let nested3 = get(depth);
   /// 
-  /// let actual_res =nested3.polygon_coverage(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
+  /// let actual_res = nested3.polygon_coverage(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
   /// let expected_res: [u64; 8] = [304, 305, 306, 307, 308, 310, 313, 316];
   /// 
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
@@ -2540,23 +2553,39 @@ impl Layer {
   /// }
   /// ```
   pub fn polygon_coverage(&self, vertices: &[(f64, f64)], exact_solution: bool) -> BMOC {
-    let mut poly = Polygon::new(
+    self.custom_polygon_coverage(vertices, &ContainsSouthPoleMethod::Default, exact_solution)
+  }
+
+  /// Same as [polygon_coverage](struct.Layer.html#method.polygon_coverage) but with a custom
+  /// Polygon builder (in case the default behaviour is not satisfactory).
+  pub fn custom_polygon_coverage(
+    &self,
+    vertices: &[(f64, f64)],
+    south_pole_method: &ContainsSouthPoleMethod,
+    exact_solution: bool) -> BMOC
+  {
+    let poly = Polygon::new_custom(
       vertices.iter().map(|(lon, lat)| LonLat { lon: *lon, lat: *lat} )
-        .collect::<Vec<LonLat>>().into_boxed_slice()
+        .collect::<Vec<LonLat>>().into_boxed_slice(),
+      south_pole_method
     );
     let bounding_cone: Cone = Cone::bounding_cone(poly.vertices());
     let mut depth_start = 0;
-    let neigs: Vec<u64> = if !has_best_starting_depth(bounding_cone.radius()) {
-      poly.must_contain(bounding_cone.center());
-      (0..12).collect()
+    let neigs: Vec<u64> = if let ContainsSouthPoleMethod::Default = south_pole_method {
+      if !has_best_starting_depth(bounding_cone.radius()) {
+        // poly.must_contain(bounding_cone.center()); // Opposite of bounding cone out of?
+        (0..12).collect()
+      } else {
+        depth_start = best_starting_depth(bounding_cone.radius()).min(self.depth);
+        let root_layer = get(depth_start);
+        let LonLat{lon, lat} = bounding_cone.center().lonlat();
+        let center_hash = root_layer.hash(lon, lat);
+        let mut neigs: Vec<u64> = root_layer.neighbours(center_hash, true).values_vec();
+        neigs.sort_unstable();
+        neigs
+      }
     } else {
-      depth_start = best_starting_depth(bounding_cone.radius()).min(self.depth);
-      let root_layer = get(depth_start);
-      let LonLat{lon, lat} = bounding_cone.center().lonlat();
-      let center_hash = root_layer.hash(lon, lat);
-      let mut neigs: Vec<u64> = root_layer.neighbours(center_hash, true).values_vec();
-      neigs.sort_unstable();
-      neigs
+      (0..12).collect()
     };
     // Compute and sort the list of cells containing at least one polygon vertex
     let mut sorted_poly_vertices_hash = self.hashs_vec(poly.vertices());
@@ -2576,7 +2605,7 @@ impl Layer {
     let sorted_poly_vertices_hash = sorted_poly_vertices_hash.into_boxed_slice();
     // Build the list (removing duplicated) for all deltaDepth?
     let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, 10_000_usize);
-    for root_hash in neigs { 
+    for root_hash in neigs {
       self.polygon_coverage_recur(&mut bmoc_builder, depth_start, root_hash, &poly, &sorted_poly_vertices_hash);
     }
     bmoc_builder.to_bmoc()

@@ -167,6 +167,13 @@ To use the library in python, install it through `pip` (examples are provided on
 pip install cdshealpix
 ```
 
+
+ToDo list
+---------
+
+* [ ] Modify elliptical cone: compute distance to both foci
+* [ ] Implement the exact cone solution
+
 License
 -------
 

@@ -13,36 +13,38 @@ use super::TWICE_PI;
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
 
 trait ContainsSouthPoleComputer {
-  fn contains_south_pole(&self, vertices: &[Coo3D], cross_products: &[Vect3]) -> bool;
+  fn contains_south_pole(&self, polygon: &Polygon) -> bool;
 }
+
 /// We explicitly tell that the south pole is inside the polygon.
 struct ProvidedTrue;
 impl ContainsSouthPoleComputer for ProvidedTrue {
   #[inline]
-  fn contains_south_pole(&self, _vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
+  fn contains_south_pole(&self, _polygon: &Polygon ) -> bool {
     true
   }
 }
+
 /// We explicitly tell that the south pole is NOT inside the polygon.
 struct ProvidedFalse;
 impl ContainsSouthPoleComputer for ProvidedFalse {
   #[inline]
-  fn contains_south_pole(&self, _vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
+  fn contains_south_pole(&self, _polygon: &Polygon) -> bool {
     false
   }
 }
-/// Consider the south pole to be inside the polygon if the sum of consecutive longitude
-/// differences equals 2pi and if there is more vertices in the south hemisphere than in the 
-/// north hemisphere.
+/// Consider the south pole to be inside the polygon only if both poles are in different polygon
+/// area (i.e. one in the polygon, one in its complementary) and the gravity center of the polygon
+/// vertices is in the south hemisphere.
 struct Basic;
 impl ContainsSouthPoleComputer for Basic {
-  fn contains_south_pole(&self, vertices: &[Coo3D], _cross_products: &[Vect3]) -> bool {
-    let mut n_vertices_in_south_hemisphere = 0_usize;
+  fn contains_south_pole(&self, polygon: &Polygon) -> bool {
+    let mut gravity_center_z = 0.0_f64;
     let mut sum_delta_lon = 0.0_f64;
-    let mut j = (vertices.len() - 1) as usize;
+    let mut j = (polygon.vertices.len() - 1) as usize;
     let to = j; // variable defined to remove a clippy warning
     for i in 0..=to {
-      let delta_lon = vertices[i].lon() - vertices[j].lon();
+      let delta_lon = polygon.vertices[i].lon() - polygon.vertices[j].lon();
       let abs_delta_lon = delta_lon.abs();
       if abs_delta_lon <= PI {
         sum_delta_lon += delta_lon;
@@ -51,39 +53,55 @@ impl ContainsSouthPoleComputer for Basic {
       } else {
         sum_delta_lon += TWICE_PI - abs_delta_lon;
       }
-      if vertices[i].lat() < 0.0 {
-        n_vertices_in_south_hemisphere += 1;
-      }
+      gravity_center_z += polygon.vertices[i].z();
       j = i;
     }
-    sum_delta_lon.abs() > PI // scalarangle deezerust
-      && (n_vertices_in_south_hemisphere << 1) > vertices.len() // more vertices in south than in north  
+    sum_delta_lon.abs() > PI // Both poles in both the polygon and its complementary
+      && gravity_center_z < 0.0 // Polygon vertices gravity center in south hemisphere
   }
 }
 
 static PROVIDED_TRUE: ProvidedTrue = ProvidedTrue;
 static PROVIDED_FALSE: ProvidedFalse = ProvidedFalse;
 static BASIC: Basic = Basic;
-// Centre gravite des 3 premier points est dans le Polygone
+// Gravity center of the 3 first vertices?
 
 pub enum ContainsSouthPoleMethod {
-  TRUE,
-  FALSE,
-  DEFAULT,
+  Default,
+  DefaultComplement,
+  ContainsSouthPole,
+  DoNotContainsSouthPole,
+  ControlPointIn(Coo3D),
+  ControlPointOut(Coo3D),
+  // Opposite of the gravity center out of the polygon?
 }
 
 impl ContainsSouthPoleComputer for ContainsSouthPoleMethod {
-  fn contains_south_pole(&self, vertices: &[Coo3D], cross_products: &[Vect3]) -> bool {
+  fn contains_south_pole(&self, polygon: &Polygon) -> bool {
     match self {
-      ContainsSouthPoleMethod::TRUE    => PROVIDED_TRUE.contains_south_pole(vertices, cross_products),
-      ContainsSouthPoleMethod::FALSE   => PROVIDED_FALSE.contains_south_pole(vertices, cross_products),
-      ContainsSouthPoleMethod::DEFAULT => BASIC.contains_south_pole(vertices, cross_products),
+      ContainsSouthPoleMethod::Default =>
+        BASIC.contains_south_pole(&polygon),
+      ContainsSouthPoleMethod::DefaultComplement =>
+        !BASIC.contains_south_pole(&polygon),
+      ContainsSouthPoleMethod::ContainsSouthPole =>
+        PROVIDED_TRUE.contains_south_pole(&polygon),
+      ContainsSouthPoleMethod::DoNotContainsSouthPole =>
+        PROVIDED_FALSE.contains_south_pole(&polygon),
+      ContainsSouthPoleMethod::ControlPointIn(control_point) =>
+        if polygon.contains(&control_point) {
+          polygon.contains_south_pole
+        } else {
+          !polygon.contains_south_pole
+        },
+      ContainsSouthPoleMethod::ControlPointOut(control_point) =>
+        if polygon.contains(&control_point) {
+          !polygon.contains_south_pole
+        } else {
+          polygon.contains_south_pole
+        },
     }
   }
 }
-
-// static NORTH_POLE: Coo3D = Coo3D::from_sph_coo(PI, HALF_PI);
-// static NORTH_POLE: Vect3 = Vect3::vec3_of(PI, HALF_PI);
 
 pub struct Polygon {
   vertices: Box<[Coo3D]>,
@@ -94,18 +112,19 @@ pub struct Polygon {
 impl Polygon {
   
   pub fn new(vertices: Box<[LonLat]>) -> Polygon {
-    Polygon::new_custom(vertices, ContainsSouthPoleMethod::DEFAULT)
+    Polygon::new_custom(vertices, &ContainsSouthPoleMethod::Default)
   }
 
-  pub fn new_custom(vertices: Box<[LonLat]>, method: ContainsSouthPoleMethod) -> Polygon {
+  pub fn new_custom(vertices: Box<[LonLat]>, method: &ContainsSouthPoleMethod) -> Polygon {
     let vertices: Box<[Coo3D]> = lonlat2coo3d(&vertices);
     let cross_products: Box<[Vect3]> = compute_cross_products(&vertices);
-    let contains_south_pole = method.contains_south_pole(&vertices, &cross_products);
-    Polygon {
+    let mut polygon = Polygon {
       vertices,
       cross_products,
-      contains_south_pole,
-    }
+      contains_south_pole: false,
+    };
+    polygon.contains_south_pole = method.contains_south_pole(&polygon);
+    polygon
   }
 
   /// Control point must be in the polygon.

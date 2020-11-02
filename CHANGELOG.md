@@ -5,9 +5,14 @@
 
 Released 2020-11-02
 
+### Modified
+
+* Default behaviour for polygons
+
 ### Add
 
 * Add `zone_coverage`.
+* Add `custom_polygon_coverage` (to be able to select the default area or its complementary)
 
 --------------------------------------------------------------------------------
 
