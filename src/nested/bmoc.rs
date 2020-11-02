@@ -1041,6 +1041,44 @@ if (debug) System.out.println("Add3 " + hh);
     ranges.into_boxed_slice()
   }
 
+  /// Transform this (B)MOC as a simple (sorted) array of ranges.
+  /// Ranges containing different flag values are split in sub-ranges 
+  pub fn to_flagged_ranges(&self) -> Vec<(std::ops::Range<u64>, bool)> {
+    let mut ranges: Vec<(std::ops::Range<u64>, bool)> = Vec::with_capacity(self.entries.len());
+    let mut prev_min = 0_u64;
+    let mut prev_max = 0_u64;
+    let mut prev_flag = false;
+    for cell in self.into_iter() {
+      if cell.depth < self.depth_max {
+        let range = to_range(cell.hash, self.depth_max - cell.depth);
+        if range.start == prev_max && (prev_max == 0 || cell.is_full == prev_flag) {
+          prev_max = range.end;
+        } else {
+          if prev_min != prev_max { // false only at first call, then always true
+            ranges.push((prev_min..prev_max, prev_flag));
+          }
+          prev_min = range.start;
+          prev_max = range.end;
+          prev_flag = cell.is_full;
+        }
+      } else if cell.hash == prev_max && cell.is_full == prev_flag {
+        prev_max += 1;
+      } else {
+        if prev_min != prev_max { // false only at first call, then always true
+          ranges.push((prev_min..prev_max, prev_flag));
+        }
+        prev_min = cell.hash;
+        prev_max = cell.hash + 1;
+        prev_flag = cell.is_full;
+      }
+    }
+    if prev_min != prev_max { // false only at first call, then always true
+      ranges.push((prev_min..prev_max, prev_flag));
+    }
+    ranges.shrink_to_fit();
+    ranges
+  }
+
   /// Transform this (B)MOC in a very compressed version. We call it `lossy` because
   /// during the operation, we loose the `flag` information attached to each BMOC cell.
   /// # Remark
@@ -1053,7 +1091,7 @@ if (debug) System.out.println("Add3 " + hh);
   /// question: was it worth implementing this specific case instead of using an
   /// `Interpolative coding` library?
   /// # Idea
-  /// * The basic idea consists
+  /// * The basic idea consists in...
   #[allow(clippy::many_single_char_names)]
   pub fn compress_lossy(&self) -> CompressedMOC {
     let n = self.entries.len();
