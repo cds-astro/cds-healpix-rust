@@ -616,11 +616,10 @@ impl Layer {
   /// ```
   pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
-    // Coords inside the base cell time nside/2
     let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64);
-    debug_assert!(x <= (0.0 - 1e-15) || x < (self.nside as f64 + 1e-15), format!("x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c));
+    debug_assert!(-1e-14 < x || x < self.nside as f64 * (1.0_f64 + 1e-14), format!("x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c));
     let y = f64::from_bits((self.time_half_nside + (h_in_d0c - l_in_d0c).to_bits() as i64) as u64);
-    debug_assert!(y <= (0.0 - 1e-15) || y < (self.nside as f64 + 1e-15), format!("y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c));
+    debug_assert!(-1e-14 < y || y < self.nside as f64 * (1.0_f64 + 1e-14), format!("y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c));
     // - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
     let i = x as u32;
     let j = y as u32;
@@ -4404,6 +4403,18 @@ mod tests {
       (405766747919, 0.024554563745909478)
     ]);
   }
+
+  #[test]
+  fn test_bilinear_interpolation_3() {
+    let lon_rad = [0.17453293_f64, 0.43633231_f64, 0.0_f64];
+    let lat_rad = [0.08726646_f64, 0.17453293_f64, 0.78539816_f64];
+    let depth = 5;
+    for (lon, lat) in lon_rad.iter().zip(lat_rad.iter()) {
+      let res = bilinear_interpolation(depth, *lon, *lat);
+      println!("{:?}", res);
+    }
+  }
+
 
   #[test]
   fn test_gen_file() -> std::io::Result<()> {
