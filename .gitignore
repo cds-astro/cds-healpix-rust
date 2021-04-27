@@ -6,7 +6,10 @@
 /libpsql_test/
 /test/target/
 /resources/gnuplot
+resources/external
 src/nested/vmoc/
+libpython/target/
+libpython/*.so
 
 # Ignore files
 Notes.txt
@@ -17,4 +20,5 @@ Makefile
 !/libpsql/Makefile
 **/*.rs.bk
 **/*.swp
+Licence_notice.txt
 

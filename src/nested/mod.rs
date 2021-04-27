@@ -2312,15 +2312,27 @@ impl Layer {
 
   #[inline]
   fn n_moc_cell_in_cone_upper_bound(&self, cone_radius: f64) -> usize {
-    const TWICE_SQRT_3: f64 = 2.0_f64 * 1.732_050_807_568_877_2_f64; // sqrt(3)
+    // 	NEW UPPER BOUND: supposedly more robust (and faster to compute)
+    // But requires delta_depth to be given in parameter!
+    // At lower resolution depth, max 9 cells (partially) overlapped:
+    // => grid nside max = 3 * (2^DeltaDepth)
+    // Worst case, for each nside max row (or col) at depth max:
+    // - 2 (both sides) x (1 cell overllapping externaly + 1 cell overlapping internally + 1 no-fusioned internall cell)
+    // - x2 to be conservative
+    // 12 << delta_depth (delta_depth = diff between best starting depth and MOC depth max)
+
+    // OLD UPPER BOUND (KEEP DURING THE TRANSITION): fails in rare circumstances,
+    //   e.g. depth = 14, radius = 0.001, alpha = 0.002 ,delta = -1.3;
     // cell_area = 4 * pi / ncell = 4 * pi / (3 * 4 * nside^2) = pi / (3 * nside^2) =  pi * r^2
     // cell_radius = r = 1 / (sqrt(3) * nside)
     // As a very simple and naive rule, we take 4x the number of cells needed to cover
     // the cone external annulus
     // Annulus area = 4 pi ((R + r)^2 - R^2) = 4 pi (r^2 + 2rR)
     // N cells = 4 pi (r^2 + 2rR) / 4 pi r^2 = 1 + 2 R/r = 1 + 2 * sqrt(3) * nside * R
+    const TWICE_SQRT_3: f64 = 2.0_f64 * 1.732_050_807_568_877_2_f64; // sqrt(3)
     4_usize * (1_usize + (self.nside as f64 * TWICE_SQRT_3 * cone_radius + 0.99_f64) as usize)
   }
+
 
 
 

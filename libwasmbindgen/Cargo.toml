@@ -5,15 +5,22 @@ authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 
 [build-dependencies]
-cdshealpix = "0.5.2"
+cdshealpix = "0.5.4"
 
 [dependencies]
-cdshealpix = "0.5.2"
+cdshealpix = "0.5.4"
 wasm-bindgen = "0.2.64"
 
 [lib]
 crate-type = ["cdylib"]
 
 [profile.release]
-lto = true
+#lto = true # Commented due to a bug in rustc 1.44: https://github.com/rustwasm/wasm-bindgen/issues/2160 and https://github.com/rust-lang/rust/issues/72758
+
+# See: https://rustwasm.github.io/wasm-pack/book/cargo-toml-configuration.html
+
+# `wasm-opt` is on by default in for the release profile, but it can be
+# disabled by setting it to `false`i
+#[package.metadata.wasm-pack.profile.release]
+#wasm-opt = false
 
