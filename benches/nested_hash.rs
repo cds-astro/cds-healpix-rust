@@ -12,11 +12,11 @@ use cdshealpix::{
   F64_SIGN_BIT_MASK,
   F64_BUT_SIGN_BIT_MASK
 };
-use cdshealpix::nested::{self, get_or_create};
+use cdshealpix::nested::{self, get};
 use cdshealpix::nested::zordercurve::{ZOC, ZOrderCurve, get_zoc};
 
 pub fn hash_v1(depth: u8, lon: f64, lat: f64) -> u64 {
-  get_or_create(depth).hash(lon, lat)
+  get(depth).hash(lon, lat)
 }
 
 pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {

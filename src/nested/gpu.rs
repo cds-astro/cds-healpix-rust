@@ -79,8 +79,8 @@ pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
     (d0h, x_proj, y_proj)
   };
   // Coords inside the base cell
-  let x = half_nside * (y_in_d0c + x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && x < (nside as f32 + 1e-5), format!("x: {}, x_proj: {}; y_proj: {}", &x, &x_in_d0c, &y_in_d0c));
-  let y = half_nside * (y_in_d0c - x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && y < (nside as f32 + 1e-5), format!("y: {}", &y));
+  let x = half_nside * (y_in_d0c + x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && x < (nside as f32 + 1e-5), "x: {}, x_proj: {}; y_proj: {}", &x, &x_in_d0c, &y_in_d0c);
+  let y = half_nside * (y_in_d0c - x_in_d0c);    debug_assert!((0.0 - 1e-5) < x && y < (nside as f32 + 1e-5), "y: {}", &y);
   // Ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
   let mut i = x as u32; 
   let mut j = y as u32;
@@ -170,20 +170,20 @@ mod tests {
       let prec = 1.0 / 512.0; //512.0; // HiPS images: 512 x 512
       match h & 3 {
         0 => {
-          assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs())); // precision should depends on depth!!
-          assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs())); // 1e-3 => images 1000x1000 while HiPS uses 512x512
+          assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()); // precision should depends on depth!!
+          assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()); // 1e-3 => images 1000x1000 while HiPS uses 512x512
         },
         1 => {
-          assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-          assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()));
+          assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+          assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs());
         },
         2 => {
-          assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()));
-          assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+          assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs());
+          assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
         },
         3 => {
-          assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-          assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+          assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+          assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
         },
         _ => unreachable!(),
       }
@@ -213,20 +213,20 @@ mod tests {
     let prec = 1.0 / 512.0; //512.0; // HiPS images: 512 x 512
     match h & 3 {
       0 => {
-        assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs())); // precision should depends on depth!!
-        assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs())); // 1e-3 => images 1000x1000 while HiPS uses 512x512
+        assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()); // precision should depends on depth!!
+        assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()); // 1e-3 => images 1000x1000 while HiPS uses 512x512
       },
       1 => {
-        assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-        assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()));
+        assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+        assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs());
       },
       2 => {
-        assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()));
-        assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+        assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs());
+        assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
       },
       3 => {
-        assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-        assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+        assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+        assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
       },
       _ => unreachable!(),
     }
@@ -256,20 +256,20 @@ mod tests {
       let prec = 1.0 / 512.0; //512.0; // HiPS images: 512 x 512 with level max = 14
       match h & 3 {
         0 => {
-          assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs())); // precision should depends on depth!!
-          assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs())); // 1e-3 => images 1000x1000 while HiPS uses 512x512
+          assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()); // precision should depends on depth!!
+          assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()); // 1e-3 => images 1000x1000 while HiPS uses 512x512
         },
         1 => {
-          assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-          assert!((dy - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs()));
+          assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+          assert!((dy - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.25).abs());
         },
         2 => {
-          assert!((dx - 0.25).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs()));
-          assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+          assert!((dx - 0.25).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.25).abs());
+          assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
         },
         3 => {
-          assert!((dx - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs()));
-          assert!((dy - 0.75).abs() <= prec, format!("h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs()));
+          assert!((dx - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dx - 0.75).abs());
+          assert!((dy - 0.75).abs() <= prec, "h: {}; ra: {}; dec: {}; dx: {}; dy: {}; prec: {}", h, ra.to_degrees(), de.to_degrees(), dx, dy, (dy - 0.75).abs());
         },
         _ => unreachable!(),
       }

@@ -1470,16 +1470,16 @@ pub fn edge_cell_direction_from_neighbour(base_cell: u8, inner_direction: &MainW
 
 fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     E => match inner_direction {
       N | NE => N,
-      E => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      E => panic!("No neighbour in direction {:?}", &neighbour_direction),
       S | SE => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     W => match inner_direction {
       N | NW => N,
-      W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      W => panic!("No neighbour in direction {:?}", &neighbour_direction),
       S | SW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
@@ -1507,16 +1507,16 @@ fn eqr_edge_direction_from_neighbour(_inner_direction: &MainWind, neighbour_dire
 
 fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     E => match inner_direction {
       S | SE => S,
-      E => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      E => panic!("No neighbour in direction {:?}", &neighbour_direction),
       N | NE => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     W => match inner_direction {
       S | SW => S,
-      W => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+      W => panic!("No neighbour in direction {:?}", &neighbour_direction),
       N | NW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
@@ -1554,7 +1554,7 @@ pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -
 
 fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     NE => NW,
     NW => NE,
     N  => N,
@@ -1564,14 +1564,14 @@ fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
 
 fn eqr_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    S | N | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    S | N | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     _ => neighbour_direction.opposite(),
   }
 }
 
 fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!(format!("No neighbour in direction {:?}", &neighbour_direction)),
+    E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     S  => S,
     SE => SW,
     SW => SE,

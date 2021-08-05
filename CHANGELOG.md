@@ -1,5 +1,23 @@
 # `cdshealpix` Change Log
 
+## 0.5.5
+
+Released 2020-08-05
+
+### Add
+
+* Add `box_coverage`
+
+### Bug correction
+
+* In polygon: contrary to the Java code (which was correct) a cell was added to the 
+  moc if its 4 vertices where in the polygon (without testing possible intersection with the polygon).
+  This may lead to wrong coverages in the case of self-intersecting polygons
+  (see `nested::testok_polygone_exact_fxp`).
+* Fix benches  
+
+--------------------------------------------------------------------------------
+
 
 ## 0.5.4
 

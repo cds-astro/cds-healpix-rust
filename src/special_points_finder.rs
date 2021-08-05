@@ -345,7 +345,7 @@ pub fn arc_special_point_in_pc<'a>(
         debug_assert!(lon2_div_half_pi > 0);
         let n2_y = lon2_div_half_pi & 1;
         let n2 = Coo3D::from_vec3((n2_y ^ 1) as f64, n2_y as f64, 0.0);
-        let intersect2 = Coo3D::from(intersect_point_pc(&p1, p2, &p2p1_n, &n2));
+        let intersect2 = Coo3D::from(intersect_point_pc(p1, p2, &p2p1_n, &n2));
         debug_assert!(p2.lon() < intersect2.lon() || intersect2.lon() < p1.lon(), "p1.lon: {}, p2.lon: {}, intersect.lon: {}", p1.lon(), p2.lon(), intersect2.lon());
         if p2.lon() < intersect2.lon() {
           res_z2 = arc_special_point_in_pc_same_quarter(p2, &intersect2, z_eps_max, n_iter_max);
@@ -355,7 +355,7 @@ pub fn arc_special_point_in_pc<'a>(
       debug_assert!(lon1_div_half_pi < 3);
       let n1_x = lon1_div_half_pi & 1;
       let n1 = Coo3D::from_vec3(n1_x as f64, (n1_x ^ 1) as f64, 0.0);
-      let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p2p1_n, &n1));
+      let intersect1 = Coo3D::from(intersect_point_pc(p1, p2, &p2p1_n, &n1));
       debug_assert!(intersect1.lon() < p1.lon(),
         "p1: ({}, {}); p2: ({}, {}); intersect: ({}, {}); n; ({}, {})",
         p1.lon().to_degrees(), p1.lat().to_degrees(),
@@ -370,7 +370,7 @@ pub fn arc_special_point_in_pc<'a>(
         debug_assert!(lon1_div_half_pi < 3);
         let n1_y = lon1_div_half_pi & 1;
         let n1 = Coo3D::from_vec3((n1_y ^ 1) as f64, n1_y as f64, 0.0);
-        let intersect1 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n1));
+        let intersect1 = Coo3D::from(intersect_point_pc(p1, p2, &p1p2_n, &n1));
         debug_assert!(p1.lon() < intersect1.lon());
         res_z1 = arc_special_point_in_pc_same_quarter(p1, &intersect1, z_eps_max, n_iter_max);
       }
@@ -378,7 +378,7 @@ pub fn arc_special_point_in_pc<'a>(
       debug_assert!(lon2_div_half_pi > 0);
       let n2_x = lon2_div_half_pi & 1;
       let n2 = Coo3D::from_vec3(n2_x as f64, (n2_x ^ 1) as f64, 0.0);
-      let intersect2 = Coo3D::from(intersect_point_pc(&p1, &p2, &p1p2_n, &n2));
+      let intersect2 = Coo3D::from(intersect_point_pc(p1, p2, &p1p2_n, &n2));
       debug_assert!(intersect2.lon() < p2.lon());
       res_z2 = arc_special_point_in_pc_same_quarter(&intersect2,  p2, z_eps_max, n_iter_max);
     }

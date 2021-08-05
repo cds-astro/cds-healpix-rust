@@ -35,7 +35,7 @@ use compressed::*;
 /// In practice u16, u32 and u64 implement this trait.
 pub trait HpxHash: NumAssign + PrimInt + ToPrimitive + Unsigned + ShlAssign<u8> + ShrAssign<u8> + Copy + Display  + Debug {
   const N_BYTES: u8 = mem::size_of::<Self>() as u8;
-  const N_BITS: u8 = (mem::size_of::<Self>() as u8) << 3;
+  const N_BITS: u8 = Self::N_BYTES << 3;
   // 4 bits reserved for base cells 
   // + 1 bit for the sentinel bit
   // + 1 bit for the flag in BMOCs

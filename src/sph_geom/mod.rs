@@ -6,6 +6,7 @@ pub(super) mod cone;
 pub(super) mod zone;
 pub(super) mod elliptical_cone;
 pub(super) mod proj;
+pub(super) mod frame;
 
 use std::f64::consts::{PI};
 use super::TWICE_PI;
@@ -80,21 +81,21 @@ impl ContainsSouthPoleComputer for ContainsSouthPoleMethod {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool {
     match self {
       ContainsSouthPoleMethod::Default =>
-        BASIC.contains_south_pole(&polygon),
+        BASIC.contains_south_pole(polygon),
       ContainsSouthPoleMethod::DefaultComplement =>
-        !BASIC.contains_south_pole(&polygon),
+        !BASIC.contains_south_pole(polygon),
       ContainsSouthPoleMethod::ContainsSouthPole =>
-        PROVIDED_TRUE.contains_south_pole(&polygon),
+        PROVIDED_TRUE.contains_south_pole(polygon),
       ContainsSouthPoleMethod::DoNotContainsSouthPole =>
-        PROVIDED_FALSE.contains_south_pole(&polygon),
+        PROVIDED_FALSE.contains_south_pole(polygon),
       ContainsSouthPoleMethod::ControlPointIn(control_point) =>
-        if polygon.contains(&control_point) {
+        if polygon.contains(control_point) {
           polygon.contains_south_pole
         } else {
           !polygon.contains_south_pole
         },
       ContainsSouthPoleMethod::ControlPointOut(control_point) =>
-        if polygon.contains(&control_point) {
+        if polygon.contains(control_point) {
           !polygon.contains_south_pole
         } else {
           polygon.contains_south_pole
@@ -190,7 +191,7 @@ impl Polygon {
     let mut left = &self.vertices[n_vertices - 1];
     for i in 0..n_vertices {
       let right = &self.vertices[i];
-      if is_in_lon_range(coo,  &left,  &right)
+      if is_in_lon_range(coo,  left,  right)
         && cross_plane_going_south(coo, &self.cross_products[i]) {
         c = !c;
       }

@@ -30,10 +30,7 @@ impl ExternalEdge {
   
   /// Returns the neighbour cell located at the given cardinal point (if it exists). 
   pub fn get_corner(&self, cardinal_point: &Cardinal) -> Option<u64> {
-    match self.corners[cardinal_point.index() as usize] {
-      Some(h) => Some(h),
-      None => None,
-    }
+    self.corners[cardinal_point.index() as usize]
   }
   
   /// Returns the neighbour cells along the given ordinal direction.

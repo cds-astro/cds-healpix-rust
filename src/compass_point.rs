@@ -421,10 +421,7 @@ impl MainWind {
   /// assert_eq!(false, MainWind::NW.is_cardinal());
   /// ```
   pub fn is_cardinal(&self) -> bool {
-    match *self {
-      MainWind::S | MainWind::E | MainWind::N | MainWind::W => true,
-      _ => false,
-    }
+    matches!(*self, MainWind::S | MainWind::E | MainWind::N | MainWind::W)
   }
 
   /// Convert this main wind into a Cardinal point.
@@ -437,7 +434,7 @@ impl MainWind {
       MainWind::E => Cardinal::E,
       MainWind::N => Cardinal::N,
       MainWind::W => Cardinal::W,
-      _ => panic!(format!("Main wind '{:?}' can't be converted to cardinal!", &self)),
+      _ => panic!("Main wind '{:?}' can't be converted to cardinal!", &self),
     }
   }
 
@@ -456,10 +453,7 @@ impl MainWind {
   /// assert_eq!(true, MainWind::NW.is_ordinal());
   /// ```
   pub fn is_ordinal(&self) -> bool {
-    match *self {
-      MainWind::SE | MainWind::SW | MainWind::NE | MainWind::NW => true,
-      _ => false,
-    }
+    matches!(*self, MainWind::SE | MainWind::SW | MainWind::NE | MainWind::NW)
   }
 
   /// Convert this main wind into an Ordinal point.
@@ -471,7 +465,7 @@ impl MainWind {
       MainWind::SW => Ordinal::SW,
       MainWind::NE => Ordinal::NE,
       MainWind::NW => Ordinal::NW,
-      _ => panic!(format!("Main wind '{:?}' can't be converted to ordinal!", &self)),
+      _ => panic!("Main wind '{:?}' can't be converted to ordinal!", &self),
     }
   }
   

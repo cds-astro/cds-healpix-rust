@@ -355,6 +355,13 @@ pub fn elliptical_cone_coverage_custom(depth: u8, delta_depth: u8, lon: f64, lat
   get(depth).elliptical_cone_coverage_custom(delta_depth, lon, lat, a, b, pa)
 }
 
+/// Conveniency function simply calling the [box_coverage](struct.Layer.html#method.box_coverage) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn box_coverage(depth: u8,  lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+  get(depth).box_coverage(lon, lat, a, b, pa)
+}
+
 /// Conveniency function simply calling the [polygon_coverage](struct.Layer.html#method.polygon_coverage) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -391,6 +398,7 @@ use super::sph_geom::coo3d::*;
 use super::sph_geom::{Polygon, ContainsSouthPoleMethod};
 use super::sph_geom::cone::{Cone};
 use super::sph_geom::zone::{Zone};
+use crate::sph_geom::frame::RefToLocalRotMatrix;
 use super::sph_geom::elliptical_cone::EllipticalCone;
 use super::{direction_from_neighbour, edge_cell_direction_from_neighbour};
 use super::compass_point::{Cardinal, CardinalSet, CardinalMap};
@@ -617,9 +625,9 @@ impl Layer {
   pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
     let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
     let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64);
-    debug_assert!(-1e-14 < x || x < self.nside as f64 * (1.0_f64 + 1e-14), format!("x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c));
+    debug_assert!(-1e-14 < x || x < self.nside as f64 * (1.0_f64 + 1e-14), "x: {}, x_proj: {}; y_proj: {}", &x, &h_in_d0c, &l_in_d0c);
     let y = f64::from_bits((self.time_half_nside + (h_in_d0c - l_in_d0c).to_bits() as i64) as u64);
-    debug_assert!(-1e-14 < y || y < self.nside as f64 * (1.0_f64 + 1e-14), format!("y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c));
+    debug_assert!(-1e-14 < y || y < self.nside as f64 * (1.0_f64 + 1e-14), "y: {}, x_proj: {}; y_proj: {}", &y, &h_in_d0c, &l_in_d0c);
     // - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
     let i = x as u32;
     let j = y as u32;
@@ -1527,9 +1535,9 @@ impl Layer {
     self.check_hash(hash);
     let mut res = ExternalEdge::new_empty();
     let h_bits: HashBits = self.pull_bits_appart(hash);
+    let mut neighbours = MainWindMap::new();
     if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
       // Not easy: opposite directions depends on base cell neighbours
-      let mut neighbours = MainWindMap::new();
       self.edge_cell_neighbours(hash, &mut neighbours);
       let h_parts: HashParts = self.decode_hash(hash);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
@@ -1546,7 +1554,6 @@ impl Layer {
       }
     } else {
       // Easy: always use the opposite direction
-      let mut neighbours = MainWindMap::new();
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       for (direction, hash_value) in neighbours.entries_vec().drain(..) {
         let dir_from_neig = direction.opposite();
@@ -2434,10 +2441,6 @@ impl Layer {
     if a >= FRAC_PI_2 {
       panic!("Unable to handle ellipses with a semi-major axis > PI/2");
     }
-    // Special case: the full sky is covered
-    if b >= PI {
-      return self.allsky_bmoc_builder();
-    }
     // Common variable
     let sph_ellipse = EllipticalCone::new(lon, lat, a, b, pa);
     // Special case of very large radius: test the 12 base cells
@@ -2513,6 +2516,90 @@ impl Layer {
         self.elliptical_cone_coverage_recur(depth, hash | 3_u64, ellipse, distances, recur_depth, bmoc_builder);
       }
     }
+  }
+
+   /// Returns a hierarchical view of the list of cells overlapped by the given box.
+   /// The BMOC also tells if the cell if fully or partially overlapped by the box.
+   /// 
+   /// # Input
+   /// - `lon` the longitude of the center of the box, in radians
+   /// - `lat` the latitude of the center of the box, in radians
+   /// - `a` the semi-major axis of the box (half the box width), in radians
+   /// - `b` the semi-minor axis of the box (half the box height), in radians
+   /// - `pa` the position angle (i.e. the angle between the north and the semi-major axis, east-of-north), in radians
+   /// 
+   /// # Output
+   /// - the list of cells overlapped by the given box, in a BMOC 
+   ///   (hierarchical view also telling if a cell is fully or partially covered).
+   ///
+   /// # Panics
+   /// - if `a` not in `]0, pi/2]`
+   /// - if `b` not in `]0, a]`
+   /// - if `pa` not in `[0, pi[`
+   /// 
+  pub fn box_coverage(&self,  lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> BMOC {
+     let center = Coo3D::from_sph_coo(lon, lat);
+     let vertices = Layer::box2polygon(center.lon(), center.lat(), a, b, pa);
+     self.custom_polygon_coverage(&vertices, &ContainsSouthPoleMethod::ControlPointIn(center), true)
+  }
+
+  // # Panics
+  // * if `lon` not in `[0, 2\pi[`
+  // * if `lat` not in `[-\pi/2, \pi/2]`
+  // * if `a` not in `]0, \pi/2]` or \`]0, \pi/2]`
+  // * if `b` not in `]0, a[`
+  // * if `pa` not in `[0, \pi[`
+  fn box2polygon(lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> Vec<(f64, f64)> {
+    assert!(0.0 <= lon && lon < TWICE_PI, "Expected: lon in [0, 2pi[. Actual: {}", lon);
+    assert!(-HALF_PI <= lat && lat <= HALF_PI, "Expected: lat in [-pi/2, pi/2]. Actual: {}", lat);
+    assert!(0.0 < a && a <= HALF_PI, "Expected: a in ]0, pi/2]. Actual: {}", a);
+    assert!(0.0 < b && b < a, "Expected: b in ]0, a]. Actual: {}", b);
+    assert!(0.0 <= pa && pa < PI, "Expected: pa in [0, pi[. Actual: {}", pa);
+    // Compute spherical coordinates
+    let frame_rotation = RefToLocalRotMatrix::from_center(lon, lat);
+    // By application of the Thales theorem, the new point has the property:
+    //   sin(new_lat) / sin(dlat) = (cos(dlon) * cos(new_lat)) / cos(dlat)
+    // With (imagine looking a the triangle in the (x, z) plane:
+    // * old_x = cos(lat)
+    // * new_x = cos(dlon) * cos(new_lat)
+    // * old_z = sin(dlat)
+    // * new_z = sin(new_lat)
+    // Leading to:
+    //   tan(new_lat) = cos(dlon) * tan(dlat)
+    let lon = a;
+    let (sin_lon, cos_lon) = lon.sin_cos();
+    let lat = (cos_lon * b.tan()).atan();
+    let (sin_lat, cos_lat) = lat.sin_cos();
+    let (sin_pa, cos_pa) = pa.sin_cos();
+    // Rotation by the position angle
+    // - upper right (before rotation by PA)
+    let (x1, y1, z1) = (cos_lon * cos_lat, sin_lon * cos_lat, sin_lat);
+    // - apply rotation (sin and cos are revere since theta = pi/2 - pa)
+    let (y2, z2) = (
+      y1 * sin_pa - z1 * cos_pa,
+      y1 * cos_pa + z1 * sin_pa,
+    );
+    let mut vertices = Vec::with_capacity(4);
+    vertices.push(frame_rotation.to_global_coo(x1, y2, z2));
+    // - lower right (before rotation by PA) = (y1, -z1)
+    let (y2, z2) = (
+      y1 * sin_pa + z1 * cos_pa,
+      y1 * cos_pa - z1 * sin_pa,
+    );
+    vertices.push(frame_rotation.to_global_coo(x1, y2, z2));
+    // - lower left (before rotation by PA) = (-y1, -z1)
+    let (y2, z2) = (
+      -y1 * sin_pa + z1 * cos_pa,
+      -y1 * cos_pa - z1 * sin_pa,
+    );
+    vertices.push(frame_rotation.to_global_coo(x1, y2, z2));
+    // - upper left (before rotation by PA) = (-y1, z1)
+    let (y2, z2) = (
+      -y1 * sin_pa - z1 * cos_pa,
+      -y1 * cos_pa + z1 * sin_pa,
+    );
+    vertices.push(frame_rotation.to_global_coo(x1, y2, z2));
+    vertices
   }
   
   /// Returns a hierarchical view of the list of cells overlapped by the given polygon.
@@ -2637,9 +2724,7 @@ impl Layer {
       }
     } else {
       let (n_vertices_in_poly, poly_vertices) = n_vertices_in_poly(depth, hash, poly);
-      if n_vertices_in_poly == 4 {
-        moc_builder.push(depth, hash, true);
-      } else if n_vertices_in_poly > 0 || has_intersection(poly, poly_vertices) {
+      if (n_vertices_in_poly > 0 &&  n_vertices_in_poly < 4) || has_intersection(poly, poly_vertices) {
         if depth == self.depth {
           moc_builder.push(depth, hash, false);
         } else {
@@ -2651,6 +2736,8 @@ impl Layer {
           self.polygon_coverage_recur(moc_builder, depth, hash | 2, poly, sorted_poly_vertices_hash);
           self.polygon_coverage_recur(moc_builder, depth, hash | 3, poly, sorted_poly_vertices_hash);
         }
+      } else if n_vertices_in_poly == 4 {
+        moc_builder.push(depth, hash, true);
       }
     }
   }
@@ -3904,6 +3991,31 @@ mod tests {
     println!(")");*/
   }
 
+  #[test]
+  fn testok_polygone_exact_fxp() {
+    let depth = 10;
+    let mut vertices = [ 
+      (000.9160848095,  01.0736381331),
+      (001.5961114529, -00.7062969568),
+      (359.6079412529,  01.1296198985),
+      (358.7836886856, -01.3663552354),
+      (001.8720201899,  00.4097184220),
+      (358.4159783831,  00.2376811155),
+      (359.8319515193, -01.2824324848),
+      (358.7798765255, 00.9896544935),
+      (001.5440798843, 00.8056786162)
+    ];
+    // 10/4806091 10/4806094
+    to_radians(&mut vertices);
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    for h in actual_res_exact.flat_iter() {
+      if h == 4806091 || h == 4806094 {
+        assert!(false, "Contains 10/4806091 or 10/4806094")
+      }
+    }
+  }
+  
   #[test]
   fn testok_polygone_exact_markus() {
     // In Aladin: 

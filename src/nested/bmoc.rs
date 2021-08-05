@@ -1007,7 +1007,8 @@ if (debug) System.out.println("Add3 " + hh);
     (depth, hash)
   }
   
-  /// Transform this (B)MOC as a simple (sorted) array of ranges.
+  /// Transform this (B)MOC as a simple (sorted) array of ranges
+  /// (WARNING: the ranges are at the MOC depth, not at the depth 29).
   /// During the operation, we loose the `flag` information attached to each BMOC cell.  
   pub fn to_ranges(&self) -> Box<[std::ops::Range<u64>]> {
     let mut ranges: Vec<std::ops::Range<u64>> = Vec::with_capacity(self.entries.len());
@@ -1016,15 +1017,13 @@ if (debug) System.out.println("Add3 " + hh);
     for cell in self.into_iter() {
       if cell.depth < self.depth_max {
         let range = to_range(cell.hash, self.depth_max - cell.depth);
-        if range.start == prev_max {
-          prev_max = range.end;
-        } else {
+        if range.start != prev_max {
           if prev_min != prev_max { // false only at first call, then always true
             ranges.push(prev_min..prev_max);
           }
           prev_min = range.start;
-          prev_max = range.end;
         }
+        prev_max = range.end;
       } else if cell.hash == prev_max {
         prev_max += 1;
       } else {
