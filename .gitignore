@@ -14,6 +14,7 @@ libpython/*.so
 # Ignore files
 Notes.txt
 GIT_NOTICE.txt
+RELEASE_NOTICE.md
 CRATESIO_NOTICE.txt
 Cargo.lock
 Makefile
