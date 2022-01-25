@@ -416,7 +416,7 @@ impl BMOC {
   /// We suppose here that the entries are already sorted (ASC natural ordering) with
   /// no duplicates and no small cells included into larger one's.
   pub(super) fn create_unsafe(depth_max: u8, entries: Box<[u64]>) -> BMOC {
-    BMOC { depth_max, entries}
+    BMOC { depth_max, entries }
   }
 
   pub(super) fn create_unsafe_copying(depth_max: u8, entries: &[u64]) -> BMOC {

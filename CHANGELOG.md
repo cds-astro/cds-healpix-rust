@@ -1,5 +1,20 @@
 # `cdshealpix` Change Log
 
+
+## 0.6.0
+
+Released 2022-XX-XX
+
+### Add
+
+* Method `cone_coverage_fullin`: returns HEALPix nested cells fully covered by the given cone
+* Method `cone_coverage_centers`: returns HEALPix nested cells having their center in the given cone
+* Method `ring_coverage_approx`: returns HEALPix nested cells overlapped by a ring
+* Method `ring_coverage_approx_custom`: returns HEALPix nested cells overlapped by a ring (with a custom delta depth for better precision)
+
+--------------------------------------------------------------------------------
+
+
 ## 0.5.5
 
 Released 2020-08-05

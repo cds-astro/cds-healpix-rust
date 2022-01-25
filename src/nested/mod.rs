@@ -341,6 +341,34 @@ pub fn cone_coverage_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, co
   get(depth).cone_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius)
 }
 
+/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.cone_coverage_centers) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn cone_coverage_centers(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  get(depth).cone_coverage_centers(cone_lon, cone_lat, cone_radius)
+}
+
+/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.cone_coverage_fullin) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn cone_coverage_fullin(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+  get(depth).cone_coverage_fullin(cone_lon, cone_lat, cone_radius)
+}
+
+/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn ring_coverage_approx(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius_int: f64, cone_radius_ext: f64) -> BMOC {
+  get(depth).ring_coverage_approx(cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
+}
+
+/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
+/// of the [Layer] of the given *depth*.
+#[inline]
+pub fn ring_coverage_approx_custom(depth: u8, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius_int: f64, cone_radius_ext: f64) -> BMOC {
+  get(depth).ring_coverage_approx_custom(delta_depth, cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
+}
+
 /// Conveniency function simply calling the [elliptical_cone_coverage](struct.Layer.html#method.elliptical_cone_coverage) method
 /// of the [Layer] of the given *depth*.
 #[inline]
@@ -387,7 +415,6 @@ pub fn custom_polygon_coverage(
 pub fn zone_coverage(depth: u8, lon_min: f64, lat_min: f64, lon_max: f64, lat_max: f64) -> BMOC {
   get(depth).zone_coverage(lon_min, lat_min, lon_max, lat_max)
 }
-
 
 pub mod bmoc;
 pub mod gpu;
@@ -2131,18 +2158,456 @@ impl Layer {
     }
   }
 
-  /// Returns a hierarchical view of the list of cells overlapped by the given cone.
-  /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
-  /// The algorithm is fast but approximated: it may return false positive, 
-  /// i.e. cells which are near from the cone but do not overlap it.
-  /// To control the approximation, see the method 
-  /// [cone_coverage_approx_custom](#method.cone_coverage_approx_custom)
-  /// 
+  /// Returns a hierarchical view of the list of cells having their center in the given cone.
+  /// All BMOC flags are set to 1.
+  ///
   /// # Input
   /// - `cone_lon` the longitude of the center of the cone, in radians
   /// - `cone_lat` the latitude of the center of the cone, in radians
   /// - `cone_radius` the radius of the cone, in radians
-  /// 
+  ///
+  /// # Output
+  /// - the list of cells having their center in the given cone, in a BMOC (hierarchical view with
+  ///   all flags set to 1).
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::nested::{get, Layer};
+  ///
+  /// let depth = 4_u8;
+  /// let nested = get(depth);
+  ///
+  /// let lon = 13.158329_f64.to_radians();
+  /// let lat = -72.80028_f64.to_radians();
+  /// let radius = 5.64323_f64.to_radians();
+  ///
+  /// let actual_res = nested.cone_coverage_centers(lon, lat, radius);
+  /// let expected_res: [u64; 7] = [2058, 2059, 2080, 2081, 2082, 2083, 2088];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///      assert_eq!(h1, *h2);
+  /// }
+  /// ```
+  pub fn cone_coverage_centers(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+    // Special case: the full sky is covered
+    if cone_radius >= PI {
+      return self.allsky_bmoc_builder().to_bmoc();
+    }
+    // Common variable
+    let cos_cone_lat = cone_lat.cos();
+    let shs_cone_radius = dbg!(to_squared_half_segment(cone_radius));
+    // Special case of very large radius: test the 12 base cells
+    if !has_best_starting_depth(cone_radius) {
+      let distances = largest_center_to_vertex_distances_with_radius(
+        0, self.depth + 1, cone_lon, cone_lat, cone_radius);
+      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
+      for h in 0..12 {
+        self.cone_coverage_centers_recur(
+          0, h, shs_cone_radius,
+          &shs_computer(cone_lon, cone_lat, cos_cone_lat),
+           &minmax_array, 0, &mut bmoc_builder
+        );
+      }
+      return bmoc_builder.to_bmoc_packing();
+    }
+    // Normal case
+    let depth_start = best_starting_depth(cone_radius);
+    if depth_start >= self.depth {
+      let neigs: Vec<u64> = self.neighbours(self.hash(cone_lon, cone_lat), true)
+        .values_vec().into_iter()
+        .filter(|neigh| {
+          let (lon, lat) = self.center(*neigh);
+          squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat) <= shs_cone_radius
+        }).collect();
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, neigs.len());
+      for neig in neigs {
+        bmoc_builder.push(self.depth,neig, true);
+      }
+      bmoc_builder.to_bmoc()
+    } else {
+        let distances = largest_center_to_vertex_distances_with_radius(
+          depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius);
+        let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
+        let root_layer = get(depth_start);
+        let root_center_hash = root_layer.hash(cone_lon, cone_lat);
+        let neigs = root_layer.neighbours(root_center_hash, true);
+        let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
+        for &root_hash in neigs.sorted_values().iter() {
+          self.cone_coverage_centers_recur(
+            depth_start, root_hash, shs_cone_radius,
+            &shs_computer(cone_lon, cone_lat, cos_cone_lat),
+            &minmax_array, 0, &mut bmoc_builder
+          );
+        }
+        bmoc_builder.to_bmoc_packing()
+    }
+  }
+
+  // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_fullin_recur
+  fn cone_coverage_centers_recur<F>(
+    &self,
+    depth: u8,             // cell depth
+    hash: u64,             // cell hash
+    shs_cone_radius: f64,  // squared_half_segment corresponding to the cone radius
+    shs_computer: &F,      // function to compute the squared_half_segment between a point and the cone center
+    shs_minmax: &[MinMax], // min and max shs at various delta depth
+    recur_depth: u8,       // conveniency delta depth index
+    bmoc_builder: &mut BMOCBuilderUnsafe  // builder in which cells are appended (flag always set to true!)
+  )
+    where F: Fn((f64, f64)) -> f64
+  {
+    let center = get(depth).center(hash);
+    let shs = shs_computer(center);
+    let MinMax{min, max} = shs_minmax[recur_depth as usize];
+    if shs <= min {
+      bmoc_builder.push(depth, hash, true);
+    } else if shs <= max {
+      if depth == self.depth {
+        if shs <= shs_cone_radius {
+          bmoc_builder.push(depth, hash, true);
+        } // else do nothing, recur end here
+      } else { // because 'min' is a lower bound (approx), we may split cells fully included in the MOC
+        // we could check the 4 corers here, we assume it is more costly than post-merging (to be verified!)
+        let hash = hash << 2;
+        let depth = depth + 1;
+        let recur_depth = recur_depth + 1;
+        self.cone_coverage_centers_recur(depth, hash, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_centers_recur(depth, hash | 1_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_centers_recur(depth, hash | 2_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_centers_recur(depth, hash | 3_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+      }
+    }
+  }
+
+  /// Returns a hierarchical view of the list of cells fully covered by the given cone.
+  /// All BMOC flags are set to 1.
+  ///
+  /// # Input
+  /// - `cone_lon` the longitude of the center of the cone, in radians
+  /// - `cone_lat` the latitude of the center of the cone, in radians
+  /// - `cone_radius` the radius of the cone, in radians
+  ///
+  /// # Output
+  /// - the list of cells fully covered by the given cone, in a BMOC (hierarchical view with
+  ///   all flags set to 1).
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::nested::{get, Layer};
+  ///
+  /// let depth = 4_u8;
+  /// let nested3 = get(depth);
+  ///
+  /// let lon = 13.158329_f64.to_radians();
+  /// let lat = -72.80028_f64.to_radians();
+  /// let radius = 5.64323_f64.to_radians();
+  ///
+  /// let actual_res = nested3.cone_coverage_fullin(lon, lat, radius);
+  /// let expected_res: [u64; 2] = [2081, 2082];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///      assert_eq!(h1, *h2);
+  /// }
+  /// ```
+  pub fn cone_coverage_fullin(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
+    // Special case: the full sky is covered
+    if cone_radius >= PI {
+      return self.allsky_bmoc_builder().to_bmoc();
+    }
+    // Common variable
+    let cos_cone_lat = cone_lat.cos();
+    let shs_cone_radius = to_squared_half_segment(cone_radius);
+    // Special case of very large radius: test the 12 base cells
+    if !has_best_starting_depth(cone_radius) {
+      let distances = largest_center_to_vertex_distances_with_radius(
+        0, self.depth + 1, cone_lon, cone_lat, cone_radius);
+      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
+      for h in 0..12 {
+        self.cone_coverage_fullin_recur(
+          0, h, shs_cone_radius,
+          &shs_computer(cone_lon, cone_lat, cos_cone_lat),
+          &minmax_array, 0, &mut bmoc_builder
+        );
+      }
+      return bmoc_builder.to_bmoc_packing();
+    }
+    // Normal case
+    let depth_start = best_starting_depth(cone_radius);
+    if depth_start >= self.depth {
+      let neigs: Vec<u64> = self.neighbours(self.hash(cone_lon, cone_lat), true)
+        .values_vec().into_iter()
+        .filter(|neigh| {
+          let mut fully_in = true;
+          for (lon, lat) in self.vertices(*neigh) {
+            fully_in &= squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat) <= shs_cone_radius;
+          }
+          fully_in
+        }).collect();
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, neigs.len());
+      for neig in neigs {
+        bmoc_builder.push(self.depth,neig, true);
+      }
+      bmoc_builder.to_bmoc()
+    } else {
+      let distances = largest_center_to_vertex_distances_with_radius(
+        depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius);
+      let minmax_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius, &distances);
+      let root_layer = get(depth_start);
+      let root_center_hash = root_layer.hash(cone_lon, cone_lat);
+      let neigs = root_layer.neighbours(root_center_hash, true);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius));
+      for &root_hash in neigs.sorted_values().iter() {
+        self.cone_coverage_fullin_recur(
+          depth_start, root_hash, shs_cone_radius,
+          &shs_computer(cone_lon, cone_lat, cos_cone_lat),
+          &minmax_array, 0, &mut bmoc_builder
+        );
+      }
+      bmoc_builder.to_bmoc_packing()
+    }
+  }
+
+  // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_centers_recur
+  fn cone_coverage_fullin_recur<F>(
+    &self,
+    depth: u8,             // cell depth
+    hash: u64,             // cell hash
+    shs_cone_radius: f64,  // squared_half_segment corresponding to the cone radius
+    shs_computer: &F,      // function to compute the squared_half_segment between a point and the cone center
+    shs_minmax: &[MinMax], // min and max shs at various delta depth
+    recur_depth: u8,       // conveniency delta depth index
+    bmoc_builder: &mut BMOCBuilderUnsafe  // builder in which cells are appended (flag always set to true!)
+  )
+    where F: Fn((f64, f64)) -> f64
+  {
+    let center = get(depth).center(hash);
+    let shs = shs_computer(center);
+    let MinMax{min, max} = shs_minmax[recur_depth as usize];
+    if shs <= min {
+      bmoc_builder.push(depth, hash, true);
+    } else if shs <= max {
+      if depth == self.depth {
+        // Center must be in the cone
+        if shs <= shs_cone_radius {
+          // And the 4 vertices must also be in the cone
+          for vertex_coo in self.vertices(hash) {
+            // If vertex out of the cone
+            if shs_computer(vertex_coo) > shs_cone_radius {
+              return; // do nothing, recur end here
+            }
+          }
+          bmoc_builder.push(depth, hash, true);
+        } // else do nothing, recur end here
+      } else { // because 'min' is a lower bound (approx), we may split cells fully included in the MOC
+        // we could check the 4 corers here, we assume it is more costly than post-merging (to be verified!)
+        let hash = hash << 2;
+        let depth = depth + 1;
+        let recur_depth = recur_depth + 1;
+        self.cone_coverage_fullin_recur(depth, hash, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_fullin_recur(depth, hash | 1_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_fullin_recur(depth, hash | 2_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+        self.cone_coverage_fullin_recur(depth, hash | 3_u64, shs_cone_radius, shs_computer, shs_minmax, recur_depth, bmoc_builder);
+      }
+    }
+  }
+
+  /// Returns a hierarchical view of the list of cells fully covered by the given cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
+  /// This is approximated: cell tagged as partially overlapped could be fully overlapped
+  /// (but we guarantee that cells tagged as fully overlapped are really fully overlapped).
+  ///
+  /// # Input
+  /// - `cone_lon` longitude of the center of the ring, in radians
+  /// - `cone_lat` latitude of the center of the ring, in radians
+  /// - `cone_radius_int` internal radius of the ring, in radians
+  /// - `cone_radius_ext` external radius of the ring, in radians
+  ///
+  /// # Output
+  /// - the list of cells overlapped by the given ring, in a BMOC (hierarchical view also telling
+  ///   if a cell is fully or partially covered).
+  ///
+  /// # Panics
+  /// * if `cone_radius_ext > PI`
+  /// * if `cone_radius_ext <= cone_radius_int`
+  ///
+  /// # Usecase
+  /// * annulus region provided by the delay between Fermi and INTEGRAL for GRBs
+  ///   (asked for Gravitational Waves applications).
+  ///
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::nested::{get, Layer};
+  ///
+  /// let depth = 4_u8;
+  /// let nested = get(depth);
+  ///
+  /// let lon = 13.158329_f64.to_radians();
+  /// let lat = -72.80028_f64.to_radians();
+  /// let radius_int = 5.64323_f64.to_radians();
+  /// let radius_ext = 10.0_f64.to_radians();
+  ///
+  /// let actual_res = nested.ring_coverage_approx(lon, lat, radius_int, radius_ext);
+  /// let expected_res: [u64; 40] = [2050, 2051, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061,
+  ///   2062, 2063, 2080, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2094, 2176,
+  ///   2177, 2178, 2817, 2820, 2821, 2822, 2823, 2832, 2833, 2834, 2835, 2836, 2837, 2838, 2880];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+  /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+  ///      assert_eq!(h1, *h2);
+  /// }
+  /// ```
+  pub fn ring_coverage_approx(&self, cone_lon: f64, cone_lat: f64, cone_radius_int: f64, cone_radius_ext: f64) -> BMOC {
+    self.ring_coverage_approx_internal(cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
+      .to_bmoc_packing()
+
+  }
+
+  pub fn ring_coverage_approx_custom(&self, delta_depth: u8, cone_lon: f64, cone_lat: f64, cone_radius_int: f64, cone_radius_ext: f64) -> BMOC {
+    if delta_depth == 0 {
+      self.ring_coverage_approx(cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
+    } else {
+      // TODO: change the algo not to put all cell in the MOC before pruning it:
+      // - make a second recur function returning the number of sub-cell overlapped by the cone
+      get(self.depth + delta_depth)
+        .ring_coverage_approx_internal(cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
+        .to_lower_depth_bmoc_packing(self.depth)
+    }
+  }
+
+  fn ring_coverage_approx_internal(&self, cone_lon: f64, cone_lat: f64, cone_radius_int: f64, cone_radius_ext: f64) -> BMOCBuilderUnsafe {
+    assert!(cone_radius_ext <= PI);
+    assert!(cone_radius_int < cone_radius_ext, "{} >= {} ", cone_radius_int, cone_radius_ext);
+    // Common variable
+    let cos_cone_lat = cone_lat.cos();
+    let shs_cone_radius_int = to_squared_half_segment(cone_radius_int);
+    // Special case of very large radius: test the 12 base cells
+    if !has_best_starting_depth(cone_radius_ext) {
+      let distances_int = largest_center_to_vertex_distances_with_radius(
+        0, self.depth + 1, cone_lon, cone_lat, cone_radius_int);
+      let minmax_int_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius_int, &distances_int);
+      let distances_ext = largest_center_to_vertex_distances_with_radius(
+        0, self.depth + 1, cone_lon, cone_lat, cone_radius_ext);
+      let minmax_ext_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius_ext, &distances_ext);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius_ext));
+      for h in 0..12 {
+        self.ring_coverage_approx_recur(
+          0, h, &shs_computer(cone_lon, cone_lat, cos_cone_lat), shs_cone_radius_int,
+          &minmax_int_array, &minmax_ext_array, 0, &mut bmoc_builder
+        );
+      }
+      return bmoc_builder;
+    }
+    // Normal case
+    let depth_start = best_starting_depth(cone_radius_ext);
+    if depth_start >= self.depth {
+      let shs_max = to_squared_half_segment(cone_radius_ext
+        + largest_center_to_vertex_distance_with_radius(depth_start, cone_lon, cone_lat, cone_radius_ext));
+      let root_layer = get(depth_start);
+      let mut neigs: Vec<u64> = root_layer.neighbours(root_layer.hash(cone_lon, cone_lat), true)
+        .values_vec().iter()
+        .filter(|neigh| {
+          for (lon, lat) in self.vertices(**neigh) {
+            if squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat) > shs_cone_radius_int {
+              return true
+            }
+          }
+          false
+        }) // remove cell fully in the internal raidus
+        .map(h_to_h_and_shs(cone_lon, cone_lat, cos_cone_lat, root_layer))
+        .filter(shs_lower_than(shs_max))
+        .map(self.h_and_shs_to_lower_h(depth_start))
+        .collect();
+      neigs.sort_unstable(); // sort the array (unstable is ok since we remove duplicates)
+      neigs.dedup();         // remove duplicates (vector must be sorted first)
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, neigs.len());
+      for neig in neigs {
+        bmoc_builder.push(self.depth,neig, false);
+      }
+      bmoc_builder
+    } else {
+      let distances_int = largest_center_to_vertex_distances_with_radius(
+        depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius_int);
+      let minmax_int_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius_int, &distances_int);
+      let distances_ext = largest_center_to_vertex_distances_with_radius(
+        depth_start, self.depth + 1, cone_lon, cone_lat, cone_radius_ext);
+      let minmax_ext_array: Box<[MinMax]> = to_shs_min_max_array(cone_radius_ext, &distances_ext);
+      let root_layer = get(depth_start);
+      let root_center_hash = root_layer.hash(cone_lon, cone_lat);
+      let neigs = root_layer.neighbours(root_center_hash, true);
+      let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, self.n_moc_cell_in_cone_upper_bound(cone_radius_ext));
+      for &root_hash in neigs.sorted_values().iter() {
+        self.ring_coverage_approx_recur(
+          depth_start, root_hash, &shs_computer(cone_lon, cone_lat, cos_cone_lat),shs_cone_radius_int,
+          &minmax_int_array, &minmax_ext_array, 0, &mut bmoc_builder
+        );
+      }
+      bmoc_builder
+    }
+  }
+
+  fn ring_coverage_approx_recur<F>(
+    &self,
+    depth: u8,                 // cell depth
+    hash: u64,                 // cell hash
+    shs_computer: &F,          // function to compute the squared_half_segment between a point and the cone center
+    shs_int_cone_radius: f64,  // squared_half_segment corresponding to the internal radius
+    // shs_ext_cone_radius: f64,  // squared_half_segment corresponding to the external radius
+    shs_int_minmax: &[MinMax], // min and max shs at various delta depth for the internal radius
+    shs_ext_minmax: &[MinMax], // min and max shs at various delta depth for the external radius
+    recur_depth: u8,           // conveniency delta depth index
+    bmoc_builder: &mut BMOCBuilderUnsafe  // builder in which cells are appended (flag always set to true!)
+  )
+    where F: Fn((f64, f64)) -> f64
+  {
+    let center = get(depth).center(hash);
+    let shs = shs_computer(center);
+    let MinMax{min: min_int, max: max_int} = shs_int_minmax[recur_depth as usize];
+    let MinMax{min: min_ext, max: max_ext} = shs_ext_minmax[recur_depth as usize];
+    // We recall here that 'min_ext' and 'min_int' are lower bounds
+    // while 'max_ext' and 'max_ext' are upper bounds
+    if min_ext >= shs && shs >= max_int { // is fully in the ring (for sure)
+      bmoc_builder.push(depth, hash, true);
+    } else if max_ext >= shs && shs >= min_int { // may overlap (or not) or be fully in the ring
+      if depth == self.depth {
+        // If all 4 vertices are in the small radius, reject the cell,
+        // i.e. if at least one vertex is not in the small radius, accept the cell
+        for vertex_coo in self.vertices(hash) {
+          if shs_computer(vertex_coo) > shs_int_cone_radius {
+            bmoc_builder.push(depth, hash, false); // could be true, but we use a fast test only
+            break;
+          }
+        }
+      } else { //because 'min_int' and 'max_ext' are approximations, we may split cells fully
+        // included in the MOC. We could check the 4 corers here, but we assume it is more costly
+        // than post-merging (to be verified!)
+        let hash = hash << 2;
+        let depth = depth + 1;
+        let recur_depth = recur_depth + 1;
+        self.ring_coverage_approx_recur(depth, hash, shs_computer, shs_int_cone_radius, shs_int_minmax, shs_ext_minmax, recur_depth, bmoc_builder);
+        self.ring_coverage_approx_recur(depth, hash | 1_u64, shs_computer, shs_int_cone_radius, shs_int_minmax, shs_ext_minmax, recur_depth, bmoc_builder);
+        self.ring_coverage_approx_recur(depth, hash | 2_u64, shs_computer, shs_int_cone_radius, shs_int_minmax, shs_ext_minmax, recur_depth, bmoc_builder);
+        self.ring_coverage_approx_recur(depth, hash | 3_u64, shs_computer, shs_int_cone_radius, shs_int_minmax, shs_ext_minmax, recur_depth, bmoc_builder);
+      }
+    }  // else fully out of the ring (for sure)
+  }
+
+  /// Returns a hierarchical view of the list of cells overlapped by the given cone.
+  /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
+  /// This is approximated: cell tagged as partially overlapped could be fully overlapped
+  /// (but we guarantee that cells tagged as fully overlapped are really fully overlapped).
+  ///
+  /// The algorithm is fast but approximated: it may return false positive,
+  /// i.e. cells which are near from the cone but do not overlap it.
+  /// To control the approximation, see the method
+  /// [cone_coverage_approx_custom](#method.cone_coverage_approx_custom)
+  ///
+  /// # Input
+  /// - `cone_lon` the longitude of the center of the cone, in radians
+  /// - `cone_lat` the latitude of the center of the cone, in radians
+  /// - `cone_radius` the radius of the cone, in radians
+  ///
   /// # Output
   /// - the list of cells overlapped by the given cone, in a BMOC (hierarchical view also telling
   ///   if a cell is fully or partially covered).
@@ -2157,9 +2622,10 @@ impl Layer {
   /// let lon = 13.158329_f64.to_radians();
   /// let lat = -72.80028_f64.to_radians();
   /// let radius = 5.64323_f64.to_radians();
-  /// 
+  ///
   /// let actual_res = nested3.cone_coverage_approx(lon, lat, radius);
   /// let expected_res: [u64; 10] = [512, 514, 515, 520, 521, 522, 544, 705, 708, 709];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///      assert_eq!(h1, *h2);
   /// }
@@ -2167,7 +2633,7 @@ impl Layer {
   pub fn cone_coverage_approx(&self, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> BMOC {
     self.cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius).to_bmoc_packing()
   }
-  
+
   /// Returns a hierarchical view of the list of cells overlapped by the given cone.
   /// The BMOC also tells if the cell if fully or partially overlapped by the cone.
   /// The algorithm is fast but approximated: it may return false positive, 
@@ -2202,6 +2668,7 @@ impl Layer {
   /// 
   /// let actual_res = nested3.cone_coverage_approx_custom(2, lon, lat, radius);
   /// let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///     assert_eq!(h1, *h2);
   /// }
@@ -2210,7 +2677,7 @@ impl Layer {
     if delta_depth == 0 {
       self.cone_coverage_approx(cone_lon, cone_lat, cone_radius)
     } else {
-      // TODO: change the algo not to put all cell in the MOC and pruning it
+      // TODO: change the algo not to put all cell in the MOC before pruning it
       get(self.depth + delta_depth)
         .cone_coverage_approx_internal(cone_lon, cone_lat, cone_radius)
         //.to_lower_depth_bmoc(self.depth)
@@ -2236,7 +2703,7 @@ impl Layer {
                                 &shs_computer(cone_lon, cone_lat, cos_cone_lat),
                                 &minmax_array, 0, &mut bmoc_builder);
       }
-      return bmoc_builder; //.to_bmoc_packing();
+      return bmoc_builder;
     }
     // Normal case
     let depth_start = best_starting_depth(cone_radius);
@@ -2274,18 +2741,28 @@ impl Layer {
       bmoc_builder
     }
   }
-  fn cone_coverage_approx_recur<F>(&self, depth: u8, hash: u64, shs_computer: &F, shs_minmax: &[MinMax],
-                           recur_depth: u8, bmoc_builder: &mut BMOCBuilderUnsafe)
-    where F: Fn((f64, f64)) -> f64  {
+
+  fn cone_coverage_approx_recur<F>(
+    &self,
+    depth: u8,             // cell depth
+    hash: u64,             // cell hash
+    shs_computer: &F,      // function to compute the squared_half_segment between a point and the cone center
+    shs_minmax: &[MinMax], // min and max shs at various delta depth
+    recur_depth: u8,       // conveniency delta depth index
+    bmoc_builder: &mut BMOCBuilderUnsafe // builder in which cells are appended
+  )
+    where F: Fn((f64, f64)) -> f64
+  {
     let center = get(depth).center(hash);
     let shs = shs_computer(center);
     let MinMax{min, max} = shs_minmax[recur_depth as usize];
-    if shs <= min {
+    if shs <= min { // Fast inclusion test
       bmoc_builder.push(depth, hash, true);
-    } else if shs <= max {
+    } else if shs <= max { // Fast rejection test
       if depth == self.depth {
         bmoc_builder.push(depth, hash, false);
-      } else {
+      } else { // because 'min' is a lower bound (approx), we may split cells fully included in the MOC
+        // we could check the 4 corers here, we assume it is more costly than post-merging (to be verified!)
         let hash = hash << 2;
         let depth = depth + 1;
         let recur_depth = recur_depth + 1;
@@ -2296,7 +2773,7 @@ impl Layer {
       }
     }
   }
-  
+
   /// cone_radius in radians
   /// TODO: find a better function!!
   #[inline]
@@ -2394,6 +2871,7 @@ impl Layer {
   /// 
   /// let actual_res = nested3.elliptical_cone_coverage(lon, lat, a, b, pa);
   /// let expected_res: [u64; 16] = [27, 30, 39, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 56, 57];
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///     assert_eq!(h1, *h2);
   /// }
@@ -2645,7 +3123,7 @@ impl Layer {
   /// 
   /// let actual_res = nested3.polygon_coverage(&[(0.0, 0.0), (0.0, 0.5), (0.25, 0.25)], false);
   /// let expected_res: [u64; 8] = [304, 305, 306, 307, 308, 310, 313, 316];
-  /// 
+  /// assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
   /// for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
   ///     assert_eq!(h1, *h2);
   /// }
@@ -3506,6 +3984,7 @@ mod tests {
   fn testok_cone_approx_custom_bmoc() {
     let actual_res = cone_coverage_approx_custom(3, 2,13.158329_f64.to_radians(), -72.80028_f64.to_radians(), 5.64323_f64.to_radians());
     let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
@@ -3517,12 +3996,84 @@ mod tests {
     let expected_res: [u64; 50] = [0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 49, 52, 53, 64, 65, 66, 67,
       68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 82, 88, 89, 90, 91, 94, 131, 134, 135, 136,
       137, 138, 139, 140, 141, 142, 143, 181, 183, 189];
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
   }
-  
-  
+
+  #[test]
+  fn testok_conecenter_bmoc_dbg() {
+    let depth = 4_u8;
+    let lon = 13.158329_f64;
+    let lat = -72.80028_f64;
+    let radius = 5.64323_f64;
+    let actual_res = cone_coverage_centers(depth, lon.to_radians(),lat.to_radians(), radius.to_radians());
+    let expected_res: [u64; 7] = [2058, 2059, 2080, 2081, 2082, 2083, 2088];
+    // println!("draw red circle({} {} {}deg)", lon, lat, radius);
+    // to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_conefullin_bmoc_dbg() {
+    let depth = 4_u8;
+    let lon = 13.158329_f64;
+    let lat = -72.80028_f64;
+    let radius = 5.64323_f64;
+    let actual_res = cone_coverage_fullin(depth, lon.to_radians(),lat.to_radians(), radius.to_radians());
+    let expected_res: [u64; 2] = [2081, 2082];
+    println!("draw red circle({} {} {}deg)", lon, lat, radius);
+    to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_ring_bmoc_dbg() {
+    let depth = 4_u8;
+    let lon = 13.158329_f64;
+    let lat = -72.80028_f64;
+    let radius_int = 5.64323_f64;
+    let radius_ext = 10.0_f64;
+    let actual_res = ring_coverage_approx(depth, lon.to_radians(),lat.to_radians(), radius_int.to_radians(), radius_ext.to_radians());
+    let expected_res: [u64; 40] = [2050, 2051, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062,
+      2063, 2080, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2094, 2176, 2177,
+      2178, 2817, 2820, 2821, 2822, 2823, 2832, 2833, 2834, 2835, 2836, 2837, 2838, 2880];
+    // println!("draw red circle({} {} {}deg)", lon, lat, radius_int);
+    // println!("draw red circle({} {} {}deg)", lon, lat, radius_ext);
+    // to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_ring_bmoc() {
+    let depth = 5_u8;
+    let lon = 13.158329_f64;
+    let lat = -72.80028_f64;
+    let radius_int = 5.64323_f64;
+    let radius_ext = 10.0_f64;
+    let actual_res = ring_coverage_approx_custom(depth, 2, lon.to_radians(),lat.to_radians(), radius_int.to_radians(), radius_ext.to_radians());
+    let expected_res: [u64; 40] = [2050, 2051, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062,
+      2063, 2080, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2094, 2176, 2177,
+      2178, 2817, 2820, 2821, 2822, 2823, 2832, 2833, 2834, 2835, 2836, 2837, 2838, 2880];
+    // println!("draw red circle({} {} {}deg)", lon, lat, radius_int);
+    // println!("draw red circle({} {} {}deg)", lon, lat, radius_ext);
+    to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
   #[test]
   fn testok_elliptical_cone() {
     let lon = 36.80105218_f64.to_radians();
