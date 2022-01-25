@@ -4062,12 +4062,19 @@ mod tests {
     let radius_int = 5.64323_f64;
     let radius_ext = 10.0_f64;
     let actual_res = ring_coverage_approx_custom(depth, 2, lon.to_radians(),lat.to_radians(), radius_int.to_radians(), radius_ext.to_radians());
-    let expected_res: [u64; 40] = [2050, 2051, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062,
-      2063, 2080, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2094, 2176, 2177,
-      2178, 2817, 2820, 2821, 2822, 2823, 2832, 2833, 2834, 2835, 2836, 2837, 2838, 2880];
+    let expected_res: [u64; 99] = [8202, 8203, 8206, 8207, 8218, 8224, 8225, 8226, 8227, 8228, 8229,
+      8230, 8231, 8232, 8233, 8234, 8236, 8237, 8239, 8240, 8241, 8242, 8243, 8246, 8248, 8249,
+      8250, 8251, 8252, 8254, 8320, 8333, 8335, 8336, 8337, 8338, 8339, 8340, 8342, 8344, 8345,
+      8346, 8347, 8348, 8355, 8356, 8357, 8358, 8359, 8360, 8361, 8362, 8363, 8364, 8365, 8366,
+      8367, 8368, 8369, 8370, 8376, 8704, 8705, 8706, 8707, 8708, 11280, 11281, 11283, 11284,
+      11285, 11286, 11287, 11292, 11293, 11328, 11329, 11330, 11331, 11332, 11333, 11334, 11335,
+      11336, 11337, 11340, 11341, 11344, 11345, 11346, 11347, 11348, 11349, 11350, 11351, 11352,
+      11353, 11520, 11521
+    ];
+    // For visual verification (cargo test testok_ring_bmoc -- --nocapture)
     // println!("draw red circle({} {} {}deg)", lon, lat, radius_int);
     // println!("draw red circle({} {} {}deg)", lon, lat, radius_ext);
-    to_aladin_moc(&actual_res);
+    // to_aladin_moc(&actual_res);
     assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
