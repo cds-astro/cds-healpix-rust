@@ -3,7 +3,7 @@
 
 ## 0.6.0
 
-Released 2022-XX-XX
+Released 2022-01-25
 
 ### Add
 
