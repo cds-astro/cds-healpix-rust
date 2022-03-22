@@ -5,7 +5,7 @@
 
 **[CDS](http://cdsweb.u-strasbg.fr) implementation of the HEALPix tesselation in Rust and modules to generate libraries in WebAssembly, Python, ...**
 
-[![](https://meritbadge.herokuapp.com/cdshealpix)](https://crates.io/crates/cdshealpix)
+[![](https://img.shields.io/crates/v/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
 [![](https://img.shields.io/crates/d/cdshealpix.svg)](https://crates.io/crates/cdshealpix)
 [![API Documentation on docs.rs](https://docs.rs/cdshealpix/badge.svg)](https://docs.rs/cdshealpix/)
 ![Rust](https://github.com/cds-astro/cds-healpix-rust/workflows/Rust/badge.svg)
@@ -17,17 +17,26 @@ About
 This library is an implementation in Rust of the HEALPix tesselation.
 This implementation has been made by the Strasbourg astronomical Data Centre (*Centre de Données astronomique de Strasbourg*, [CDS](http://cdsweb.u-strasbg.fr)).
 
+It is used in:
+ * [Aladin Lite V3](https://github.com/cds-astro/aladin-lite/tree/webgl1)
+ * [The CDS MOC library in Rust](https://github.com/cds-astro/cds-moc-rust) used in:
+     + [MOCPy](https://github.com/cds-astro/mocpy), a Python wrapper to manipulate MOCs;
+     + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool for linux and MacOS;
+     + [MOCWasm](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/wasm), a WASM library to manipulate MOCs from web browsers.
+ * CDS internal developments
+
+
 Initially, it is a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java),
 but improvement have been added while porting the code.
 
-For informations on HEALPix in general, see:
+For information on HEALPix in general, see:
  * The [official web site](https://healpix.jpl.nasa.gov/)
  * The [Wikipedia page](https://en.wikipedia.org/wiki/HEALPix)
  * The two main reference papers: [Gorski (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G) and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
 
 Official implementations, are available [here](https://healpix.sourceforge.io/). It contains GPL v2 codes in Fortran, C++, Java, IDL, Python, ...
 
-Other independant HEALPix implementations:
+Other independent HEALPix implementations:
  * [Astropy-healpix](https://github.com/astropy/astropy-healpix) python wrapper using a C code (C code by Dustin Lang, python wrapper by Thomas Robitaille and others)
  * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
  * [Julia](https://github.com/ziotom78/Healpix.jl) implementation by Maurizio Tomasi
