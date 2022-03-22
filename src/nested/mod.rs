@@ -3025,13 +3025,13 @@ impl Layer {
   // * if `lon` not in `[0, 2\pi[`
   // * if `lat` not in `[-\pi/2, \pi/2]`
   // * if `a` not in `]0, \pi/2]` or \`]0, \pi/2]`
-  // * if `b` not in `]0, a[`
+  // * if `b` not in `]0, a]`
   // * if `pa` not in `[0, \pi[`
   fn box2polygon(lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> Vec<(f64, f64)> {
     assert!(0.0 <= lon && lon < TWICE_PI, "Expected: lon in [0, 2pi[. Actual: {}", lon);
     assert!(-HALF_PI <= lat && lat <= HALF_PI, "Expected: lat in [-pi/2, pi/2]. Actual: {}", lat);
     assert!(0.0 < a && a <= HALF_PI, "Expected: a in ]0, pi/2]. Actual: {}", a);
-    assert!(0.0 < b && b < a, "Expected: b in ]0, a]. Actual: {}", b);
+    assert!(0.0 < b && b <= a, "Expected: b in ]0, a]. Actual: {}", b);
     assert!(0.0 <= pa && pa < PI, "Expected: pa in [0, pi[. Actual: {}", pa);
     // Compute spherical coordinates
     let frame_rotation = RefToLocalRotMatrix::from_center(lon, lat);

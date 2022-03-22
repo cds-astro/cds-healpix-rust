@@ -1,5 +1,15 @@
 # `cdshealpix` Change Log
 
+## 0.6.1
+
+Released 2022-03-22
+
+### Bug correction
+
+* Method `box_coverage`: relax a too restrictive constraint preventing a == b
+
+--------------------------------------------------------------------------------
+
 
 ## 0.6.0
 
