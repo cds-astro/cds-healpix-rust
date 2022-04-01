@@ -1,5 +1,19 @@
 # `cdshealpix` Change Log
 
+## 0.6.2
+
+Released 2022-04-01
+
+### Bug correction
+
+* In the computation of constants in `ConstantsC2V`, 
+  impacting the `largest_center_to_vertex_distance` family methods: 
+  wrong contant 4/pi instead of pi/4 leading to overestimating the 
+  `largest_center_to_vertex_distance`
+
+--------------------------------------------------------------------------------
+
+
 ## 0.6.1
 
 Released 2022-03-22

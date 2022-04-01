@@ -21,7 +21,7 @@ It is used in:
  * [Aladin Lite V3](https://github.com/cds-astro/aladin-lite/tree/webgl1)
  * [The CDS MOC library in Rust](https://github.com/cds-astro/cds-moc-rust) used in:
      + [MOCPy](https://github.com/cds-astro/mocpy), a Python wrapper to manipulate MOCs;
-     + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool for linux and MacOS;
+     + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool for linux, MacOS and Windows;
      + [MOCWasm](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/wasm), a WASM library to manipulate MOCs from web browsers.
  * CDS internal developments
 

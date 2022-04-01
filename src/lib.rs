@@ -29,7 +29,7 @@ const HALF: f64 = 0.5_f64;
 /// Upper limit on sqrt(3(1-|z|)) to consider that we are not near from the poles
 const EPS_POLE: f64 = 1e-13_f64;
 
-/// Constant = pi/2.
+/// Constant = 2 * pi.
 /// 
 /// ```rust
 /// use cdshealpix::{TWICE_PI};
@@ -38,7 +38,7 @@ const EPS_POLE: f64 = 1e-13_f64;
 /// ```
 pub const TWICE_PI: f64 = 2.0 * PI;
 
-/// Constant = 4/pi.
+/// Constant = 4 / pi.
 /// 
 /// ```rust
 /// use cdshealpix::{FOUR_OVER_PI};
@@ -46,6 +46,15 @@ pub const TWICE_PI: f64 = 2.0 * PI;
 /// assert_eq!(4f64 / PI, FOUR_OVER_PI);
 /// ```
 pub const FOUR_OVER_PI: f64 = 4_f64 / PI;
+
+/// Constant = pi / 4.
+///
+/// ```rust
+/// use cdshealpix::{PI_OVER_FOUR};
+/// use std::f64::consts::PI;
+/// assert_eq!(PI / 4f64, PI_OVER_FOUR);
+/// ```
+pub const PI_OVER_FOUR: f64 = 0.25_f64 * PI;
 
 /// Constant = 29, i.e. the largest possible depth we can store on a signed positive long
 /// (4 bits for base cells + 2 bits per depth + 2 remaining bits (1 use in the unique notation).
@@ -135,8 +144,6 @@ static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] =  [
     1.3238871881399636E-9  // depth = 29
 ];
 
-// Idee pour cone: surface du cone => ncells !! (facteur variant 8, 4, 2, ... 1.2 
-
 /// Latitude, in the equatorial region, for which the distance from the cell center to its four
 /// vertices is almost equal on the sky (i.e. the shape of the cell on the sky is close to a square).
 /// The larger the depth, the better the approximation (based on differential calculus).
@@ -179,29 +186,6 @@ static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
   }
 }
 static CSTS_C2V: [ConstantsC2V; 30] = unsafe { make_array!(30, |depth| new_cst_c2v(depth)) };
-*/
-
-/*
-/// Defines a simple range `from` a given index (inclusive) `to` a given index (exclusive) 
-pub struct Range {
-  pub from: u64,
-  pub to: u64,
-}
-
-impl Range {
-  
-  pub fn new(from: u64, to: u64) -> Range {
-    if from >= to {
-      panic!("Illegal argument: from '{}' must be lower than to '{}'.", from, to);
-    }
-    new_unsafe(from, to)
-  }
-  
-  fn new_unsafe(from: u64, to: u64) -> Range {
-    Range{from, to}
-  }
-  
-}
 */
 
 /// See the get_or_create function, each object is used for the lazy instantiation of the 
@@ -248,29 +232,32 @@ struct ConstantsC2V {
 }
 
 impl ConstantsC2V {
- fn new(depth: u8) -> ConstantsC2V {
+  fn new(depth: u8) -> ConstantsC2V {
     let nside = nside_unsafe(depth);
     let dist_cw = 1.0_f64 / (nside as f64); // Center to West (or East) vertex distance on the transition latitude
     let one_min_dist_cw = 1.0_f64 - dist_cw;
     // NPC, see comment of function largest_c2v_dist_in_npc()
     let lat_north = f64::asin(1_f64 - (pow2(one_min_dist_cw) / 3_f64));
-    let mut d_min = lat_north - TRANSITION_LATITUDE;
-    let mut d_max: f64 = sphe_dist(
+    let d_min_npc = lat_north - TRANSITION_LATITUDE;
+    let d_max_npc: f64 = sphe_dist(
       squared_half_segment(
-        FRAC_PI_4 * dist_cw, d_min,
+        FRAC_PI_4 * dist_cw, d_min_npc,
         lat_north.cos(),  TRANSITION_LATITUDE.cos()));
+    debug_assert!(d_min_npc < d_max_npc);
     // - linear approx
-    let slope_npc: f64 = (d_max - d_min) / (FRAC_PI_4 * one_min_dist_cw); // a = (yB - yA) / (xB - xA); with xA = 0
-    let intercept_npc: f64 = d_min;                                          // b = yA - a * xA          ; with xA = 0
+    let slope_npc: f64 = (d_max_npc - d_min_npc) / (FRAC_PI_4 * one_min_dist_cw); // a = (yB - yA) / (xB - xA); with xA = 0
+    let intercept_npc: f64 = d_min_npc;                                           // b = yA - a * xA          ; with xA = 0
     // EQR TOP, see comment of function largest_c2v_dist_in_eqr_top()
-    d_min =  FOUR_OVER_PI * dist_cw * COS_LAT_OF_SQUARE_CELL;
-    d_max = TRANSITION_LATITUDE - f64::asin(one_min_dist_cw * TRANSITION_Z);
-    let slope_eqr: f64 = (d_max - d_min) / (TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL); // a = (yB - yA) / (xB - xA) 
-    let intercept_eqr: f64 = d_min - slope_eqr * LAT_OF_SQUARE_CELL;                   // b = yA - a * xA 
+    let d_min_eqr_top = PI_OVER_FOUR * dist_cw * COS_LAT_OF_SQUARE_CELL; // pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
+    let d_max_eqr_top = TRANSITION_LATITUDE - f64::asin(one_min_dist_cw * TRANSITION_Z);
+    //debug_assert!((d_min_npc - d_max_eqr_top).abs() < 1e-5, "depth: {}, 1: {}; 2: {}", depth, d_min_npc.to_degrees() * 3600.0, d_max_eqr_top.to_degrees() * 3600.0);
+    debug_assert!(d_min_eqr_top < d_max_eqr_top);
+    let slope_eqr: f64 = (d_max_eqr_top - d_min_eqr_top) / (TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL); // a = (yB - yA) / (xB - xA)
+    let intercept_eqr: f64 = d_min_eqr_top - slope_eqr * LAT_OF_SQUARE_CELL;                           // b = yA - a * xA
     // EQR BOTTOM,  see comment of function largest_c2v_dist_in_eqr_bottom()
-    d_max = FOUR_OVER_PI * dist_cw;
+    let d_max = PI_OVER_FOUR * dist_cw;
     let coeff_cst_eqr: f64 = d_max;
-    let coeff_x2_eqr: f64 = (d_min - d_max) / pow2(LAT_OF_SQUARE_CELL);
+    let coeff_x2_eqr: f64 = (d_min_eqr_top - d_max) / pow2(LAT_OF_SQUARE_CELL);
     // Struct creation
     ConstantsC2V {
       slope_npc,
@@ -311,28 +298,15 @@ fn squared_half_segment(dlon: f64, dlat: f64, cos_lat1: f64, cos_lat2: f64) -> f
   dlat.half().sin().pow2() + cos_lat1 * cos_lat2 * dlon.half().sin().pow2()
 }
 
-
 #[inline]
 fn to_squared_half_segment(spherical_distance: f64) -> f64 {
   spherical_distance.half().sin().pow2()
 }
 
-/*#[inline]
-fn to_squared_half_segments(spherical_distances: &mut [f64]) {
-  spherical_distances.iter_mut().for_each(|d| *d = to_squared_half_segment(*d));
-}*/
-
 #[inline]
 fn pow2(x: f64) -> f64 {
   x * x
 }
-
-/*impl f64 {
-  #[inline]
-  pub fn pow2(self) -> f64 {
-    self * self
-  }
-}*/
 
 /// Simple trait used to implements `pow2`, `twice` and `half` on f64.
 pub trait Customf64 {
@@ -482,7 +456,7 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
   vec.into_boxed_slice()
 }
 
-/// Returns an upper limit on distance between the center of a cell and its furthest vertex.  
+/// Returns an upper limit on distances between the center of a cell and its furthest vertex.  
 /// We assumes that the cell center is located in the North polar cap region (OR IS ON THE
 /// TRANSITION LATITUDE).  
 /// We use a linear upper limit based on the longitude.
@@ -518,8 +492,8 @@ fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2
 /// above the latitude at which cells are squares.
 /// We use a linear upper limit based on the latitude.
 /// - At the latitude in which cells are squares (lat = LAT_OF_SQUARE_CELL), we note CE the 
-///   Center-to-East distance: CE (=CW) =  4/pi * 1/nside * cos(LAT_OF_SQUARE_CELL)
-/// > dMin = 4/pi * 1/nside * cos(LAT_OF_SQUARE_CELL)
+///   Center-to-East distance: CE (=CW) =  pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
+/// > dMin = pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
 /// - At the latitude under the transition latitude, we note CN the distance with N on the 
 ///   transition latitude and C at latitude: y_c = 1 - 1/nside => lat_c = arcsin(y_c * 2/3)
 /// > dMax = TRANSITION_LATITUDE - arcsin(y_c * 2/3)
@@ -543,7 +517,7 @@ fn largest_c2v_dist_in_eqr_top_with_radius(lat_abs: f64, radius: f64, csts: &Con
 /// bellow the latitude at which cells are squares.
 /// We use a parabola approximation upper limit based on the latitude.
 /// - At lat = 0, d_max = pi/4 * 1/nside
-/// - At lat = LAT_OF_SQUARE_CELL, d_min = 4/pi * 1/nside * cos(LAT_OF_SQUARE_CELL)
+/// - At lat = LAT_OF_SQUARE_CELL, d_min = pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
 /// - Parabola approx: a * lat^2 + b = dist
 ///   - At lat = 0, b = d_max
 ///   - At lat = LAT_OF_SQUARE_CELL, a * LAT_OF_SQUARE_CELL^2 + d_max = d_min
@@ -1748,6 +1722,36 @@ mod tests {
     let shs = to_squared_half_segment(ang_dist);
     let ang_dist_2 = sphe_dist(shs);
     assert!((ang_dist - ang_dist_2).abs() < 1e-4);
+  }
+
+  #[test]
+  fn testok_largest_center_to_vertex_distance() {
+    let depth = 8;
+    let d1_mas = largest_center_to_vertex_distance(depth, 0.0, 0.0)
+      .to_degrees() * 3600.0;
+    let d2_mas = largest_center_to_vertex_distance(depth, 0.0, LAT_OF_SQUARE_CELL)
+      .to_degrees() * 3600.0;
+    let d3_mas = largest_center_to_vertex_distance(depth, 0.0, TRANSITION_LATITUDE)
+      .to_degrees() * 3600.0;
+    let d4_mas = largest_center_to_vertex_distance(depth, PI / 4.0, TRANSITION_LATITUDE)
+      .to_degrees() * 3600.0;
+    let d5_mas = largest_center_to_vertex_distance(depth, 0.0, 0.5 * LAT_OF_SQUARE_CELL)
+      .to_degrees() * 3600.0;
+    let d6_mas = largest_center_to_vertex_distance(depth, 0.0, 0.5 * TRANSITION_LATITUDE)
+      .to_degrees() * 3600.0;
+    println!("d1: {}", d1_mas); // center parabol
+    println!("d2: {}", d2_mas); // smallest value
+    println!("d3: {}", d3_mas); // largest in PC (polar caps)
+    println!("d4: {}", d4_mas); // smallest in PC = larges in EQR
+    println!("d5: {} ~620?", d5_mas); // milieu parabol
+    println!("d6: {} ~660?", d6_mas); // milieu droite eqr
+
+    assert!((d1_mas - 632.8125000000000).abs() < 1e-12);
+    assert!((d2_mas - 583.0213772328785).abs() < 1e-12);
+    assert!((d3_mas - 861.2025252838432).abs() < 1e-12);
+    assert!((d4_mas - 720.3786531802374).abs() < 1e-12);
+    assert!((d5_mas - 620.3647193082197).abs() < 1e-12);
+    assert!((d6_mas - 591.2475292479544).abs() < 1e-12);
   }
   
 }
