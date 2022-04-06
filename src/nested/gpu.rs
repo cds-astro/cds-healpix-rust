@@ -8,6 +8,52 @@ use crate::nside;
 pub const TRANSITION_Z: f32 = 2.0 / 3.0;
 pub const TRANSITION_Z_INV: f32 = 3.0 / 2.0;
 
+/// Returns the projection, in the 2D Euclidean plane, of the given position on the unit sphere. 
+/// # Inputs:
+/// - `x`: in `[-1.0, 1.0]`
+/// - `y`: in `[-1.0, 1.0]`
+/// - `z`: in `[-1.0, 1.0]`
+/// # Output
+/// - `X`: coordinate along the X-axis in the projection plane, in `[-4, 4]`
+/// - `Y`: coordinate along the Y-axis in the projection plane, in `[-2, 2]`
+/// # Remark
+/// For the HPX projection as defined in Calabreta, use:
+///   - `X *= PI / 4` 
+///   - `Y *= PI / 4`
+/// # WARNING
+/// - The function assumes, without checking, that the input vector is a unit vector 
+///   (hence `x^2 + y^2 + z^2 = 1`) !!
+pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
+  assert!(-1.0 <= x && x <= 1.0);
+  assert!(-1.0 <= y && y <= 1.0);
+  assert!(-1.0 <= z && z <= 1.0);
+  debug_assert!(1.0 - (x *  x + y * y + z * z) < 1e-5, "{}", 1.0 - (x *  x + y * y + z * z));
+  if z > TRANSITION_Z {
+    // North polar cap, Collignon projection.
+    let (x_pm1, offset) = xpm1_and_offset(x, y);
+    let sqrt_3_one_min_z = (3.0 * one_minus_z_pos(x, y, z)).sqrt();
+    (
+      (x_pm1 * sqrt_3_one_min_z) + offset as f32, 
+      2.0 - sqrt_3_one_min_z
+    )
+  } else if z < -TRANSITION_Z {
+    // South polar cap, Collignon projection
+    let (x_pm1, offset) = xpm1_and_offset(x, y);
+    let sqrt_3_one_min_z = (3.0 * one_minus_z_neg(x, y, z)).sqrt();
+    (
+      (x_pm1 * sqrt_3_one_min_z) + offset as f32,
+      -2.0 + sqrt_3_one_min_z
+    )
+  } else {
+    // Equatorial region, Cylindrical equal area projection
+    (
+      y.atan2(x) * 4.0 / PI, 
+      z * TRANSITION_Z_INV
+    )
+  }
+}
+
+
 /// Returns the cell number (hash value) associated with the given position on the unit sphere, 
 /// together with the offset `(dx, dy)` on the Euclidean plane of the projected position with
 /// respect to the origin of the cell (South vertex).
@@ -33,7 +79,7 @@ pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
   assert!(-1.0 <= y && y <= 1.0);
   assert!(-1.0 <= z && z <= 1.0);
   // println!("norm: {}", (x *  x + y * y + z * z));
-  debug_assert!(1.0 - (x *  x + y * y + z * z) < 1e-5);
+  debug_assert!(1.0 - (x *  x + y * y + z * z) < 1e-5, "{}", 1.0 - (x *  x + y * y + z * z));
   // A f32 mantissa contains 23 bits.
   // - it basically means that when storing (x, y) coordinates,
   //   we can go as deep as depth 24 (or maybe 25)
@@ -105,6 +151,23 @@ fn xpm1_and_q(x: f32, y: f32) -> (f32, u8) {
     (1.0 - x02, q)
   } else {
     (x02 - 1.0, q)
+  }
+}
+
+fn xpm1_and_offset(x: f32, y: f32) -> (f32, i8) {
+  let x_neg = (x < 0.0) as i8;           debug_assert!(x_neg == 0 || x_neg == 1);
+  let y_neg = (y < 0.0) as i8;           debug_assert!(y_neg == 0 || y_neg == 1);
+  // x>0, y>0 => [    0,  pi/2[ => offset =  1
+  // x<0, y>0 => [pi/2 ,    pi[ => offset =  3
+  // x<0, y<0 => [3pi/2,    pi[ => offset = -3
+  // x>0, y<0 => [pi   , 3pi/2[ => offset = -1
+  let offset = ((-y_neg) << 2) + 1 + ((x_neg ^ y_neg) << 1);
+  let lon = y.abs().atan2(x.abs());          debug_assert!(0.0 <= lon && lon <= PI / 2.0);
+  let x02 = lon * 4.0 / PI;                  debug_assert!(0.0 <= x02 && x02 <= 2.0);
+  if x_neg != y_neg { // Could be replaced by a sign copy from (x_neg ^ y_neg) << 32
+    (1.0 - x02, offset)
+  } else {
+    (x02 - 1.0, offset)
   }
 }
 
@@ -275,5 +338,22 @@ mod tests {
       }
     }
   }
+
+  /* No a real test, used to check the projection code visually
+  #[test]
+  fn testok_proj_gpu() {
+    println!("ra,dec,x,y,color");
+    for ra in 0..=360 {
+      for dec in 0..=180 {
+        let ra = (ra as f32).to_radians();
+        let dec = ((dec - 90) as f32).to_radians();
+        let x = ra.cos() * dec.cos();
+        let y = ra.sin() * dec.cos();
+        let z = dec.sin();
+        let (x_proj, y_proj) = proj_gpu(x, y, z);
+        println!("{},{},{},{},{}", ra, dec, x_proj, y_proj, ra + (dec + 2.0) * 2.0 * PI);
+      }
+    }
+  }*/
   
 }
