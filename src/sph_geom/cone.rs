@@ -26,6 +26,7 @@ impl Cone {
   /// We use the algorithm of 
   /// Barequet & Elber (2005) "Optimal bounding cones of vectors in three dimensions",
   /// [see here](https://www.sciencedirect.com/science/article/pii/S0020019004002911?via%3Dihub).
+  #[allow(dead_code)]
   pub fn mec<T: Vec3 + UnitVec3>(points: &[T]) -> Option<Cone> {
     match points.len() {
       0 | 1 => None,
@@ -74,7 +75,7 @@ impl Cone {
 
 /// Returns the minimum enclosing cone, i.e. the cone containig the two given points and having
 /// the smallest possible radius. In this trivial case, the diameter of the cone is the arc (ab).
-#[inline]
+#[allow(dead_code)]
 fn mec_2<T: Vec3 + UnitVec3>(a: &T, b: &T) -> Cone {
   let radius = 0.5 * a.ang_dist(b);
   let center = a.arc_center(b);
@@ -104,6 +105,7 @@ pub(crate) fn mec_3<T: Vec3 + UnitVec3>(a: &T, b: &T, c: &T) -> Cone {
 
 
 // We remove the dependance to rand
+#[allow(dead_code)]
 fn mec_n<T: Vec3 + UnitVec3>(points: &[T]) -> Option<Cone> {
   // let mut rng = thread_rng();
   let points: Vec<&T> = points.iter().map(|v| v).collect();

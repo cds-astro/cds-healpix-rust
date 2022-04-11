@@ -2119,11 +2119,11 @@ impl Layer {
     bmoc_builder: &mut BMOCBuilderUnsafe)
   {
     let shift = (self.depth - depth) << 1; // <=> shift = 2 * (self.depth - depth)
-    let [(lS, bS), (lE, bE), (lN, bN), (lW, bW)] = vertices(depth, hash);
-    let n_in = zone.contains(lS, bS) as u8
-      + zone.contains(lE, bE) as u8
-      + zone.contains(lN, bN) as u8
-      + zone.contains(lW, bW) as u8;
+    let [(l_s, b_s), (l_e, b_e), (l_n, b_n), (l_w, b_w)] = vertices(depth, hash);
+    let n_in = zone.contains(l_s, b_s) as u8
+      + zone.contains(l_e, b_e) as u8
+      + zone.contains(l_n, b_n) as u8
+      + zone.contains(l_w, b_w) as u8;
     // A cell may intersect a zone without having a vertex inside:
     // * either a vertex of the zone is in the cell: we can easily test this
     // * or no vertex of the zone is int the cell: we must detect either
@@ -2139,10 +2139,10 @@ impl Layer {
       || zone_vertices_hashs[1] >> shift == hash
       || zone_vertices_hashs[2] >> shift == hash
       || zone_vertices_hashs[3] >> shift == hash
-      || zone.crossed_vertically(lN, bN, bS) // we may have false positive in the polar caps around n*PI/2
-      || zone.crossed_vertically(lS, bN, bS) // we may have false positive in the polar caps around n*PI/2
-      || zone.crossed_horizontally(lW, lE, bW) // we may have false positive in the polar caps around n*PI/2
-      || zone.crossed_horizontally(lW, lE, bE) // we may have false positive in the polar caps around n*PI/2
+      || zone.crossed_vertically(l_n, b_n, b_s) // we may have false positive in the polar caps around n*PI/2
+      || zone.crossed_vertically(l_s, b_n, b_s) // we may have false positive in the polar caps around n*PI/2
+      || zone.crossed_horizontally(l_w, l_e, b_w) // we may have false positive in the polar caps around n*PI/2
+      || zone.crossed_horizontally(l_w, l_e, b_e) // we may have false positive in the polar caps around n*PI/2
       // We should probably consider the zone in the projection plane, to be done later if necesary
     {
       if depth == self.depth {

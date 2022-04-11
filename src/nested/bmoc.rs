@@ -6,6 +6,7 @@
 
 use base64::{encode, decode, DecodeError};
 
+use std::vec::IntoIter;
 use std::slice::Iter;
 use std::cmp::{max, Ordering};
 // use std::opt::Range;
@@ -967,7 +968,13 @@ if (debug) System.out.println("Add3 " + hh);
   /// Returns an iterator iterating over all cells at the BMOC maximum depth
   /// (the iteration is made in the natural cell order).
   pub fn flat_iter(&self) -> BMOCFlatIter {
-    BMOCFlatIter::new(self.depth_max, self.deep_size(),self.entries.iter())
+    BMOCFlatIter::new(self.depth_max, self.deep_size(), self.entries.iter())
+  }
+
+  /// Returns an iterator iterating over all cells at the BMOC maximum depth
+  /// (the iteration is made in the natural cell order).
+  pub fn into_flat_iter(self) -> BMOCIntoFlatIter {
+    BMOCIntoFlatIter::new(self.depth_max, self.deep_size(), self.entries.into_vec().into_iter())
   }
 
   /// Returns an iterator iterating over all cells at the BMOC maximum depth
@@ -975,11 +982,11 @@ if (debug) System.out.println("Add3 " + hh);
   /// Contrary to [flat_iter](fn.flat_iter.html), the full cell information (the raw BMOC value
   /// it belongs to, its flag) is kept.
   pub fn flat_iter_cell(&self) -> BMOCFlatIterCell {
-    BMOCFlatIterCell::new(self.depth_max, self.deep_size(),self.entries.iter())
+    BMOCFlatIterCell::new(self.depth_max, self.deep_size(), self.entries.iter())
   }
   
   /// Returns an array containing all the BMOC cells flattened at the maximum depth.
-  /// This is an utility methods bascailly calling `deep_size` to initialize an array
+  /// This is an utility methods basically calling `deep_size` to initialize an array
   /// and `flat_iter` to retrieve all cells.
   pub fn to_flat_array(&self) -> Box<[u64]> {
     let mut res: Vec<u64> = Vec::with_capacity(self.deep_size());
@@ -1352,6 +1359,73 @@ fn get_hash_from_delta_depth(raw_value: u64, delta_depth: u8) -> u64 {
   raw_value >> (2 + (delta_depth << 1))
 }
 
+
+pub struct BMOCIntoFlatIter {
+  depth_max: u8,
+  deep_size: usize,
+  raw_val_iter: IntoIter<u64>,
+  curr_val: Option<u64>,
+  curr_val_max: u64,
+  n_returned: usize,
+}
+
+impl BMOCIntoFlatIter {
+  fn new(depth_max: u8, deep_size: usize, raw_val_iter: IntoIter<u64>) -> BMOCIntoFlatIter {
+    let mut flat_iter = BMOCIntoFlatIter {
+      depth_max, deep_size, raw_val_iter,
+      curr_val: None, curr_val_max: 0_u64, n_returned: 0_usize
+    };
+    flat_iter.next_cell();
+    flat_iter
+  }
+
+  pub fn deep_size(&self) -> usize {
+    self.deep_size
+  }
+
+  pub fn depth(&self) -> u8 {
+    self.depth_max
+  }
+
+  fn next_cell(&mut self) -> Option<u64> {
+    match self.raw_val_iter.next() {
+      None => self.curr_val.take(),
+      Some(raw_value) => {
+        // Remove the flag bit, then divide by 2 (2 bits per level)
+        let delta_depth = ((raw_value >> 1).trailing_zeros() >> 1) as u8;
+        let twice_delta_depth = delta_depth << 1;
+        // Remove 2 bits per depth difference + 1 sentinel bit + 1 flag bit
+        let hash = raw_value >> (2 + twice_delta_depth);
+        let val = hash << twice_delta_depth;
+        self.curr_val_max = val | ((1_u64 << twice_delta_depth) - 1_u64);
+        self.curr_val.replace(val)
+      },
+    }
+  }
+
+}
+
+impl Iterator for BMOCIntoFlatIter {
+  type Item = u64;
+
+  fn next(&mut self) -> Option<u64> {
+    if let Some(val) = self.curr_val {
+      self.n_returned += 1;
+      if val < self.curr_val_max {
+        self.curr_val.replace(val + 1)
+      } else {
+        self.next_cell()
+      }
+    } else {
+      None
+    }
+  }
+
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    let n = self.deep_size - self.n_returned;
+    (n, Some(n))
+  }
+}
 
 
 pub struct BMOCFlatIter<'a> {

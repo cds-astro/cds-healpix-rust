@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+## 0.6.3
+
+Released 2022-04-11
+
+### Add
+
+* Add `into_flat_iter` in BMOC (to be able to flatten an iterator of BMOC `flat_iter`) 
+* Remove a few warnings
+
+--------------------------------------------------------------------------------
+
+
+
 ## 0.6.2
 
 Released 2022-04-01
