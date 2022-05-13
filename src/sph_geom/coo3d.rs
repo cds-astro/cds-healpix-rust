@@ -4,7 +4,7 @@ use std::f64::consts::{PI};
 
 use super::super::Customf64;
 
-const TWO_PI: f64 = 2.0 * PI;
+pub const TWO_PI: f64 = 2.0 * PI;
 pub(crate) const HALF_PI: f64 = 0.5 * PI;
 
 // see https://www.nalgebra.org/
