@@ -190,6 +190,12 @@ impl Polygon {
   /// and a parallel defined by a latitude (this may suffer from numerical precision
   /// for polygon of size < 0.1 arcsec).
   /// Returns `None` if no has been found
+  /// 
+  /// This code relies on the resolution of the following system:
+  /// * N.I   = 0         (i)   (The intersection I lies on the great circle of normal N)
+  /// * ||I|| = 1         (ii)  (I lies on the unit sphere)
+  /// * I_z   = sin(lat)  (iii) (I lies on the given parallel)
+  /// Knowing Iz (cf the third equation), we end up finding Ix and Iy thanks to (i) and (ii)
   pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     let (lat_sin, lat_cos) = lat.sin_cos();
     let z = lat_sin;
@@ -219,11 +225,12 @@ impl Polygon {
           let b = 2.0 * n.y() * n.z() * z / xn2;
           let c = (zn2 * z2 / xn2) - lat_cos*lat_cos;
   
+          // Iy is a 2nd degree polynomia
           let delta = b * b - 2.0 * two_a * c;
   
+          // Case A.1: there are 2 solutions for Iy
           if delta > 0.0 {
-            // Two solutions
-            // Compute the first one
+            // Case A.1.a: first solution
             let delta_root_sq = delta.sqrt();
             let y1 = (-b - delta_root_sq) / two_a;
             let x = -(n.y() * y1 + n.z() * z) / n.x();
@@ -240,8 +247,8 @@ impl Polygon {
   
               return Some(UnitVect3::new_unsafe(x, y2, z));
             }
+          // Case A.2: there are one solution
           } else if delta == 0.0 {
-            // One solution
             let y = -b / two_a;
             let x = -(n.y() * y + n.z() * z) / n.x();
             return Some(UnitVect3::new_unsafe(x, y, z));
@@ -249,15 +256,18 @@ impl Polygon {
             // No real solutions
             return None;
           }
+        // Case B: Nx == 0
         } else {
-          // Case: n.x = 0
+          // Case B.1: Ny = 0
           if n.y() == 0.0 {
-            // Case: n pointing towards north pole and (pa, pb) lying on a great circle => z = 0
+            // Case B.1.a: N is pointing towards ez. Only the great circle of lat = 0 can fall in that case.
+            // Therefore a solution can only be found if pa and pb lies on the equator too (lat = 0)
             if z == 0.0 && z == pa.z() {
               return Some(UnitVect3::new_unsafe(pa.x(), pa.y(), pa.z()));
             } else {
               return None;
             }
+          // Case B.2: Ny != 0
           } else {
             let yn2 = n.y()*n.y();
             let zn2 = n.z()*n.z();
