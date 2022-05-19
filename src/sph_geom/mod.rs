@@ -123,7 +123,6 @@ impl Polygon {
       contains_south_pole: false,
     };
     polygon.contains_south_pole = method.contains_south_pole(&polygon);
-
     polygon
   }
 
@@ -136,7 +135,6 @@ impl Polygon {
   /// We typically use the gravity center.
   pub fn must_contain(&mut self, control_point: &UnitVect3) {
     if !self.contains(&Coo3D::from_ref(control_point)) {
-      //self.poles_inside = !self.poles_inside;
       self.contains_south_pole = !self.contains_south_pole;
     }
   }
@@ -151,7 +149,7 @@ impl Polygon {
   pub fn contains(&self, coo: &Coo3D) -> bool {
     self.contains_south_pole ^ self.odd_num_intersect_going_south(coo)
   }
-  
+
   /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the 
   /// two given points (we consider the arc having a length < PI).
   pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Option<UnitVect3> {
