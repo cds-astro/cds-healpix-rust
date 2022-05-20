@@ -187,9 +187,9 @@ impl Polygon {
   }
 
   /// Returns the coordinate of the intersection from an edge of the polygon
-  /// and a parallel defined by a latitude (this may suffer from numerical precision
+  /// with a parallel defined by a latitude (this may suffer from numerical precision at poles
   /// for polygon of size < 0.1 arcsec).
-  /// Returns `None` if no has been found
+  /// Returns `None` if no intersection has been found
   /// 
   /// This code relies on the resolution of the following system:
   /// * N.I   = 0         (i)   (The intersection I lies on the great circle of normal N)
@@ -199,7 +199,7 @@ impl Polygon {
   pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     let (lat_sin, lat_cos) = lat.sin_cos();
     let z = lat_sin;
-    let z2 = z * z;
+    let z2 = z.powi(2);
 
     let mut left = self.vertices.last().unwrap();
     for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
@@ -214,16 +214,17 @@ impl Polygon {
       if (pa.lat()..pb.lat()).contains(&lat) {
         let n = &cross_prod;
 
+        // Case A: Nx != 0
         if n.x() != 0.0 {
-          let xn2 = n.x() * n.x();
-          let yn2 = n.y() * n.y();
-          let zn2 = n.z() * n.z();
+          let xn2 = n.x().powi(2);
+          let yn2 = n.y().powi(2);
+          let zn2 = n.z().powi(2);
 
           let a = (yn2 / xn2) + 1.0;
           let two_a = 2.0 * a;
 
           let b = 2.0 * n.y() * n.z() * z / xn2;
-          let c = (zn2 * z2 / xn2) - lat_cos*lat_cos;
+          let c = (zn2 * z2 / xn2) - lat_cos.powi(2);
   
           // Iy is a 2nd degree polynomia
           let delta = b * b - 2.0 * two_a * c;
@@ -269,10 +270,10 @@ impl Polygon {
             }
           // Case B.2: Ny != 0
           } else {
-            let yn2 = n.y()*n.y();
-            let zn2 = n.z()*n.z();
+            let yn2 = n.y().powi(2);
+            let zn2 = n.z().powi(2);
 
-            let (x, y) = ((lat_cos*lat_cos - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
+            let (x, y) = ((lat_cos.powi(2) - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
 
             let p = UnitVect3::new_unsafe(x, y, z);
             if dot_product(&cross_product(&p, &pa), &cross_product(&p, &pb)) < 0.0 {
