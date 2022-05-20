@@ -150,35 +150,30 @@ impl Polygon {
   /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the 
   /// two given points (we consider the arc having a length < PI).
   pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> bool {
-    // double ua, ub;
     // Ensure a < b in longitude
     let mut a = a;
     let mut b = b;
     if a.lon() > b.lon() {
       std::mem::swap(&mut a, &mut b);
     }
-    // 
-    let n_vertices = self.vertices.len();
-    let mut left = &self.vertices[n_vertices - 1];
-    for i in 0..n_vertices {
-      let right = &self.vertices[i];
-      {
-        // Ensures pA < pB in longitude
-        let mut pa = left;
-        let mut pb = right;
-        if pa.lon() > pb.lon() {
-          std::mem::swap(&mut pa, &mut pb);
-        }
-        if great_circle_arcs_are_overlapping_in_lon(a, b, pa, pb) {
-          let ua = dot_product(a, &self.cross_products[i]);
-          let ub = dot_product(b, &self.cross_products[i]);
-          if polygon_edge_intersects_great_circle(ua, ub)
-              && intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub) {
-            return true;
-          }
+    
+    let mut left = self.vertices.last().unwrap();
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in longitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lon() > pb.lon() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+      if great_circle_arcs_are_overlapping_in_lon(a, b, pa, pb) {
+        let ua = dot_product(a, cross_prod);
+        let ub = dot_product(b, cross_prod);
+        if polygon_edge_intersects_great_circle(ua, ub)
+          && intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub) {
+          return true;
         }
       }
-      left = right;
+      left = right
     }
     false
   }
