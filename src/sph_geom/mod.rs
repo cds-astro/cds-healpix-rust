@@ -11,6 +11,7 @@ pub(super) mod frame;
 use std::f64::consts::{PI};
 use super::TWICE_PI;
 
+use crate::Customf64;
 use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
 
 trait ContainsSouthPoleComputer {
@@ -199,7 +200,7 @@ impl Polygon {
   pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     let (lat_sin, lat_cos) = lat.sin_cos();
     let z = lat_sin;
-    let z2 = z.powi(2);
+    let z2 = z.pow2();
 
     let mut left = self.vertices.last().unwrap();
     for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
@@ -216,15 +217,15 @@ impl Polygon {
 
         // Case A: Nx != 0
         if n.x() != 0.0 {
-          let xn2 = n.x().powi(2);
-          let yn2 = n.y().powi(2);
-          let zn2 = n.z().powi(2);
+          let xn2 = n.x().pow2();
+          let yn2 = n.y().pow2();
+          let zn2 = n.z().pow2();
 
           let a = (yn2 / xn2) + 1.0;
-          let two_a = 2.0 * a;
+          let two_a = a.twice();
 
           let b = 2.0 * n.y() * n.z() * z / xn2;
-          let c = (zn2 * z2 / xn2) - lat_cos.powi(2);
+          let c = (zn2 * z2 / xn2) - lat_cos.pow2();
   
           // Iy is a 2nd degree polynomia
           let delta = b * b - 2.0 * two_a * c;
@@ -270,10 +271,10 @@ impl Polygon {
             }
           // Case B.2: Ny != 0
           } else {
-            let yn2 = n.y().powi(2);
-            let zn2 = n.z().powi(2);
+            let yn2 = n.y().pow2();
+            let zn2 = n.z().pow2();
 
-            let (x, y) = ((lat_cos.powi(2) - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
+            let (x, y) = ((lat_cos.pow2() - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
 
             let p = UnitVect3::new_unsafe(x, y, z);
             if dot_product(&cross_product(&p, &pa), &cross_product(&p, &pb)) < 0.0 {
