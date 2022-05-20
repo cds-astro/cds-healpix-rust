@@ -3493,10 +3493,10 @@ fn n_vertices_in_poly(depth: u8, hash: u64, poly: &Polygon) -> (u8, [Coo3D; 4]) 
 }
 
 fn has_intersection(poly: &Polygon, vertices: [Coo3D; 4]) -> bool {
-       poly.intersect_great_circle_arc(&vertices[2], &vertices[1]) // N vs E
-    || poly.intersect_great_circle_arc(&vertices[0], &vertices[1]) // S vs E
-    || poly.intersect_great_circle_arc(&vertices[3], &vertices[2]) // W vs N
-    || poly.intersect_great_circle_arc(&vertices[3], &vertices[0]) // W vs S
+       poly.is_intersecting_great_circle_arc(&vertices[2], &vertices[1]) // N vs E
+    || poly.is_intersecting_great_circle_arc(&vertices[0], &vertices[1]) // S vs E
+    || poly.is_intersecting_great_circle_arc(&vertices[3], &vertices[2]) // W vs N
+    || poly.is_intersecting_great_circle_arc(&vertices[3], &vertices[0]) // W vs S
 }
 
 
