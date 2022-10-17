@@ -24,9 +24,9 @@ pub const TRANSITION_Z_INV: f32 = 3.0 / 2.0;
 /// - The function assumes, without checking, that the input vector is a unit vector 
 ///   (hence `x^2 + y^2 + z^2 = 1`) !!
 pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
-  assert!(-1.0 <= x && x <= 1.0);
-  assert!(-1.0 <= y && y <= 1.0);
-  assert!(-1.0 <= z && z <= 1.0);
+  assert!((-1.0..=1.0).contains(&x));
+  assert!((-1.0..=1.0).contains(&y));
+  assert!((-1.0..=1.0).contains(&z));
   debug_assert!(1.0 - (x *  x + y * y + z * z) < 1e-5, "{}", 1.0 - (x *  x + y * y + z * z));
   if z > TRANSITION_Z {
     // North polar cap, Collignon projection.
@@ -75,9 +75,9 @@ pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
 #[allow(clippy::many_single_char_names)]
 pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
   assert!(depth <= 14);
-  assert!(-1.0 <= x && x <= 1.0);
-  assert!(-1.0 <= y && y <= 1.0);
-  assert!(-1.0 <= z && z <= 1.0);
+  assert!((-1.0..=1.0).contains(&x));
+  assert!((-1.0..=1.0).contains(&y));
+  assert!((-1.0..=1.0).contains(&z));
   // println!("norm: {}", (x *  x + y * y + z * z));
   debug_assert!(1.0 - (x *  x + y * y + z * z) < 1e-5, "{}", 1.0 - (x *  x + y * y + z * z));
   // A f32 mantissa contains 23 bits.
@@ -140,13 +140,13 @@ pub fn hash_with_dxdy(depth: u8, x: f32, y: f32, z: f32) -> (u32, f32, f32) {
 }
 
 fn xpm1_and_q(x: f32, y: f32) -> (f32, u8) {
-  let x_neg = (x < 0.0) as u8;           debug_assert!(x_neg <= 1);
-  let y_neg = (y < 0.0) as u8;           debug_assert!(y_neg <= 1);
-  let q = (x_neg + y_neg) | (y_neg << 1);    debug_assert!(y_neg <= 3);
+  let x_neg = (x < 0.0) as u8;             debug_assert!(x_neg <= 1);
+  let y_neg = (y < 0.0) as u8;             debug_assert!(y_neg <= 1);
+  let q = (x_neg + y_neg) | (y_neg << 1);  debug_assert!(y_neg <= 3);
   // The purpose is to have the same numerical precision for each base cell
   // by avoiding subtraction by 1.0 or 3.0 or 5.0 or 7.0
-  let lon = y.abs().atan2(x.abs());          debug_assert!(0.0 <= lon && lon <= PI / 2.0);
-  let x02 = lon * 4.0 / PI;                  debug_assert!(0.0 <= x02 && x02 <= 2.0);
+  let lon = y.abs().atan2(x.abs()); debug_assert!((0.0..=PI / 2.0).contains(&lon));
+  let x02 = lon * 4.0 / PI;               debug_assert!((0.0..=2.0).contains(&x02));
   if x_neg != y_neg { // Could be replaced by a sign copy from (x_neg ^ y_neg) << 32
     (1.0 - x02, q)
   } else {
@@ -155,15 +155,15 @@ fn xpm1_and_q(x: f32, y: f32) -> (f32, u8) {
 }
 
 fn xpm1_and_offset(x: f32, y: f32) -> (f32, i8) {
-  let x_neg = (x < 0.0) as i8;           debug_assert!(x_neg == 0 || x_neg == 1);
-  let y_neg = (y < 0.0) as i8;           debug_assert!(y_neg == 0 || y_neg == 1);
+  let x_neg = (x < 0.0) as i8;             debug_assert!(x_neg == 0 || x_neg == 1);
+  let y_neg = (y < 0.0) as i8;             debug_assert!(y_neg == 0 || y_neg == 1);
   // x>0, y>0 => [    0,  pi/2[ => offset =  1
   // x<0, y>0 => [pi/2 ,    pi[ => offset =  3
   // x<0, y<0 => [3pi/2,    pi[ => offset = -3
   // x>0, y<0 => [pi   , 3pi/2[ => offset = -1
   let offset = ((-y_neg) << 2) + 1 + ((x_neg ^ y_neg) << 1);
-  let lon = y.abs().atan2(x.abs());          debug_assert!(0.0 <= lon && lon <= PI / 2.0);
-  let x02 = lon * 4.0 / PI;                  debug_assert!(0.0 <= x02 && x02 <= 2.0);
+  let lon = y.abs().atan2(x.abs()); debug_assert!((0.0..=PI / 2.0).contains(&lon));
+  let x02 = lon * 4.0 / PI;               debug_assert!((0.0..=2.0).contains(&x02));
   if x_neg != y_neg { // Could be replaced by a sign copy from (x_neg ^ y_neg) << 32
     (1.0 - x02, offset)
   } else {

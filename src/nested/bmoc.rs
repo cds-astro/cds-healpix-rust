@@ -737,7 +737,7 @@ impl BMOC {
   fn not_in_cell_4_or(&self, low_resolution: &Cell, mut c: Cell,  iter: &mut BMOCIter, builder: &mut BMOCBuilderUnsafe) -> Option<Cell> {
     let mut d = low_resolution.depth;
     let mut h = low_resolution.hash;
-    debug_assert_eq!(true, c.is_full);
+    debug_assert!(c.is_full);
     go_down(&mut d, &mut h, c.depth, c.hash, false, builder);
     builder.push(c.depth, c.hash, true);
     let mut is_overlapped = false;

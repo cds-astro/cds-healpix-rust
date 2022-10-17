@@ -10,17 +10,20 @@ use cdshealpix::{
   SQRT6, 
   FOUR_OVER_PI,
   F64_SIGN_BIT_MASK,
-  F64_BUT_SIGN_BIT_MASK
+  F64_BUT_SIGN_BIT_MASK,
+  nested::{
+    get,
+    zordercurve::get_zoc
+  }
 };
-use cdshealpix::nested::{self, get};
-use cdshealpix::nested::zordercurve::{ZOC, ZOrderCurve, get_zoc};
+
 
 pub fn hash_v1(depth: u8, lon: f64, lat: f64) -> u64 {
   get(depth).hash(lon, lat)
 }
 
 pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {
-  let nside = (1u32 << depth);
+  let nside = 1u32 << depth;
   let nside_minus_1 = nside - 1;
   let time_half_nside = ((depth - 1) as i64) << 52; // WARNING DO NOT WORK WITH depth=0
   
@@ -37,7 +40,7 @@ pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {
 }
 
 pub fn hash_v3(depth: u8, lon: f64, lat: f64) -> u64 {
-  let nside = (1u32 << depth);
+  let nside = 1u32 << depth;
   let nside_minus_1 = nside - 1;
   let time_half_nside = ((depth - 1) as i64) << 52; // WARNING DO NOT WORK WITH depth=0
   
@@ -59,8 +62,7 @@ fn build_hash_from_parts(depth: u8, d0h: u8, i: u32, j: u32) -> u64 {
 
 #[inline]
 fn build_hash(depth: u8, d0h_bits: u64, i: u32, j: u32) -> u64 {
-  // d0h_bits | get_zoc(depth).ij2h(i, j)
-  d0h_bits | ZOC::LARGE.ij2h(i, j)
+  d0h_bits | get_zoc(depth).ij2h(i, j)
 }
 
 fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
@@ -157,7 +159,7 @@ fn xpm1_and_q(lon: f64) -> (f64, u8) {
   let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
   let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
   let x = lon_abs * FOUR_OVER_PI;
-  let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(0 <= q && q < 8);
+  let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(q < 8);
   // Remark: to avoid the branch, we could have copied lon_sign on x - q, 
   //         but I so far lack of idea to deal with q efficiently.
   //         And we are not supposed to have negative longitudes in ICRS 
@@ -208,22 +210,20 @@ pub fn benchmark_hash_v3(depth: u8, positions: &Vec<(f64, f64)>) -> u64 {
 
 fn bench_time_pow2(c: &mut Criterion) {
   let mut group = c.benchmark_group("Time power of 2");
-
-  for depth in (1..29) {
-    let time_half_nside = ((depth - 1) as i64) << 52;
-    let half_nside = (1u32 << depth) as f64 / 2.0;
-    let one_over_half_nside = 1.0 / half_nside;
-    let val: f64 = black_box(PI);
-    group.bench_with_input(BenchmarkId::new("x2^n v1", 1), &depth, |b, pos| b.iter(||
-      f64::from_bits((time_half_nside + val.to_bits() as i64) as u64)
-    ));
-    group.bench_with_input(BenchmarkId::new("x2^n v2", 2), &depth,  |b, pos| b.iter(|| 
-      val / half_nside
-    ));
-    group.bench_with_input(BenchmarkId::new("x2^n v3", 3), &depth,  |b, pos| b.iter(||
-      val * one_over_half_nside
-    ));
-  }
+  let depth = 25;
+  let time_half_nside = ((depth - 1) as i64) << 52;
+  let half_nside = (1u32 << depth) as f64 / 2.0;
+  let one_over_half_nside = 1.0 / half_nside;
+  let val: f64 = black_box(PI);
+  group.bench_with_input(BenchmarkId::new("x2^n v1", 1), &depth, |b, _| b.iter(||
+    f64::from_bits((time_half_nside + val.to_bits() as i64) as u64)
+  ));
+  group.bench_with_input(BenchmarkId::new("x2^n v2", 2), &depth,  |b, _| b.iter(||
+    val / half_nside
+  ));
+  group.bench_with_input(BenchmarkId::new("x2^n v3", 3), &depth,  |b, _| b.iter(||
+    val * one_over_half_nside
+  ));
   group.finish();
 }
 
@@ -234,18 +234,18 @@ fn bench_hash(c: &mut Criterion) {
   let depth = 16;
   let positions = gen_rand_lonlat(black_box(1000000));
   group.bench_with_input(BenchmarkId::new("Hash v1", 1), &1,
-                         |b, pos| b.iter(|| benchmark_hash_v1(depth, &positions)));
+                         |b, _| b.iter(|| benchmark_hash_v1(depth, &positions)));
   group.bench_with_input(BenchmarkId::new("Hash v2", 2), &2,
-                         |b, pos| b.iter(|| benchmark_hash_v2(depth, &positions)));
+                         |b, _| b.iter(|| benchmark_hash_v2(depth, &positions)));
   group.bench_with_input(BenchmarkId::new("Hash v3", 3), &3,
-                         |b, pos| b.iter(|| benchmark_hash_v3(depth, &positions)));
+                         |b, _| b.iter(|| benchmark_hash_v3(depth, &positions)));
   group.finish();
 }
 
-criterion_group!(hash_benches, bench_hash/*, bench_time_pow2*/);
-// criterion_group!(pow2_time_benches, bench_time_pow2);
+criterion_group!(hash_benches, bench_hash);
+criterion_group!(pow2_time_benches, bench_time_pow2);
 
-criterion_main!(hash_benches);
+criterion_main!(hash_benches, pow2_time_benches);
 
 
 

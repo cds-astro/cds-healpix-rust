@@ -1,5 +1,22 @@
 # `cdshealpix` Change Log
 
+## 0.6.4
+
+Released 2022-10-17
+
+### Add
+
+* Add latitude check in `bilinear_interpolation` 
+* Add computation of lat=cte small circle intersection with polygon edges (great circle arcs)
+* Add Sph geom polygon/parallel intersection
+* Update dependencies
+* Remove a few warnings in test and bench
+* Make clippy happier
+
+--------------------------------------------------------------------------------
+
+
+
 ## 0.6.3
 
 Released 2022-04-11

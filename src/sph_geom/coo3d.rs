@@ -239,8 +239,8 @@ pub fn lonlat_of(x: f64, y: f64, z: f64) -> (f64, f64) {
     lon = 0.0;
   }
   let lat = z.atan2((x.pow2() + y.pow2()).sqrt());
-  debug_assert!(0.0 <= lon && lon <= TWO_PI);
-  debug_assert!(-HALF_PI <= lat && lat < HALF_PI);
+  debug_assert!((0.0..=TWO_PI).contains(&lon));
+  debug_assert!((-HALF_PI..HALF_PI).contains(&lat));
   (lon, lat)
 }
 
@@ -416,7 +416,7 @@ impl Coo3D {
   /// lon and lat in radians
   pub fn from_sph_coo(lon: f64, lat: f64) -> Coo3D {
     let v = vec3_of(lon, lat);
-    if lon < 0.0 || TWO_PI <= lon || lat < -HALF_PI || HALF_PI < lat {
+    if !(0.0..TWO_PI).contains(&lon) || !(-HALF_PI..=HALF_PI).contains(&lat) {
       let (new_lon, new_lat) = lonlat_of(v.x(), v.y(), v.z());
       Coo3D {x: v.x(), y: v.y(), z: v.z(), lon: new_lon, lat: new_lat}
     } else {

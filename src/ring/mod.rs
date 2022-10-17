@@ -237,8 +237,8 @@ fn hash_with_dldh(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
   let mut dh = half_nside * (xy.1 + 3.0);  debug_assert!(0.0 <= dh && dh <= 2.5 * nside as f64);
   let mut i_ring = (dh as u64) << 1;
   let mut i_in_ring = dl as u64;
-  dl -= i_in_ring as f64;      debug_assert!(0.0 <= dl && dl < 1.0);
-  dh -= (i_ring >> 1) as f64;  debug_assert!(0.0 <= dh && dh < 1.0);
+  dl -= i_in_ring as f64;      debug_assert!((0.0..1.0).contains(&dl));
+  dh -= (i_ring >> 1) as f64;  debug_assert!((0.0..1.0).contains(&dh));
   deal_with_1x1_box(dl, dh, &mut i_ring, &mut i_in_ring);
   // Those tests are already performed in the proj, so if we have to improve performances we may
   // merge this code with the projection code (loosing readability).
@@ -273,8 +273,8 @@ fn hash_with_dldh(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
 ///    SOUTH       - q = 3 => increase `i_ring` of  +1
 /// Warning, the inequalities are important to decide if an edge is in a cell or its neighbour!!
 fn deal_with_1x1_box(dl: f64, dh: f64, i_ring: &mut u64, i_in_ring: &mut u64) {
-  debug_assert!(0.0 <= dl && dl < 1.0);
-  debug_assert!(0.0 <= dh && dh < 1.0);
+  debug_assert!((0.0..1.0).contains(&dl));
+  debug_assert!((0.0..1.0).contains(&dh));
   let in1 = (dl <= dh) as u64;       /* 1/0 */  debug_assert!(in1 == 0 || in1 == 1);
   let in2 = (dl >= 1.0 - dh) as u64; /* 0\1 */  debug_assert!(in2 == 0 || in2 == 1);
   *i_ring += in1 + in2;
@@ -490,8 +490,8 @@ pub fn center(nside: u32, hash: u64) -> (f64, f64) {
 /// TODO
 ///
 pub fn sph_coo(nside: u32, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
-  assert!(0.0 <= dx && dx < 1.0);
-  assert!(0.0 <= dy && dy < 1.0);
+  assert!((0.0..1.0).contains(&dx));
+  assert!((0.0..1.0).contains(&dy));
   let (mut x, mut y) = center_of_projected_cell(nside, hash);
   x += (dx - dy) / (nside as f64);
   y += (dx + dy - 1.0) / (nside as f64);

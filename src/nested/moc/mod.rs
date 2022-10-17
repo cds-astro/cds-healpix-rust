@@ -45,7 +45,7 @@ pub trait HpxHash: NumAssign + PrimInt + ToPrimitive + Unsigned + ShlAssign<u8> 
 impl<H> HpxHash for H where H: NumAssign + PrimInt + ToPrimitive + Unsigned + ShlAssign<u8> + ShrAssign<u8> + Copy + Display + Debug{}
 
 /// Represents an HEALPix cell with its depth and hash value.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct HpxCell<H: HpxHash> {
   pub depth: u8,
   pub hash: H,

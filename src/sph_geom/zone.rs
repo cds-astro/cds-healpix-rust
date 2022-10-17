@@ -26,8 +26,8 @@ impl Zone {
   /// * if `lat_min` or `lat_max` not in `[-\pi/2, \pi/2[`
   /// * `lat_min >= lat_max`
   pub fn new(lon_min: f64, lat_min: f64, lon_max: f64, lat_max: f64) -> Zone {
-    assert!(0.0 <= lon_min && lon_min < TWICE_PI && 0.0 < lon_max && lon_max <= TWICE_PI);
-    assert!(-HALF_PI <= lat_min && lat_min < HALF_PI && -HALF_PI < lat_max && lat_max <= HALF_PI);
+    assert!((0.0..TWICE_PI).contains(&lon_min) && 0.0 < lon_max && lon_max <= TWICE_PI);
+    assert!((-HALF_PI..HALF_PI).contains(&lat_min) && -HALF_PI < lat_max && lat_max <= HALF_PI);
     assert!(lat_min < lat_max);
     // Because of inequalities (< lat_max), we have to make an exception for the north pole
     let lat_max = if lat_max == HALF_PI { HALF_PI + 1e-15 } else { lat_max };

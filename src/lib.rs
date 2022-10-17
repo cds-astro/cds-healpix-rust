@@ -474,7 +474,7 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
 #[inline]
 fn largest_c2v_dist_in_npc(lon: f64, csts: &ConstantsC2V) -> f64 {
   let lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
-  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
+  debug_assert!((0_f64..=FRAC_PI_4).contains(&lon));
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
 /// Same as the above method, but taking into account an additional radius
@@ -482,7 +482,7 @@ fn largest_c2v_dist_in_npc(lon: f64, csts: &ConstantsC2V) -> f64 {
 fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
   debug_assert!(0_f64 < radius);
   let mut lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
-  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
+  debug_assert!((0_f64..=FRAC_PI_4).contains(&lon));
   lon = f64::min(lon + radius, FRAC_PI_4);
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
@@ -1108,8 +1108,8 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   let mut y = 0.5 * (y + 3.0);
   let mut i = x as u8;     debug_assert!(i <  4); // if can be == 4, then (x as u8) & 3
   let mut j = (y as u8) << 1;  debug_assert!(j == 0 || j == 2 || j == 4);
-  x -= i as f64;               debug_assert!(0.0 <= x && x < 1.0);
-  y -= (j >> 1) as f64;        debug_assert!(0.0 <= y && y < 1.0);
+  x -= i as f64;               debug_assert!((0.0..1.0).contains(&x));
+  y -= (j >> 1) as f64;        debug_assert!((0.0..1.0).contains(&y));
   let in_northwest = (x <= y) as u8;       // 1/0
   let in_southeast = (x >= 1.0 - y) as u8; // 0\1
   i += in_southeast >> in_northwest; // <=> in_southeast & (1 - in_northwest) => 0 or 1
@@ -1244,13 +1244,13 @@ pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
 fn check_lat(lat: f64) {
-    assert!(-FRAC_PI_2 <= lat && lat <= FRAC_PI_2);
+    assert!((-FRAC_PI_2..=FRAC_PI_2).contains(&lat));
 }
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
 fn check_lat_res(lat: f64) -> Result<(), String> {
-  if -FRAC_PI_2 <= lat && lat <= FRAC_PI_2 {
+  if (-FRAC_PI_2..=FRAC_PI_2).contains(&lat) {
     Ok(())
   } else {
     Err(format!("Wrong latitude. Expected value in [-pi/2, pi/2]. Actual: {}", lat))
@@ -1259,7 +1259,7 @@ fn check_lat_res(lat: f64) -> Result<(), String> {
 
 /// Verify that the projected y coordinate is in [-2, 2], panics if not.
 #[inline]
-fn check_y(y: f64) { assert!(-2f64 <= y && y <= 2f64); }
+fn check_y(y: f64) { assert!((-2f64..=2f64).contains(&y)); }
 
 /// Returns `true` if the point of given (absolute value of) latitude is in the equatorial region,
 /// and `false` if it is located in one of the two polar caps

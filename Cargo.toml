@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "Apache-2.0 OR MIT"
@@ -29,13 +29,13 @@ doc = true
 
 [dependencies]
 katex-doc = "0.1.0"
-base64 = "0.11.0"   # Added for Compressed MOC
-num = "0.2.1"       # Added for MOC
+base64 = "0.13"   # Added for Compressed MOC
+num = "0.4"       # Added for MOC
 num-traits = "0.2"  # Added for MOC
 
 [dev-dependencies]
-criterion = "0.3"
-rand = "0.7.2"
+criterion = "0.4"
+rand = "0.8"
 
 [[bench]]
 name = "nested_hash"
@@ -46,8 +46,4 @@ name = "zordercurve"
 harness = false
 
 [features]
-
-[profile.release]
-lto = true
-debug = false
 

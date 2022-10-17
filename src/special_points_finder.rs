@@ -572,7 +572,7 @@ fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte
 /// points are higher than the two points scalar product.
 pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVect3>
   where T1: UnitVec3, T2: UnitVec3 {
-  debug_assert!(-1.0 <= z && z <= 1.0);
+  debug_assert!((-1.0..=1.0).contains(&z));
   if  (p1.z() < z && z < p2.z()) || (p2.z() < z && z < p1.z()) {
     let p1_dot_p2 = dot_product(p1, p2);
     let p1_x_p2 = cross_product(p1, p2).normalized();

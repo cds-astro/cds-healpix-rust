@@ -42,10 +42,10 @@ fn bench_zordercurve(c: &mut Criterion) {
   group.sample_size(10);
   
   let n = black_box(0xFFFFFFFF_u32);
-  group.bench_with_input(BenchmarkId::new("LUPT", 1), &1, |b, pos| b.iter(||
+  group.bench_with_input(BenchmarkId::new("LUPT", 1), &1, |b, _| b.iter(||
     bench_morton_lupt(n)
   ));
-  group.bench_with_input(BenchmarkId::new("XOR", 2), &2,  |b, pos| b.iter(||
+  group.bench_with_input(BenchmarkId::new("XOR", 2), &2,  |b, _| b.iter(||
     bench_morton_xor(n)
   ));
   #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))]

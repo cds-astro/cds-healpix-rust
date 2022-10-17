@@ -257,8 +257,8 @@ pub fn neighbours(depth: u8, hash: u64, include_center: bool) -> MainWindMap<u64
 /// Conveniency function simply calling the [append_bulk_neighbours](struct.Layer.html#method.append_bulk_neighbours) method
 /// of the [Layer] of the given *depth*.
 #[inline]
-pub fn append_bulk_neighbours(depth: u8, hash: u64, mut dest: &mut Vec<u64>) {
-  get(depth).append_bulk_neighbours(hash, &mut dest);
+pub fn append_bulk_neighbours(depth: u8, hash: u64, dest: &mut Vec<u64>) {
+  get(depth).append_bulk_neighbours(hash, dest);
 }
 
 
@@ -1096,8 +1096,8 @@ impl Layer {
   /// ```
   ///
   pub fn sph_coo(&self, hash: u64, dx: f64, dy: f64) -> (f64, f64) {
-    assert!(0.0 <= dx && dx < 1.0);
-    assert!(0.0 <= dy && dy < 1.0);
+    assert!((0.0..1.0).contains(&dx));
+    assert!((0.0..1.0).contains(&dy));
     let (mut x, mut y) = self.center_of_projected_cell(hash);
     x += (dx - dy) * self.one_over_nside;
     y += (dx + dy - 1.0) * self.one_over_nside;
@@ -1413,13 +1413,13 @@ impl Layer {
   
   /// Same method as [neighbours](#method.neighbours) except that neighbours are appended
   /// to the given vector.
-  pub fn append_bulk_neighbours(&self, hash: u64, mut dest: &mut Vec<u64>) {
+  pub fn append_bulk_neighbours(&self, hash: u64, dest: &mut Vec<u64>) {
     self.check_hash(hash);
     let h_bits: HashBits = self.pull_bits_appart(hash);
     if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
-      self.append_bulk_edge_cell_neighbours(hash, &mut dest);
+      self.append_bulk_edge_cell_neighbours(hash, dest);
     } else {
-      self.append_bulk_inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut dest);
+      self.append_bulk_inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, dest);
     }
   }
 
@@ -1645,7 +1645,7 @@ impl Layer {
     self.external_edge_generic(hash, delta_depth, true, dest);
   }
 
-  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool, mut dest: &mut Vec<u64>) { //} -> Box<[u64]> {
+  fn external_edge_generic(&self, hash: u64, delta_depth: u8, sorted: bool, dest: &mut Vec<u64>) { //} -> Box<[u64]> {
     self.check_hash(hash);
     if delta_depth == 0 {
       if sorted {
@@ -1654,7 +1654,7 @@ impl Layer {
         tmp.sort_unstable();
         dest.append(&mut tmp);
       } else {
-        self.append_bulk_neighbours(hash, &mut dest);
+        self.append_bulk_neighbours(hash, dest);
       }
       return;
     }
@@ -1675,7 +1675,7 @@ impl Layer {
         }  else {
           edge_cell_direction_from_neighbour(h_parts.d0h, &self.direction_in_base_cell_border(h_bits.i, h_bits.j), &direction)
         };
-        append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, &mut dest);
+        append_sorted_internal_edge_element(hash_value, delta_depth, dir_from_neig, dest);
       }
     } else {
       // Easy: always use the opposite direction
@@ -1683,7 +1683,7 @@ impl Layer {
       self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut neighbours);
       let mut neighbours = if sorted { neighbours.sorted_entries_vec() } else { neighbours.entries_vec() };
       for (direction, hash_value) in neighbours.drain(..) {
-        append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), &mut dest);
+        append_sorted_internal_edge_element(hash_value, delta_depth,  direction.opposite(), dest);
       }
     }
     // edge.into_boxed_slice()
@@ -3031,11 +3031,11 @@ impl Layer {
   // * if `b` not in `]0, a]`
   // * if `pa` not in `[0, \pi[`
   fn box2polygon(lon: f64, lat: f64, a: f64, b: f64, pa: f64) -> Vec<(f64, f64)> {
-    assert!(0.0 <= lon && lon < TWICE_PI, "Expected: lon in [0, 2pi[. Actual: {}", lon);
-    assert!(-HALF_PI <= lat && lat <= HALF_PI, "Expected: lat in [-pi/2, pi/2]. Actual: {}", lat);
+    assert!((0.0..TWICE_PI).contains(&lon), "Expected: lon in [0, 2pi[. Actual: {}", lon);
+    assert!((-HALF_PI..=HALF_PI).contains(&lat), "Expected: lat in [-pi/2, pi/2]. Actual: {}", lat);
     assert!(0.0 < a && a <= HALF_PI, "Expected: a in ]0, pi/2]. Actual: {}", a);
     assert!(0.0 < b && b <= a, "Expected: b in ]0, a]. Actual: {}", b);
-    assert!(0.0 <= pa && pa < PI, "Expected: pa in [0, pi[. Actual: {}", pa);
+    assert!((0.0..PI).contains(&pa), "Expected: pa in [0, pi[. Actual: {}", pa);
     // Compute spherical coordinates
     let frame_rotation = RefToLocalRotMatrix::from_center(lon, lat);
     // By application of the Thales theorem, the new point has the property:

@@ -108,7 +108,7 @@ pub(crate) fn mec_3<T: Vec3 + UnitVec3>(a: &T, b: &T, c: &T) -> Cone {
 #[allow(dead_code)]
 fn mec_n<T: Vec3 + UnitVec3>(points: &[T]) -> Option<Cone> {
   // let mut rng = thread_rng();
-  let points: Vec<&T> = points.iter().map(|v| v).collect();
+  let points: Vec<&T> = points.iter().collect();
   // rng.shuffle(points[0..points.len()]);
   let mut cone = mec_2(points[0], points[1]);
   if cone.radius > R_MAX { return None; }
@@ -132,7 +132,7 @@ fn mec_n<T: Vec3 + UnitVec3>(points: &[T]) -> Option<Cone> {
       }
     }
   }
-  return Some(cone);
+  Some(cone)
 }
 
 /// Returns the angular radius (in radians) of the circumcircle of a

@@ -3,7 +3,7 @@
 use std::mem;
 
 /// Cardinal points 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Cardinal {
   /// South direction
   S,
@@ -262,7 +262,7 @@ impl<V: Copy> CardinalMap<V> {
 /////////////
 
 /// Cardinal points 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Ordinal {
   /// Southeast direction
   SE,
@@ -331,7 +331,7 @@ impl<V: Copy> OrdinalMap<V> {
 ///////////////
 
 /// Main winds directions
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MainWind {
   /// South
   S,
@@ -521,8 +521,8 @@ impl MainWind {
   /// assert_eq!(MainWind::from_offsets( 1,  1),  N);
   /// ```
   pub fn from_offsets(offset_se: i8, offset_sw: i8) -> MainWind {
-    debug_assert!(-1_i8 <= offset_se && offset_se <= 1_i8);
-    debug_assert!(-1_i8 <= offset_sw && offset_sw <= 1_i8);
+    debug_assert!((-1_i8..=1_i8).contains(&offset_se));
+    debug_assert!((-1_i8..=1_i8).contains(&offset_sw));
     let mut i = (offset_sw + 1_i8) as u8;
     i += (i << 1) + (offset_se + 1_i8) as u8;
     MainWind::from_index(i)
