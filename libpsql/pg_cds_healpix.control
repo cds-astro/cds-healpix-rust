@@ -1,4 +1,4 @@
 # PG_CDS_HEALPIX extension
-comment = 'pg_cds_healpix extension (beta)'
+comment = 'pg_cds_healpix extension'
 default_version = '0.0.1'
 relocatable = true

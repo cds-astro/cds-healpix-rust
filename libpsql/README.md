@@ -1,8 +1,6 @@
 
 # PSQL extension for HEALPix
 
-**This is a preliminary work!**
-
 This PSQL extension installs HEALPix functions in a PostgreSQL database.
 
 ## Available functions

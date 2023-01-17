@@ -4,7 +4,9 @@ DATA = pg_cds_healpix--0.0.1.sql
 REGRESS = simpletests
 
 MODULE_big = cdshealpix
-OBJS = src/cdshealpix.o target/release/libcdshealpix_libpsql.a
+HEADERS_cdshealpix = src/cdshealpix.h
+OBJS = src/cdshealpix.o
+SHLIB_LINK = target/release/libcdshealpix_libpsql.a
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
