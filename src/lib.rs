@@ -6,15 +6,10 @@
 //! * Calabretta2007: "Mapping on the HEALPix grid", Calabretta, M. R. et Roukema, B. F., 2007; 2007MNRAS.381..865C
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
 
-// #![cfg_attr(test, feature(test))]
-// #![cfg_attr(test)]
-
-
-// #[cfg(test)]
-// extern crate test;
-
-use std::sync::Once;
-use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
+use std::{
+  sync::Once,
+  f64::consts::{PI, FRAC_PI_2, FRAC_PI_4}
+};
 
 /// Constant = sqrt(6).
 /// 

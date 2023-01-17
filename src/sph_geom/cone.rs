@@ -42,7 +42,7 @@ impl Cone {
     }
   }
 
-  /// Returns a bounding cone (not the smalles one), i.e. a cone containing all the given points.
+  /// Returns a bounding cone (not the smallest one), i.e. a cone containing all the given points.
   pub fn bounding_cone<T: UnitVec3>(points: &[T]) -> Cone {
     // Compute the gravity center direction
     let (x, y, z) = points.iter().fold((0.0, 0.0, 0.0), |(x, y, z), p| {
@@ -73,7 +73,7 @@ impl Cone {
 }
 
 
-/// Returns the minimum enclosing cone, i.e. the cone containig the two given points and having
+/// Returns the minimum enclosing cone, i.e. the cone containing the two given points and having
 /// the smallest possible radius. In this trivial case, the diameter of the cone is the arc (ab).
 #[allow(dead_code)]
 fn mec_2<T: Vec3 + UnitVec3>(a: &T, b: &T) -> Cone {
