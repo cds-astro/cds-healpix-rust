@@ -4,11 +4,11 @@ version = "0.1.0"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 
 [build-dependencies]
-cdshealpix = { version = "0.4.1", path = "../" }
+cdshealpix = { version = "0.5.5", path = "../" }
 
 [dependencies]
 libc = "*"
-cdshealpix = { version = "0.4.1", path = "../" }
+cdshealpix = { version = "0.5.5", path = "../" }
 
 
 [lib]
