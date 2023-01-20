@@ -2,6 +2,7 @@
 # PSQL extension for HEALPix
 
 This PSQL extension installs HEALPix functions in a PostgreSQL database.
+It has been successfully tested with Postgres 10 to 15 (included).
 
 ## Available functions
 
