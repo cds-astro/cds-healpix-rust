@@ -29,12 +29,12 @@ doc = true
 
 [dependencies]
 katex-doc = "0.1.0"
-base64 = "0.13"   # Added for Compressed MOC
+base64 = "0.21"   # Added for Compressed MOC
 num = "0.4"       # Added for MOC
 num-traits = "0.2"  # Added for MOC
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
 rand = "0.8"
 
 [[bench]]

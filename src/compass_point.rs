@@ -3,16 +3,17 @@
 use std::mem;
 
 /// Cardinal points 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Cardinal {
   /// South direction
-  S,
+  S = 0,
   /// East direction
-  E,
+  E = 1,
   /// North direction
-  N,
+  N = 2,
   /// West direction
-  W
+  W = 3
 }
 
 impl Cardinal {
@@ -53,12 +54,7 @@ impl Cardinal {
   }
 
   pub(crate) fn index(&self) -> u8 {
-    match *self {
-      Cardinal::S => 0,
-      Cardinal::E => 1,
-      Cardinal::N => 2,
-      Cardinal::W => 3,
-    }
+    (*self) as u8
   }
   
   /// Returns:
@@ -124,6 +120,7 @@ impl Cardinal {
   }
 }
 
+
 /// Cardinal set. 
 /// Internally the information is stored on 4 bits.
 pub struct CardinalSet {
@@ -145,7 +142,7 @@ impl CardinalSet {
     }
   }
   
-  /// Retusn a cardinal set with all directions set
+  /// Returns a cardinal set with all directions set
   pub fn all() -> CardinalSet {
     CardinalSet {
       byte: 0b00001111_u8,
@@ -262,28 +259,152 @@ impl<V: Copy> CardinalMap<V> {
 /////////////
 
 /// Cardinal points 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Ordinal {
   /// Southeast direction
-  SE,
+  SE = 0,
   /// Southwest direction
-  SW,
+  SW = 1,
   /// Northeast direction
-  NE,
+  NE = 2,
   /// Northwest direction
-  NW
+  NW = 3
 }
 
 impl Ordinal {
-  pub(crate) fn index( & self ) -> u8 {
-    match * self {
-      Ordinal::SE => 0,
-      Ordinal::SW => 1,
-      Ordinal::NE => 2,
-      Ordinal::NW => 3,
+  pub(crate) fn index(&self) -> u8 {
+    (*self) as u8
+  }
+
+  /// Returns an Ordinal point give an index.
+  /// We define this method for calls from external languages
+  /// - 0 => SE
+  /// - 1 => SW
+  /// - 2 => NE
+  /// - 3 => NW
+  ///
+  /// # Input
+  /// - `i` index in `[0, 3]`
+  ///
+  /// # Output
+  /// - ordinal point
+  ///
+  /// # Panics
+  /// If the given index in not in `[0, 3]`
+  ///
+  /// # Example
+  /// ```rust
+  /// use cdshealpix::compass_point::{Ordinal};
+  ///
+  /// assert_eq!(Ordinal::from_index(0), Ordinal::SE);
+  /// assert_eq!(Ordinal::from_index(1), Ordinal::SW);
+  /// assert_eq!(Ordinal::from_index(2), Ordinal::NE);
+  /// assert_eq!(Ordinal::from_index(3), Ordinal::NW);
+  /// ```
+  pub fn from_index(i: u8) -> Ordinal {
+    match i {
+      0 => Ordinal::SE,
+      1 => Ordinal::SW,
+      2 => Ordinal::NE,
+      3 => Ordinal::NW,
+      _ => panic!("Wrong Cardinal index: Expected value in [0, 3]; Actual value {}.", i),
+    }
+  }
+  
+}
+
+
+pub struct OrdinalSet {
+  byte: u8
+}
+
+impl Default for OrdinalSet {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl OrdinalSet {
+  
+  /// Returns an empty cardinal set
+  pub fn new() -> Self {
+    OrdinalSet {
+      byte: 0,
+    }
+  }
+
+  /// Returns a cardinal set with all directions set
+  pub fn all() -> OrdinalSet {
+    OrdinalSet {
+      byte: 0b00001111_u8,
+    }
+  }
+
+  /// Add or remove (or do nothing) the given direction to the set.
+  pub fn set(&mut self, key: Ordinal, value: bool) {
+    let mask = 1u8 << key.index();
+    if value {
+      self.byte |= mask;
+    } else {
+      self.byte &= !mask;
+    }
+  }
+
+  /// Returns `true` if the given direction is in the set.
+  pub fn get(&self, key: Ordinal) -> bool {
+    self.get_from_index(key.index())
+  }
+
+  fn get_from_index(&self, index: u8) -> bool {
+    let mask = 1u8 << index;
+    self.byte & mask != 0u8
+  }
+  
+  
+
+  /// Remove all directions from the set
+  pub fn clear(&mut self) {
+    self.byte = 0_u8;
+  }
+}
+
+impl IntoIterator for OrdinalSet {
+  type Item = Ordinal;
+  type IntoIter = OrdinalSetIterator;
+
+  fn into_iter(self) -> Self::IntoIter {
+    OrdinalSetIterator {
+      cardinal_set: self,
+      index: 0
     }
   }
 }
+
+/// Structure used to iterate over a CardinalSet
+pub struct OrdinalSetIterator {
+  cardinal_set: OrdinalSet,
+  index: u8,
+}
+
+impl Iterator for OrdinalSetIterator {
+  type Item = Ordinal;
+
+  fn next(&mut self) -> Option<Ordinal> {
+    while self.index < 4 {
+      if self.cardinal_set.get_from_index(self.index) {
+        let ordinal = Ordinal::from_index(self.index);
+        self.index += 1;
+        return Some(ordinal)
+      } else {
+        self.index += 1;
+      }
+    }
+    None
+  }
+}
+
+
 
 /// Equivalent of a Java EnumMap for ordinal directions.
 /// We require T to implement the Copy trait since internally we use an array stored on the stack.
@@ -683,4 +804,54 @@ impl<V: Copy + Ord> MainWindMap<V> {
 /// Fill the given (mutable reference on a) slice of Option with the None value
 fn fill_with_none<T>(array_of_option: &mut [Option<T>]) {
   array_of_option.iter_mut().for_each(|o| *o = None);
+}
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn testok_cardinal_index() {
+    assert_eq!(Cardinal::S as u8, 0_u8);
+    assert_eq!(Cardinal::E as u8, 1_u8);
+    assert_eq!(Cardinal::N as u8, 2_u8);
+    assert_eq!(Cardinal::W as u8, 3_u8);
+    assert_eq!(Cardinal::S.index(), 0_u8);
+    assert_eq!(Cardinal::E.index(), 1_u8);
+    assert_eq!(Cardinal::N.index(), 2_u8);
+    assert_eq!(Cardinal::W.index(), 3_u8);
+  }
+
+  #[test]
+  fn testok_cardinal_fromindex() {
+    assert_eq!(Cardinal::S, Cardinal::from_index(0_u8));
+    assert_eq!(Cardinal::E, Cardinal::from_index(1_u8));
+    assert_eq!(Cardinal::N, Cardinal::from_index(2_u8));
+    assert_eq!(Cardinal::W, Cardinal::from_index(3_u8));
+  }
+
+  #[test]
+  fn testok_ordinalset() {
+    let os = OrdinalSet::all();
+    let mut it = os.into_iter();
+    assert_eq!(it.next(), Some(Ordinal::from_index(0)));
+    assert_eq!(it.next(), Some(Ordinal::from_index(1)));
+    assert_eq!(it.next(), Some(Ordinal::from_index(2)));
+    assert_eq!(it.next(), Some(Ordinal::from_index(3)));
+    assert_eq!(it.next(), None);
+
+    let os = OrdinalSet::default();
+    let mut it = os.into_iter();
+    assert_eq!(it.next(), None);
+
+    let mut os = OrdinalSet::default();
+    os.set(Ordinal::NE, true);
+    os.set(Ordinal::NW, true);
+    let mut it = os.into_iter();
+    assert_eq!(it.next(), Some(Ordinal::NE));
+    assert_eq!(it.next(), Some(Ordinal::NW));
+    assert_eq!(it.next(), None);
+    
+  }
 }

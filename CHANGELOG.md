@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+
+## 0.6.5
+
+Released 2023-06-27
+
+### Add
+
+* Add `OrdinalSet` in module `compass_point`
+* Update dependencies versions
+
+--------------------------------------------------------------------------------
+
+
 ## 0.6.4
 
 Released 2022-10-17
