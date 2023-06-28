@@ -30,7 +30,7 @@ SELECT hpx_hash(0, 0, '-Infinity'::float8); -- expected: ERROR!
 -- TEST HXP_CENTER
 
 SELECT hpx_center(0, 4);            -- expected: {0,0}
-SELECT hpx_center(15, 10737418240); -- expected: {225,-89.9985723325173}
+SELECT (hpx_center(15, 10737418240))[1] AS center_ra, round((hpx_center(15, 10737418240))[2]::numeric, 13) AS center_dec;    -- expected: 225 | -89.9985723325173
 SELECT hpx_center(NULL, 4);         -- expected: NULL
 SELECT hpx_center(0, NULL);         -- expected: NULL
 SELECT hpx_center(30, 4);           -- expected: ERROR!
