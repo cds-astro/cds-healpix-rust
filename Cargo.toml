@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.6.4"
+version = "0.6.5"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "Apache-2.0 OR MIT"
@@ -15,7 +15,9 @@ exclude = [
     "resources/4doc",
 ]
 
-
+# Use:
+# > cargo rustdoc --open -- --html-in-header katex.html
+# to look at the doc locally
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "katex.html"]
 
@@ -34,7 +36,7 @@ num = "0.4"       # Added for MOC
 num-traits = "0.2"  # Added for MOC
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.4"
 rand = "0.8"
 
 [[bench]]
