@@ -7,12 +7,12 @@
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
 
 use std::{
+  f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
   sync::Once,
-  f64::consts::{PI, FRAC_PI_2, FRAC_PI_4}
 };
 
 /// Constant = sqrt(6).
-/// 
+///
 /// ```rust
 /// use cdshealpix::{SQRT6};
 /// assert_eq!(6_f64.sqrt(), SQRT6);
@@ -25,7 +25,7 @@ const HALF: f64 = 0.5_f64;
 const EPS_POLE: f64 = 1e-13_f64;
 
 /// Constant = 2 * pi.
-/// 
+///
 /// ```rust
 /// use cdshealpix::{TWICE_PI};
 /// use std::f64::consts::PI;
@@ -34,7 +34,7 @@ const EPS_POLE: f64 = 1e-13_f64;
 pub const TWICE_PI: f64 = 2.0 * PI;
 
 /// Constant = 4 / pi.
-/// 
+///
 /// ```rust
 /// use cdshealpix::{FOUR_OVER_PI};
 /// use std::f64::consts::PI;
@@ -53,7 +53,7 @@ pub const PI_OVER_FOUR: f64 = 0.25_f64 * PI;
 
 /// Constant = 29, i.e. the largest possible depth we can store on a signed positive long
 /// (4 bits for base cells + 2 bits per depth + 2 remaining bits (1 use in the unique notation).
-/// 
+///
 /// ```rust
 /// use cdshealpix::{DEPTH_MAX};
 /// assert_eq!(29, DEPTH_MAX);
@@ -72,7 +72,7 @@ pub const NSIDE_MAX: u32 = 536870912;
 /// Limit on the latitude (in radians) between the equatorial region and the polar caps.
 /// Equals asin(2/3) = 0.7297276562269663 radians ~= 41,81 degrees.
 /// Written $\theta_X$ in Calabretta2007.
-/// 
+///
 /// ```rust
 /// use cdshealpix::{TRANSITION_LATITUDE};
 /// assert_eq!(f64::asin(2f64 / 3f64), TRANSITION_LATITUDE);
@@ -106,37 +106,37 @@ pub const F64_BUT_SIGN_BIT_MASK: u64 = 0x7FFFFFFFFFFFFFFF;
 /// => this radius is smaller than the smaller circumcircle radius (=> no cone having the smaller
 /// -edge-to-opposite-edge-radius radius can contains the 4 vertices of a cell (but 3 is ok)
 /// vertices
-static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] =  [
-    0.8410686705685088,    // depth = 0
-    0.37723631722170053,   // depth = 1
-    0.18256386461918295,   // depth = 2
-    0.09000432499034523,   // depth = 3
-    0.04470553761855741,   // depth = 4
-    0.02228115704023076,   // depth = 5
-    0.011122977211214961,  // depth = 6
-    0.005557125022105058,  // depth = 7
-    0.0027774761500209185, // depth = 8
-    0.0013884670480328143, // depth = 9
-    6.941658374603201E-4,  // depth = 10
-    3.4706600585087755E-4, // depth = 11
-    1.7352877579970442E-4, // depth = 12
-    8.676333125510362E-5,  // depth = 13
-    4.338140148342286E-5,  // depth = 14
-    2.1690634707822447E-5, // depth = 15
-    1.084530084565172E-5,  // depth = 16
-    5.422646295795749E-6,  // depth = 17
-    2.711322116099695E-6,  // depth = 18
-    1.3556608000873442E-6, // depth = 19
-    6.778303355805395E-7,  // depth = 20
-    3.389151516386149E-7,  // depth = 21
-    1.69457571754776E-7,   // depth = 22
-    8.472878485272006E-8,  // depth = 23
-    4.236439215502565E-8,  // depth = 24
-    2.1182195982014308E-8, // depth = 25
-    1.0591097960375205E-8, // depth = 26
-    5.295548939447981E-9,  // depth = 27
-    2.647774429917369E-9,  // depth = 28
-    1.3238871881399636E-9  // depth = 29
+static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] = [
+  0.8410686705685088,    // depth = 0
+  0.37723631722170053,   // depth = 1
+  0.18256386461918295,   // depth = 2
+  0.09000432499034523,   // depth = 3
+  0.04470553761855741,   // depth = 4
+  0.02228115704023076,   // depth = 5
+  0.011122977211214961,  // depth = 6
+  0.005557125022105058,  // depth = 7
+  0.0027774761500209185, // depth = 8
+  0.0013884670480328143, // depth = 9
+  6.941658374603201E-4,  // depth = 10
+  3.4706600585087755E-4, // depth = 11
+  1.7352877579970442E-4, // depth = 12
+  8.676333125510362E-5,  // depth = 13
+  4.338140148342286E-5,  // depth = 14
+  2.1690634707822447E-5, // depth = 15
+  1.084530084565172E-5,  // depth = 16
+  5.422646295795749E-6,  // depth = 17
+  2.711322116099695E-6,  // depth = 18
+  1.3556608000873442E-6, // depth = 19
+  6.778303355805395E-7,  // depth = 20
+  3.389151516386149E-7,  // depth = 21
+  1.69457571754776E-7,   // depth = 22
+  8.472878485272006E-8,  // depth = 23
+  4.236439215502565E-8,  // depth = 24
+  2.1182195982014308E-8, // depth = 25
+  1.0591097960375205E-8, // depth = 26
+  5.295548939447981E-9,  // depth = 27
+  2.647774429917369E-9,  // depth = 28
+  1.3238871881399636E-9, // depth = 29
 ];
 
 /// Latitude, in the equatorial region, for which the distance from the cell center to its four
@@ -148,7 +148,7 @@ static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] =  [
 /// > dlon * cos(lat) = dlat (same distance on the sky)
 /// > => cos^2(lat) = 2/3 * 4/pi
 /// > => lat = arccos(sqrt(2/3 * 4/pi)) ~= 22.88 deg ~= 0.39934 rad
-/// 
+///
 /// ```rust
 /// use cdshealpix::{TRANSITION_Z, FOUR_OVER_PI, LAT_OF_SQUARE_CELL};
 /// assert!(f64::abs(f64::acos(f64::sqrt(TRANSITION_Z * FOUR_OVER_PI)) - LAT_OF_SQUARE_CELL) < 1e-15_f64);
@@ -163,8 +163,8 @@ static COS_LAT_OF_SQUARE_CELL: f64 = 0.921_317_731_923_561_3_f64;
 /// - macro do not seems work with static arrays
 /// - const fn is not stable and can only use const fn (so no min/max/sin/ ...) :o/
 static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None
+  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+  None, None, None, None, None, None, None, None, None, None, None, None, None, None,
 ];
 // Found here: https://stackoverflow.com/questions/28656387/initialize-a-large-fixed-size-array-with-non-copy-types
 // I wanted to use it to set a static array. So far it is not possible.
@@ -183,17 +183,42 @@ static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
 static CSTS_C2V: [ConstantsC2V; 30] = unsafe { make_array!(30, |depth| new_cst_c2v(depth)) };
 */
 
-/// See the get_or_create function, each object is used for the lazy instantiation of the 
+/// See the get_or_create function, each object is used for the lazy instantiation of the
 /// layer of the corresponding depht.
 /// Info: Unfortunatly Default::default(); do no work with static arrays :o/
 static CSTS_C2V_INIT: [Once; 30] = [
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(), Once::new(),
-  Once::new(), Once::new()
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
+  Once::new(),
 ];
-/// Lazy factory method: instantiate a new Layer at the first call for a given depth; after the 
+/// Lazy factory method: instantiate a new Layer at the first call for a given depth; after the
 /// first call, returns an already instantiated Layer.
 /// # Info
 /// This method resort to a double-checked lock, ensuring thread-safety.
@@ -203,12 +228,12 @@ fn get_or_create(depth: u8) -> &'static ConstantsC2V {
     // https://doc.rust-lang.org/std/sync/struct.Once.html
     // This implements a double-checked lock
     match CSTS_C2V[depth as usize] {
-      Some(ref v) =>  return v,
+      Some(ref v) => return v,
       None => {
         CSTS_C2V_INIT[depth as usize].call_once(|| {
           CSTS_C2V[depth as usize] = Some(ConstantsC2V::new(depth));
         });
-      },
+      }
     }
     match CSTS_C2V[depth as usize] {
       Some(ref v) => v,
@@ -234,22 +259,25 @@ impl ConstantsC2V {
     // NPC, see comment of function largest_c2v_dist_in_npc()
     let lat_north = f64::asin(1_f64 - (pow2(one_min_dist_cw) / 3_f64));
     let d_min_npc = lat_north - TRANSITION_LATITUDE;
-    let d_max_npc: f64 = sphe_dist(
-      squared_half_segment(
-        FRAC_PI_4 * dist_cw, d_min_npc,
-        lat_north.cos(),  TRANSITION_LATITUDE.cos()));
+    let d_max_npc: f64 = sphe_dist(squared_half_segment(
+      FRAC_PI_4 * dist_cw,
+      d_min_npc,
+      lat_north.cos(),
+      TRANSITION_LATITUDE.cos(),
+    ));
     debug_assert!(d_min_npc < d_max_npc);
     // - linear approx
     let slope_npc: f64 = (d_max_npc - d_min_npc) / (FRAC_PI_4 * one_min_dist_cw); // a = (yB - yA) / (xB - xA); with xA = 0
-    let intercept_npc: f64 = d_min_npc;                                           // b = yA - a * xA          ; with xA = 0
-    // EQR TOP, see comment of function largest_c2v_dist_in_eqr_top()
+    let intercept_npc: f64 = d_min_npc; // b = yA - a * xA          ; with xA = 0
+                                        // EQR TOP, see comment of function largest_c2v_dist_in_eqr_top()
     let d_min_eqr_top = PI_OVER_FOUR * dist_cw * COS_LAT_OF_SQUARE_CELL; // pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
     let d_max_eqr_top = TRANSITION_LATITUDE - f64::asin(one_min_dist_cw * TRANSITION_Z);
     //debug_assert!((d_min_npc - d_max_eqr_top).abs() < 1e-5, "depth: {}, 1: {}; 2: {}", depth, d_min_npc.to_degrees() * 3600.0, d_max_eqr_top.to_degrees() * 3600.0);
     debug_assert!(d_min_eqr_top < d_max_eqr_top);
-    let slope_eqr: f64 = (d_max_eqr_top - d_min_eqr_top) / (TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL); // a = (yB - yA) / (xB - xA)
-    let intercept_eqr: f64 = d_min_eqr_top - slope_eqr * LAT_OF_SQUARE_CELL;                           // b = yA - a * xA
-    // EQR BOTTOM,  see comment of function largest_c2v_dist_in_eqr_bottom()
+    let slope_eqr: f64 =
+      (d_max_eqr_top - d_min_eqr_top) / (TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL); // a = (yB - yA) / (xB - xA)
+    let intercept_eqr: f64 = d_min_eqr_top - slope_eqr * LAT_OF_SQUARE_CELL; // b = yA - a * xA
+                                                                             // EQR BOTTOM,  see comment of function largest_c2v_dist_in_eqr_bottom()
     let d_max = PI_OVER_FOUR * dist_cw;
     let coeff_cst_eqr: f64 = d_max;
     let coeff_x2_eqr: f64 = (d_min_eqr_top - d_max) / pow2(LAT_OF_SQUARE_CELL);
@@ -260,7 +288,7 @@ impl ConstantsC2V {
       slope_eqr,
       intercept_eqr,
       coeff_x2_eqr,
-      coeff_cst_eqr
+      coeff_cst_eqr,
     }
   }
 }
@@ -268,9 +296,7 @@ impl ConstantsC2V {
 #[inline]
 // #[allow(dead_code)]
 pub fn haversine_dist(p1_lon: f64, p1_lat: f64, p2_lon: f64, p2_lat: f64) -> f64 {
-  let shs = squared_half_segment(
-    p2_lon - p1_lon, p2_lat - p1_lat, 
-    p1_lat.cos(), p2_lat.cos());
+  let shs = squared_half_segment(p2_lon - p1_lon, p2_lat - p1_lat, p1_lat.cos(), p2_lat.cos());
   sphe_dist(shs)
 }
 
@@ -280,7 +306,7 @@ fn sphe_dist(squared_half_segment: f64) -> f64 {
   squared_half_segment.sqrt().asin().twice()
 }
 
-/// Returns `(s/2)^2` with `s` the segment (i.e. the Euclidean distance) between 
+/// Returns `(s/2)^2` with `s` the segment (i.e. the Euclidean distance) between
 /// the two given points  `P1` and `P2` on the unit-sphere.
 /// We recall that `s = 2 sin(ad/2)` with `ad` the angular distance between the two points.
 /// # Input
@@ -334,29 +360,27 @@ impl Customf64 for f64 {
   fn div_eucl(self, rhs: f64) -> f64 {
     let q = (self / rhs).trunc();
     if self % rhs < 0.0 {
-      return if rhs > 0.0 { q - 1.0 } else { q + 1.0 }
+      return if rhs > 0.0 { q - 1.0 } else { q + 1.0 };
     }
     q
   }
 }
 // All types that implement `f64` get methods defined in `Customf64` for free.
 // impl<F: f64> Customf64 for F {}*/
-
-
-/// Returns an upper limit on the distance between a cell center around the given position 
+/// Returns an upper limit on the distance between a cell center around the given position
 /// and its furthest vertex.
 /// # Params
 /// - `depth` the depth of the cell
-/// - `lon` the longitude of the point on the unit-sphere, in radians 
+/// - `lon` the longitude of the point on the unit-sphere, in radians
 /// - `lat` the latitude of the point on the unit-sphere, in radians
-/// 
+///
 /// # Result
 /// The following plot shows, for the depth 8, the real largest distances (in red) and the result
 /// of this method (in blue).  
 /// WARNING: the units of `(lon, lat)` on the plot are *degrees*, while the distance is in *mas*  
 /// Credit: plot made using [TOPCAT](http://www.star.bris.ac.uk/~mbt/topcat/)
 /// ![CenterToVertexDist](https://raw.githubusercontent.com/cds-astro/cds-healpix-rust/master/resources/4doc/d_center_vertex.png)
-/// 
+///
 pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
   // Specific case for depth 0
   if depth == 0 {
@@ -378,11 +402,16 @@ pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
 /// It is an extension of [largest_center_to_vertex_distance](#fn.largest_center_to_vertex_distance)
 /// # Params
 /// - `depth` the depth of the cell
-/// - `lon` the longitude of the point on the unit-sphere, in radians 
+/// - `lon` the longitude of the point on the unit-sphere, in radians
 /// - `lat` the latitude of the point on the unit-sphere, in radians
 /// - `radius` the radius of the cone, in radians
 ///
-pub fn largest_center_to_vertex_distance_with_radius(depth: u8, lon: f64, lat: f64, radius: f64) -> f64 {
+pub fn largest_center_to_vertex_distance_with_radius(
+  depth: u8,
+  lon: f64,
+  lat: f64,
+  radius: f64,
+) -> f64 {
   // Specific case for depth 0
   if depth == 0 {
     return FRAC_PI_2 - TRANSITION_LATITUDE;
@@ -401,14 +430,20 @@ pub fn largest_center_to_vertex_distance_with_radius(depth: u8, lon: f64, lat: f
     let csts = get_or_create(depth);
     f64::max(
       largest_c2v_dist_in_eqr_top_with_radius(lat_abs, radius, csts),
-      largest_c2v_dist_in_eqr_bottom_with_radius(lat_abs, radius, csts)
+      largest_c2v_dist_in_eqr_bottom_with_radius(lat_abs, radius, csts),
     )
   }
 }
 
 /// Same as [largest_center_to_vertex_distance_with_radius](#fn.largest_center_to_vertex_distance_with_radius)
 /// but making the computation for several depths at the same time.
-pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_depth: u8, lon: f64, lat: f64, radius: f64) -> Box<[f64]> {
+pub fn largest_center_to_vertex_distances_with_radius(
+  mut from_depth: u8,
+  to_depth: u8,
+  lon: f64,
+  lat: f64,
+  radius: f64,
+) -> Box<[f64]> {
   let mut vec: Vec<f64> = Vec::with_capacity((to_depth - from_depth) as usize);
   // Specific case for depth 0
   if from_depth == 0 {
@@ -433,19 +468,20 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
   } else if lat_max <= LAT_OF_SQUARE_CELL {
     let val_min = f64::max(lat_min, 0_f64);
     for depth in from_depth..to_depth {
-      vec.push(largest_c2v_dist_in_eqr_bottom(val_min, get_or_create(depth))); 
+      vec.push(largest_c2v_dist_in_eqr_bottom(
+        val_min,
+        get_or_create(depth),
+      ));
     }
   } else {
     let val_max = f64::min(lat_max, TRANSITION_LATITUDE);
     let val_min = f64::max(lat_min, 0_f64);
     for depth in from_depth..to_depth {
       let csts = get_or_create(depth);
-      vec.push(
-        f64::max(
-          largest_c2v_dist_in_eqr_top(val_max, csts),
-          largest_c2v_dist_in_eqr_bottom(val_min, csts)
-        )
-      );
+      vec.push(f64::max(
+        largest_c2v_dist_in_eqr_top(val_max, csts),
+        largest_c2v_dist_in_eqr_bottom(val_min, csts),
+      ));
     }
   }
   vec.into_boxed_slice()
@@ -457,7 +493,7 @@ pub fn largest_center_to_vertex_distances_with_radius(mut from_depth: u8, to_dep
 /// We use a linear upper limit based on the longitude.
 /// - At the transition latitude, we note CN the distance at a base cell border between:
 ///   - Cell center (C): (x_c = 1/nside, y_c = 1) => (lon_c = pi/4 * 1/nside, lat_c = TRANSITION_LATITUDE)
-///   - North vertex (N): (x_n = 0, y_c = 2 - (1 + 1/nside)) => (lon_n = 0, lat_n = asin(1 - ((1 - 1/nside)^2 / 3)) 
+///   - North vertex (N): (x_n = 0, y_c = 2 - (1 + 1/nside)) => (lon_n = 0, lat_n = asin(1 - ((1 - 1/nside)^2 / 3))
 ///   - using the Haversine formula and SC defined below:
 /// > dMax = CN = 2 * asin(sqrt( sin^2(SC/2)  + sin^2(pi/8) * cos(pi/4 * 1/nside)))
 /// - At the transition latitude, we not SC the distance at a base cell center between:
@@ -486,10 +522,10 @@ fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2
 /// We assumes that the cell center is located in the equatorial region,
 /// above the latitude at which cells are squares.
 /// We use a linear upper limit based on the latitude.
-/// - At the latitude in which cells are squares (lat = LAT_OF_SQUARE_CELL), we note CE the 
+/// - At the latitude in which cells are squares (lat = LAT_OF_SQUARE_CELL), we note CE the
 ///   Center-to-East distance: CE (=CW) =  pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
 /// > dMin = pi/4 * 1/nside * cos(LAT_OF_SQUARE_CELL)
-/// - At the latitude under the transition latitude, we note CN the distance with N on the 
+/// - At the latitude under the transition latitude, we note CN the distance with N on the
 ///   transition latitude and C at latitude: y_c = 1 - 1/nside => lat_c = arcsin(y_c * 2/3)
 /// > dMax = TRANSITION_LATITUDE - arcsin(y_c * 2/3)
 /// - finally, linear approx:
@@ -527,7 +563,11 @@ fn largest_c2v_dist_in_eqr_bottom(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
 }
 /// Same as the above method, but taking into account an additional radius.
 #[inline]
-fn largest_c2v_dist_in_eqr_bottom_with_radius(lat_abs: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
+fn largest_c2v_dist_in_eqr_bottom_with_radius(
+  lat_abs: f64,
+  radius: f64,
+  csts: &ConstantsC2V,
+) -> f64 {
   debug_assert!(0_f64 < radius);
   debug_assert!(0_f64 <= lat_abs && lat_abs <= LAT_OF_SQUARE_CELL);
   largest_c2v_dist_in_eqr_bottom(f64::max(lat_abs - radius, 0_f64), csts)
@@ -591,17 +631,16 @@ fn linear_approx(x: f64, slope: f64, intercept: f64) -> f64 {
 /// ```
 #[inline]
 pub fn nside(depth: u8) -> u32 {
-    check_depth(depth);
-    nside_unsafe(depth)
+  check_depth(depth);
+  nside_unsafe(depth)
 }
 
 /// Same as [nside](fn.nside.html) except that this version does not check the argument, and thus
 /// does not panics if the argument is illegal.
 #[inline]
 pub const fn nside_unsafe(depth: u8) -> u32 {
-    1_u32 << depth
+  1_u32 << depth
 }
-
 
 /// Returns, for the given difference of depth, the number of cells small cells the large cell
 /// contains. If the small cell level is 0, the result is the sqaured nside.
@@ -619,7 +658,7 @@ pub const fn nside_unsafe(depth: u8) -> u32 {
 ///
 /// ```rust
 /// use cdshealpix::{nside_square};
-/// 
+///
 /// for delta_depth in 0..29_u8 {
 ///     assert_eq!(2u64.pow(2 * delta_depth as u32), nside_square(delta_depth));
 /// }
@@ -630,7 +669,7 @@ pub fn nside_square(delta_depth: u8) -> u64 {
   nside_square_unsafe(delta_depth)
 }
 
-/// Same as [nside_square](fn.nside_square.html) except that this version does not check the argument, 
+/// Same as [nside_square](fn.nside_square.html) except that this version does not check the argument,
 /// and thus does not panics if the argument is illegal.
 #[inline]
 pub const fn nside_square_unsafe(delta_depth: u8) -> u64 {
@@ -639,18 +678,18 @@ pub const fn nside_square_unsafe(delta_depth: u8) -> u64 {
 
 #[inline]
 fn check_depth(depth: u8) {
-    assert!(is_depth(depth), "Expected depth in [0, 29]");
+  assert!(is_depth(depth), "Expected depth in [0, 29]");
 }
 
-/// Returns `true` if the given argument is a valid depth, i.e. if it is <= [DEPTH_MAX](constant.DEPTH_MAX.html). 
+/// Returns `true` if the given argument is a valid depth, i.e. if it is <= [DEPTH_MAX](constant.DEPTH_MAX.html).
 #[inline]
 pub const fn is_depth(depth: u8) -> bool {
-    depth <= DEPTH_MAX
+  depth <= DEPTH_MAX
 }
 
 /// Returns, for the given `nside`, the number of subdivision of a base-resolution cell (i.e. the depth).
 /// For the NESTED scheme only.
-/// 
+///
 /// # Input
 /// - `nside` must be a power of 2 in `[0, 2^29]`
 ///
@@ -671,39 +710,39 @@ pub const fn is_depth(depth: u8) -> bool {
 /// ```
 #[inline]
 pub fn depth(nside: u32) -> u8 {
-    check_nside(nside);
-    depth_unsafe(nside)
+  check_nside(nside);
+  depth_unsafe(nside)
 }
 
 /// Same as [depth](fn.depth.html) except that this version does not check the argument, and thus
 /// does not panics if the argument is illegal.
 #[inline]
 pub const fn depth_unsafe(nside: u32) -> u8 {
-    nside.trailing_zeros() as u8
+  nside.trailing_zeros() as u8
 }
 
 #[inline]
 fn check_nside(nside: u32) {
-    assert!(is_nside(nside), "Nside must be a power of 2 in [1-2^29]");
+  assert!(is_nside(nside), "Nside must be a power of 2 in [1-2^29]");
 }
 
-/// Returns `true` if the given argument is a valid `nside` for the NESTED scheme, i.e. 
-/// if it is a power of 2, is != 0 and is <= [NSIDE_MAX](constant.NSIDE_MAX.html). 
+/// Returns `true` if the given argument is a valid `nside` for the NESTED scheme, i.e.
+/// if it is a power of 2, is != 0 and is <= [NSIDE_MAX](constant.NSIDE_MAX.html).
 #[inline]
 pub fn is_nside(nside: u32) -> bool {
-    is_pow_of_2(nside) && nside > 0 && nside <= NSIDE_MAX
+  is_pow_of_2(nside) && nside > 0 && nside <= NSIDE_MAX
 }
 
 /// Determines if an integer is a power of two, including 0.
 /// Taken from the "Bit Twiddling Hacks" web page of Sean Eron Anderson.
 #[inline]
 fn is_pow_of_2(x: u32) -> bool {
-    (x & (x - 1)) == 0
+  (x & (x - 1)) == 0
 }
 
 /// Returns the number of distinct hash value (the number of cells or pixel the unit sphere is
 /// devided in) at the given `depth`.
-/// 
+///
 /// # Input
 /// - `depth` must be in `[0, 29]`
 ///
@@ -714,10 +753,10 @@ fn is_pow_of_2(x: u32) -> bool {
 /// If `depth` is not valid (see [is_depth](fn.is_depth.html)), this method panics.
 ///
 /// # Examples
-/// 
+///
 /// ```rust
 /// use cdshealpix::{n_hash};
-/// 
+///
 /// assert_eq!(12u64, n_hash(0u8));
 /// assert_eq!(48u64, n_hash(1u8));
 /// assert_eq!(192u64, n_hash(2u8));
@@ -749,7 +788,7 @@ fn is_pow_of_2(x: u32) -> bool {
 /// assert_eq!(864691128455135232u64, n_hash(28u8));
 /// assert_eq!(3458764513820540928u64, n_hash(29u8));
 /// ```
-/// 
+///
 #[inline]
 pub fn n_hash(depth: u8) -> u64 {
   check_depth(depth);
@@ -759,21 +798,23 @@ pub fn n_hash(depth: u8) -> u64 {
 /// Same as [n_hash](fn.n_hash.html) except that this version does not panic if the given `depth` is
 /// out of range.
 #[inline]
-pub const fn n_hash_unsafe(depth: u8) -> u64 { 12u64 << (depth << 1u8) }
+pub const fn n_hash_unsafe(depth: u8) -> u64 {
+  12u64 << (depth << 1u8)
+}
 
 /// Returns `true` if the function [best_starting_depth](fn.best_starting_depth.html) is valid
 /// for the given argument `d_max_rad`. So if `d_max_rad < ~48 deg`. `d_max_rad` is given in radians.
-/// 
+///
 /// ```rust
 /// use cdshealpix::{has_best_starting_depth};
 /// use std::f64::consts::PI;
-/// 
+///
 /// assert!(!has_best_starting_depth(PI / 3f64));
 /// assert!(has_best_starting_depth(PI / 4f64));
 /// ```
 #[inline]
 pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
-    d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0]
+  d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0]
 }
 
 /// Returns the the smallest depth (in `[0, 29]`) at which a shape having the given largest distance
@@ -785,18 +826,18 @@ pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
 /// (in [0, 29]) at which a shape having the given largest distance from its center to a border
 /// overlaps a maximum of 9 cells (the cell containing the center of the shape plus the 8
 /// neighbouring cells).
-/// 
+///
 /// # Input
 /// - `d_max_rad` largest possible distance, in radians, between the center and the border of a shape
 ///
 /// # Output
-/// - `depth` = the smallest depth (in `[0, 29]`) at which a shape having the given largest distance 
+/// - `depth` = the smallest depth (in `[0, 29]`) at which a shape having the given largest distance
 /// from its center to a border overlaps a maximum of 9 cells (the cell containing the center of the
 /// shape plus the 8 neighbouring cells).
 ///
 /// # Panics
 /// If the given distance is very large (> ~48deg), this function is not valid since the 12 base
-/// cells could be overlaped by the shape 
+/// cells could be overlaped by the shape
 /// (see [has_best_starting_depth](fn.has_best_starting_depth.html)). Thus it panics.
 ///
 /// # Examples
@@ -814,95 +855,98 @@ pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
 /// assert_eq!(22, best_starting_depth(9.537E-8)); // 20 mas
 /// ```
 #[inline]
-pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
-    assert!(d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0],
-            "Too large value, use first function has_best_starting_depth");
-    // Unrolled binary search loop
-    if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[29] {
-        29
-    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[15] {
-        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[22] {
-            if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[25] {
-                if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[27] {
-                    if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[28] {
-                        28
-                    } else {
-                        27
-                    } 
-                } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[26] {
-                    26
-                } else {
-                    25
-                } 
-            } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[24] {
-                24
-            } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[23] {
-                23
-            } else {
-                22
-            }
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[18] {
-            if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[20] {
-                if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[21] {
-                    21
-                } else {
-                    20
-                }
-            } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[19] {
-                19
-            } else {
-                18
-            }
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[17] {
-            17
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[16] {
-            16
+pub fn best_starting_depth(d_max_rad: f64) -> u8 {
+  // Could have used an Option
+  assert!(
+    d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0],
+    "Too large value, use first function has_best_starting_depth"
+  );
+  // Unrolled binary search loop
+  if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[29] {
+    29
+  } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[15] {
+    if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[22] {
+      if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[25] {
+        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[27] {
+          if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[28] {
+            28
+          } else {
+            27
+          }
+        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[26] {
+          26
         } else {
-            15
+          25
         }
-    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[7] {
-        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[11] {
-            if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[13] {
-                if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[14] {
-                    14
-                } else {
-                    13
-                }
-            } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[12] {
-                12
-            } else {
-                11
-            }
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[9] {
-            if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[10] {
-                10
-            } else {
-                9
-            }
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[8] {
-            8
+      } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[24] {
+        24
+      } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[23] {
+        23
+      } else {
+        22
+      }
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[18] {
+      if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[20] {
+        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[21] {
+          21
         } else {
-            7
+          20
         }
-    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[3] {
-        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[5] {
-            if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[6] {
-                6
-            } else {
-                5
-            }
-        } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[4] {
-            4
-        } else {
-            3
-        }
-    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[2] {
-        2
-    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[1] {
-        1
+      } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[19] {
+        19
+      } else {
+        18
+      }
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[17] {
+      17
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[16] {
+      16
     } else {
-        0
+      15
     }
+  } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[7] {
+    if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[11] {
+      if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[13] {
+        if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[14] {
+          14
+        } else {
+          13
+        }
+      } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[12] {
+        12
+      } else {
+        11
+      }
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[9] {
+      if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[10] {
+        10
+      } else {
+        9
+      }
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[8] {
+      8
+    } else {
+      7
+    }
+  } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[3] {
+    if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[5] {
+      if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[6] {
+        6
+      } else {
+        5
+      }
+    } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[4] {
+      4
+    } else {
+      3
+    }
+  } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[2] {
+    2
+  } else if d_max_rad < SMALLER_EDGE2OPEDGE_DIST[1] {
+    1
+  } else {
+    0
+  }
 }
 
 /// Performs the HEALPix projection: `(x, y) = proj(lon, lat)`.  
@@ -910,9 +954,9 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// the distance from a cell center to its vertices equals one.  
 /// This projection is multi-purpose in the sense that if `lon` is in `[-pi, pi]`, then
 /// `x` is in `[-4, 4]` and if `lon` is in `[0, 2pi]`, then `x` is in `[0, 8]`.  
-/// It means that a same position on the sphere can lead to different positions in the projected 
+/// It means that a same position on the sphere can lead to different positions in the projected
 /// Euclidean plane.
-/// 
+///
 /// Simplified projection formulae are:
 ///  - Equatorial region
 /// ```math
@@ -957,7 +1001,7 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 ///    Y \in ]1, 2]
 /// \end{array}
 /// ```
-/// 
+///
 /// It is the responsibility of the caller to homogenize the result according to its needs.
 /// ![Proj](https://raw.githubusercontent.com/cds-astro/cds-healpix-rust/master/resources/4doc/hpx_proj.png)
 ///
@@ -1000,7 +1044,7 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// ```rust
 /// use cdshealpix::{TRANSITION_LATITUDE, proj};
 /// use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
-/// 
+///
 /// let (x, y) = proj(0.0, 0.0);
 /// assert_eq!(0f64, x);
 /// assert_eq!(0f64, y);
@@ -1054,37 +1098,37 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 { // Could have used an Option
 /// ```
 #[inline]
 pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
-    check_lat(lat);
-    let lon = abs_sign_decompose(lon);
-    let lat = abs_sign_decompose(lat);
-    let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
-    let mut xy = (x.pm1, lat.abs);
-    if is_in_equatorial_region(lat.abs) {
-        proj_cea(&mut xy);
-    } else {
-        proj_collignon(&mut xy);
-    }
-    apply_offset_and_signs(&mut xy, x.offset, lon.sign, lat.sign);
-    xy
+  check_lat(lat);
+  let lon = abs_sign_decompose(lon);
+  let lat = abs_sign_decompose(lat);
+  let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
+  let mut xy = (x.pm1, lat.abs);
+  if is_in_equatorial_region(lat.abs) {
+    proj_cea(&mut xy);
+  } else {
+    proj_collignon(&mut xy);
+  }
+  apply_offset_and_signs(&mut xy, x.offset, lon.sign, lat.sign);
+  xy
 }
 
 /// Returns the hash of the base cell given the coordinates of a points in the Euclidean projection
 /// plane.
-/// The purpose so far is just to test and compare both speed and precision with the 45deg 
+/// The purpose so far is just to test and compare both speed and precision with the 45deg
 /// rotation solution.
-/// 
+///
 /// # Input
-/// - `(x, y)` the coordinates in the Euclidean projection plane, i.e. $x \in [0, 8[$ 
+/// - `(x, y)` the coordinates in the Euclidean projection plane, i.e. $x \in [0, 8[$
 /// and $y \in [-2, 2]$
-/// 
+///
 /// # Ouput
 /// - `d0h` the hash value of the base cell (i.e. the depth 0 / nside 1 cell)
-/// 
+///
 /// # Example
 /// Simple example based on the center of each base cell.
 /// ```rust
 /// use cdshealpix::base_cell_from_proj_coo;
-/// 
+///
 /// assert_eq!(base_cell_from_proj_coo(1.0,  1.0),  0);
 /// assert_eq!(base_cell_from_proj_coo(3.0,  1.0),  1);
 /// assert_eq!(base_cell_from_proj_coo(5.0,  1.0),  2);
@@ -1101,15 +1145,21 @@ pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
 pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   let mut x = 0.5 * ensures_x_is_positive(x);
   let mut y = 0.5 * (y + 3.0);
-  let mut i = x as u8;     debug_assert!(i <  4); // if can be == 4, then (x as u8) & 3
-  let mut j = (y as u8) << 1;  debug_assert!(j == 0 || j == 2 || j == 4);
-  x -= i as f64;               debug_assert!((0.0..1.0).contains(&x));
-  y -= (j >> 1) as f64;        debug_assert!((0.0..1.0).contains(&y));
-  let in_northwest = (x <= y) as u8;       // 1/0
+  let mut i = x as u8;
+  debug_assert!(i < 4); // if can be == 4, then (x as u8) & 3
+  let mut j = (y as u8) << 1;
+  debug_assert!(j == 0 || j == 2 || j == 4);
+  x -= i as f64;
+  debug_assert!((0.0..1.0).contains(&x));
+  y -= (j >> 1) as f64;
+  debug_assert!((0.0..1.0).contains(&y));
+  let in_northwest = (x <= y) as u8; // 1/0
   let in_southeast = (x >= 1.0 - y) as u8; // 0\1
   i += in_southeast >> in_northwest; // <=> in_southeast & (1 - in_northwest) => 0 or 1
   j += in_northwest + in_southeast;
-  if j == 6 { j = 4; } // Very rare case (North pole), so few risks of branch miss-prediction
+  if j == 6 {
+    j = 4;
+  } // Very rare case (North pole), so few risks of branch miss-prediction
   debug_assert!(j == 2 || j == 3 || j == 4);
   ((4 - j) << 2) + i
 }
@@ -1119,14 +1169,14 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 ///  - if input `x` in `[-8, 0[`, then output `lon` in `[-2pi, 0]`
 ///  - if input `x` in `[ 0, 8]`, then output `lon` in `[0, 2pi]`
 ///  - output `lat` always in `[-pi/2, pi/2]`
-/// 
+///
 /// # Inputs
-///  - `x` the projected coordinate along the x-axis, supports positive and negative reasonably 
+///  - `x` the projected coordinate along the x-axis, supports positive and negative reasonably
 ///        large values with a naive approach (no Cody-Waite nor Payne Hanek range reduction).
 ///  - `y` the projected coordinate along te x-axis, must be in `[-2, 2]`
-/// 
+///
 /// # Output
-/// -  `(lon, lat)` in radians, the position on the unit sphere whose projected coordinates are 
+/// -  `(lon, lat)` in radians, the position on the unit sphere whose projected coordinates are
 ///    the input coordinates `(x, y)`.  
 ///   - if `x <= 0`, then `lon` in `[-2pi, 0]`;
 ///   - else if `x >= 0`, the  `lon` in `[0, 2pi]`
@@ -1163,7 +1213,7 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 ///     let sindlat = f64::sin(0.5 * (p2.1 - p1.1));
 ///     2f64 * f64::asin(f64::sqrt(sindlat * sindlat + p1.1.cos() * p2.1.cos() * sindlon * sindlon))
 /// }
-/// 
+///
 /// let points: [(f64, f64); 40] = [
 ///     (0.0 * FRAC_PI_2, 0.0),
 ///     (1.0 * FRAC_PI_2, TRANSITION_LATITUDE),
@@ -1206,7 +1256,7 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 ///     (-3.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2),
 ///     (-4.0 * FRAC_PI_2 + FRAC_PI_4, -FRAC_PI_2)
 /// ];
-/// 
+///
 /// for (lon, lat) in points.iter() {
 ///     let (x, y): (f64, f64) = proj(*lon, *lat);
 ///     assert!(dist((*lon, *lat), unproj(x, y)) < 1e-15);
@@ -1214,32 +1264,36 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 /// ```
 #[inline]
 pub fn unproj(x: f64, y: f64) -> (f64, f64) {
-    check_y(y);
-    let x = abs_sign_decompose(x);
-    let y = abs_sign_decompose(y);
-    let lon = pm1_offset_decompose(x.abs);
-    let mut lonlat= (lon.pm1, y.abs);
-    if is_in_projected_equatorial_region(y.abs) {
-        deproj_cea(&mut lonlat);
-    } else {
-        deproj_collignon(&mut lonlat);
-    }
-    apply_offset_and_signs(&mut lonlat, lon.offset, x.sign, y.sign);
-    lonlat.0 *= FRAC_PI_4;
-    lonlat
+  check_y(y);
+  let x = abs_sign_decompose(x);
+  let y = abs_sign_decompose(y);
+  let lon = pm1_offset_decompose(x.abs);
+  let mut lonlat = (lon.pm1, y.abs);
+  if is_in_projected_equatorial_region(y.abs) {
+    deproj_cea(&mut lonlat);
+  } else {
+    deproj_collignon(&mut lonlat);
+  }
+  apply_offset_and_signs(&mut lonlat, lon.offset, x.sign, y.sign);
+  lonlat.0 *= FRAC_PI_4;
+  lonlat
 }
 
 /// In the case we want the projection to return values `x in [0, 8]`, we just have to apply
 /// this method to the returned `x` value.
 #[inline]
 pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
-  if x < 0.0 { x + 8.0 } else { x }
+  if x < 0.0 {
+    x + 8.0
+  } else {
+    x
+  }
 }
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
 fn check_lat(lat: f64) {
-    assert!((-FRAC_PI_2..=FRAC_PI_2).contains(&lat));
+  assert!((-FRAC_PI_2..=FRAC_PI_2).contains(&lat));
 }
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
@@ -1248,119 +1302,127 @@ fn check_lat_res(lat: f64) -> Result<(), String> {
   if (-FRAC_PI_2..=FRAC_PI_2).contains(&lat) {
     Ok(())
   } else {
-    Err(format!("Wrong latitude. Expected value in [-pi/2, pi/2]. Actual: {}", lat))
+    Err(format!(
+      "Wrong latitude. Expected value in [-pi/2, pi/2]. Actual: {}",
+      lat
+    ))
   }
 }
 
 /// Verify that the projected y coordinate is in [-2, 2], panics if not.
 #[inline]
-fn check_y(y: f64) { assert!((-2f64..=2f64).contains(&y)); }
+fn check_y(y: f64) {
+  assert!((-2f64..=2f64).contains(&y));
+}
 
 /// Returns `true` if the point of given (absolute value of) latitude is in the equatorial region,
 /// and `false` if it is located in one of the two polar caps
 #[inline]
 pub fn is_in_equatorial_region(abs_lat: f64) -> bool {
-    abs_lat <= TRANSITION_LATITUDE
+  abs_lat <= TRANSITION_LATITUDE
 }
 
 /// Returns `true` if the point of given (absolute value of) y coordinate in the projected plane
 /// is in the equatorial region, and `false` if it is located in one of the two polar caps
 #[inline]
-pub fn is_in_projected_equatorial_region(abs_y: f64) -> bool { abs_y <= 1.0 }
+pub fn is_in_projected_equatorial_region(abs_y: f64) -> bool {
+  abs_y <= 1.0
+}
 
 // Returns the absolute value of the given double together with its bit of sign
 struct AbsAndSign {
-    abs: f64,
-    sign: u64,
+  abs: f64,
+  sign: u64,
 }
 #[inline]
 pub(crate) fn abs_sign_decompose(x: f64) -> AbsAndSign {
-    let bits = f64::to_bits(x);
-    AbsAndSign {
-        abs: f64::from_bits(bits & F64_BUT_SIGN_BIT_MASK),
-        sign: bits & F64_SIGN_BIT_MASK,
-    }
+  let bits = f64::to_bits(x);
+  AbsAndSign {
+    abs: f64::from_bits(bits & F64_BUT_SIGN_BIT_MASK),
+    sign: bits & F64_SIGN_BIT_MASK,
+  }
 }
 
 // Decompose the given positive real value in
 // --* an integer offset in [1, 3, 5, 7] (*PI/4) and
 // --* a real value in [-1.0, 1.0] (*PI/4)
 pub(crate) struct OffsetAndPM1 {
-    offset: u8, // = 1, 3, 5 or 7
-    pm1: f64,   // in [-1.0, 1.0]
+  offset: u8, // = 1, 3, 5 or 7
+  pm1: f64,   // in [-1.0, 1.0]
 }
 #[inline]
 pub(crate) fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
-    let floor: u8 = x as u8;
-    let odd_floor: u8 = floor | 1u8;
-    OffsetAndPM1 {
-        offset: odd_floor & 7u8, // value modulo 8
-        pm1: x - (odd_floor as f64),
-    }
+  let floor: u8 = x as u8;
+  let odd_floor: u8 = floor | 1u8;
+  OffsetAndPM1 {
+    offset: odd_floor & 7u8, // value modulo 8
+    pm1: x - (odd_floor as f64),
+  }
 }
 
 // Cylindrical Equal Area projection
 #[inline]
 pub(crate) fn proj_cea(xy: &mut (f64, f64)) {
-    let (_, ref mut y) = *xy;
-    *y = f64::sin(*y) * ONE_OVER_TRANSITION_Z;
+  let (_, ref mut y) = *xy;
+  *y = f64::sin(*y) * ONE_OVER_TRANSITION_Z;
 }
 #[inline]
 fn deproj_cea(lonlat: &mut (f64, f64)) {
-    let (_, ref mut lat) = *lonlat;
-    // Using asin is OK here since |lat*TRANSITION_Z| < 2/3, so not near from 1.
-    *lat = f64::asin((*lat) * TRANSITION_Z);
+  let (_, ref mut lat) = *lonlat;
+  // Using asin is OK here since |lat*TRANSITION_Z| < 2/3, so not near from 1.
+  *lat = f64::asin((*lat) * TRANSITION_Z);
 }
 
 // Collignon projection
 #[inline]
 pub(crate) fn proj_collignon(xy: &mut (f64, f64)) {
-    let (ref mut x, ref mut y) = *xy;
-    *y = SQRT6 * f64::cos(HALF * *y + FRAC_PI_4);
-    *x *= *y;
-    *y = 2.0 - *y;
+  let (ref mut x, ref mut y) = *xy;
+  *y = SQRT6 * f64::cos(HALF * *y + FRAC_PI_4);
+  *x *= *y;
+  *y = 2.0 - *y;
 }
 #[inline]
 fn deproj_collignon(lonlat: &mut (f64, f64)) {
-    let (ref mut lon, ref mut lat) = *lonlat;
-    *lat = 2.0 - *lat;
-    if is_not_near_from_pole(*lat) { // Rare, so few risks of branch miss-prediction
-        *lon /= *lat;
-        deal_with_numerical_approx_in_edges(lon);
-    } // in case of pole, lon = lat = 0 (we avoid NaN due to division by lat=0)
-    *lat *= ONE_OVER_SQRT6;
-    // Using acos is OK here since lat < 1/sqrt(6), so not near from 1.
-    *lat = 2.0 * f64::acos(*lat) - FRAC_PI_2;
+  let (ref mut lon, ref mut lat) = *lonlat;
+  *lat = 2.0 - *lat;
+  if is_not_near_from_pole(*lat) {
+    // Rare, so few risks of branch miss-prediction
+    *lon /= *lat;
+    deal_with_numerical_approx_in_edges(lon);
+  } // in case of pole, lon = lat = 0 (we avoid NaN due to division by lat=0)
+  *lat *= ONE_OVER_SQRT6;
+  // Using acos is OK here since lat < 1/sqrt(6), so not near from 1.
+  *lat = 2.0 * f64::acos(*lat) - FRAC_PI_2;
 }
 
 #[inline]
 fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
-    // In case of pole: x = y = 0
-    sqrt_of_three_time_one_minus_sin_of > EPS_POLE
+  // In case of pole: x = y = 0
+  sqrt_of_three_time_one_minus_sin_of > EPS_POLE
 }
 
 #[inline]
 fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
-    if *lon > 1.0 {
-        *lon = 1.0;
-    } else if *lon < -1.0 {
-        *lon = -1.0;
-    }
+  if *lon > 1.0 {
+    *lon = 1.0;
+  } else if *lon < -1.0 {
+    *lon = -1.0;
+  }
 }
 
 // Shift x by the given offset and apply lon and lat signs to x and y respectively
 #[inline]
 pub(crate) fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64) {
-    let (ref mut a, ref mut b) = *ab;
-    *a += off as f64;
-    *a = f64::from_bits(f64::to_bits(*a) | a_sign);
-    *b = f64::from_bits(f64::to_bits(*b) | b_sign);
+  let (ref mut a, ref mut b) = *ab;
+  *a += off as f64;
+  *a = f64::from_bits(f64::to_bits(*a) | a_sign);
+  *b = f64::from_bits(f64::to_bits(*b) | b_sign);
 }
 
 // Import module compass point
 pub mod compass_point;
 pub mod external_edge;
-use crate::compass_point::{MainWind};
+use crate::compass_point::MainWind;
 use crate::compass_point::MainWind::*;
 
 /// Compute the base cell value which is the neighbour of the given base cell, in the given direction.  
@@ -1373,8 +1435,9 @@ pub fn neighbour(base_cell: u8, direction: MainWind) -> Option<u8> {
   if direction == MainWind::C {
     Some(base_cell)
   } else {
-    let d0h_mod_4 = base_cell & 3_u8;  // <=> base_cell modulo 4
-    match base_cell >> 2 { // <=> basce_cell / 4
+    let d0h_mod_4 = base_cell & 3_u8; // <=> base_cell modulo 4
+    match base_cell >> 2 {
+      // <=> basce_cell / 4
       0 => npc_neighbour(d0h_mod_4, direction),
       1 => eqr_neighbour(d0h_mod_4, direction),
       2 => spc_neighbour(d0h_mod_4, direction),
@@ -1385,23 +1448,23 @@ pub fn neighbour(base_cell: u8, direction: MainWind) -> Option<u8> {
 
 fn npc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
-     S => base_cell_opt(iden(d0h_mod_4), 2),
+    S => base_cell_opt(iden(d0h_mod_4), 2),
     SE => base_cell_opt(next(d0h_mod_4), 1),
     SW => base_cell_opt(iden(d0h_mod_4), 1),
     NE => base_cell_opt(next(d0h_mod_4), 0),
     NW => base_cell_opt(prev(d0h_mod_4), 0),
-     N => base_cell_opt(oppo(d0h_mod_4), 0),
+    N => base_cell_opt(oppo(d0h_mod_4), 0),
     _ => None,
-  }  
+  }
 }
 
 fn eqr_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
     SE => base_cell_opt(iden(d0h_mod_4), 2),
-     E => base_cell_opt(next(d0h_mod_4), 1),
+    E => base_cell_opt(next(d0h_mod_4), 1),
     SW => base_cell_opt(prev(d0h_mod_4), 2),
     NE => base_cell_opt(iden(d0h_mod_4), 0),
-     W => base_cell_opt(prev(d0h_mod_4), 1),
+    W => base_cell_opt(prev(d0h_mod_4), 1),
     NW => base_cell_opt(prev(d0h_mod_4), 0),
     _ => None,
   }
@@ -1409,27 +1472,32 @@ fn eqr_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
 
 fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
-     S => base_cell_opt(oppo(d0h_mod_4), 2),
+    S => base_cell_opt(oppo(d0h_mod_4), 2),
     SE => base_cell_opt(next(d0h_mod_4), 2),
     SW => base_cell_opt(prev(d0h_mod_4), 2),
     NE => base_cell_opt(next(d0h_mod_4), 1),
     NW => base_cell_opt(iden(d0h_mod_4), 1),
-     N => base_cell_opt(iden(d0h_mod_4), 0),
+    N => base_cell_opt(iden(d0h_mod_4), 0),
     _ => None,
   }
 }
 
-/// Returns the direction of a cell on the inner edge of the given base cell from its neighbour 
+/// Returns the direction of a cell on the inner edge of the given base cell from its neighbour
 /// located at the given direction in a different base cell.
 /// # Inputs
 /// - `base_cell` the base cell containing the sub-cell we are looking for the direction from its
 ///   neighbour in the given `neighbour_direction`
 /// - `inner_direction` the direction of the sub-cell in the edge of the given base cell
-/// - `neighbour_direction` direction of the neighbour of the sub-cell from which we are looking 
+/// - `neighbour_direction` direction of the neighbour of the sub-cell from which we are looking
 ///    at the direction of the sub-cell
 ///   
-pub fn edge_cell_direction_from_neighbour(base_cell: u8, inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
-  match base_cell >> 2 { // <=> basce_cell / 4
+pub fn edge_cell_direction_from_neighbour(
+  base_cell: u8,
+  inner_direction: &MainWind,
+  neighbour_direction: &MainWind,
+) -> MainWind {
+  match base_cell >> 2 {
+    // <=> basce_cell / 4
     0 => npc_egde_direction_from_neighbour(inner_direction, neighbour_direction),
     1 => eqr_edge_direction_from_neighbour(inner_direction, neighbour_direction),
     2 => spc_edge_direction_from_neighbour(inner_direction, neighbour_direction),
@@ -1437,7 +1505,10 @@ pub fn edge_cell_direction_from_neighbour(base_cell: u8, inner_direction: &MainW
   }
 }
 
-fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+fn npc_egde_direction_from_neighbour(
+  inner_direction: &MainWind,
+  neighbour_direction: &MainWind,
+) -> MainWind {
   match neighbour_direction {
     C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     E => match inner_direction {
@@ -1455,12 +1526,12 @@ fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
     NE => {
       assert!(*inner_direction == N || *inner_direction == E || *inner_direction == NE);
       NW
-    },
+    }
     NW => {
       assert!(*inner_direction == N || *inner_direction == W || *inner_direction == NW);
       NE
-    },
-    N  => match inner_direction {
+    }
+    N => match inner_direction {
       N => N,
       E | NE => W,
       W | NW => E,
@@ -1470,11 +1541,17 @@ fn npc_egde_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
   }
 }
 
-fn eqr_edge_direction_from_neighbour(_inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+fn eqr_edge_direction_from_neighbour(
+  _inner_direction: &MainWind,
+  neighbour_direction: &MainWind,
+) -> MainWind {
   neighbour_direction.opposite()
 }
 
-fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direction: &MainWind) -> MainWind {
+fn spc_edge_direction_from_neighbour(
+  inner_direction: &MainWind,
+  neighbour_direction: &MainWind,
+) -> MainWind {
   match neighbour_direction {
     C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     E => match inner_direction {
@@ -1492,12 +1569,12 @@ fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
     SE => {
       assert!(*inner_direction == S || *inner_direction == E || *inner_direction == SE);
       SW
-    },
+    }
     SW => {
       assert!(*inner_direction == S || *inner_direction == W || *inner_direction == SW);
       SE
-    },
-    S  => match inner_direction {
+    }
+    S => match inner_direction {
       S => S,
       E | SE => W,
       W | SW => E,
@@ -1507,13 +1584,14 @@ fn spc_edge_direction_from_neighbour(inner_direction: &MainWind, neighbour_direc
   }
 }
 
-/// Returns the direction of the given base cell from its neighbour base cell located 
+/// Returns the direction of the given base cell from its neighbour base cell located
 /// in the given direction.
 /// # Panics
 /// If the base cell has no neighbour in the given direction (i.e. N/S for equatorial cells
 /// and E/W for polar caps cells)
 pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
-  match base_cell >> 2 { // <=> basce_cell / 4
+  match base_cell >> 2 {
+    // <=> basce_cell / 4
     0 => npc_direction_from_neighbour(neighbour_direction),
     1 => eqr_direction_from_neighbour(neighbour_direction),
     2 => spc_direction_from_neighbour(neighbour_direction),
@@ -1526,7 +1604,7 @@ fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
     E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
     NE => NW,
     NW => NE,
-    N  => N,
+    N => N,
     _ => neighbour_direction.opposite(),
   }
 }
@@ -1541,7 +1619,7 @@ fn eqr_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
 fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
     E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
-    S  => S,
+    S => S,
     SE => SW,
     SW => SE,
     _ => neighbour_direction.opposite(),
@@ -1593,17 +1671,16 @@ fn base_cell(i: u8, j: u8) -> u8 {
   (j << 2) + i
 }
 
-
 /// Module containing NESTED scheme methods
 pub mod nested;
 
 /// Module containing RING scheme methods
 pub mod ring;
 
+pub mod special_points_finder;
+pub mod sph_geom;
 /// No need to make those public!
 mod xy_geom;
-pub mod sph_geom;
-pub mod special_points_finder;
 
 #[cfg(test)]
 mod tests {
@@ -1722,18 +1799,18 @@ mod tests {
   #[test]
   fn testok_largest_center_to_vertex_distance() {
     let depth = 8;
-    let d1_mas = largest_center_to_vertex_distance(depth, 0.0, 0.0)
-      .to_degrees() * 3600.0;
-    let d2_mas = largest_center_to_vertex_distance(depth, 0.0, LAT_OF_SQUARE_CELL)
-      .to_degrees() * 3600.0;
-    let d3_mas = largest_center_to_vertex_distance(depth, 0.0, TRANSITION_LATITUDE)
-      .to_degrees() * 3600.0;
-    let d4_mas = largest_center_to_vertex_distance(depth, PI / 4.0, TRANSITION_LATITUDE)
-      .to_degrees() * 3600.0;
-    let d5_mas = largest_center_to_vertex_distance(depth, 0.0, 0.5 * LAT_OF_SQUARE_CELL)
-      .to_degrees() * 3600.0;
+    let d1_mas = largest_center_to_vertex_distance(depth, 0.0, 0.0).to_degrees() * 3600.0;
+    let d2_mas =
+      largest_center_to_vertex_distance(depth, 0.0, LAT_OF_SQUARE_CELL).to_degrees() * 3600.0;
+    let d3_mas =
+      largest_center_to_vertex_distance(depth, 0.0, TRANSITION_LATITUDE).to_degrees() * 3600.0;
+    let d4_mas =
+      largest_center_to_vertex_distance(depth, PI / 4.0, TRANSITION_LATITUDE).to_degrees() * 3600.0;
+    let d5_mas =
+      largest_center_to_vertex_distance(depth, 0.0, 0.5 * LAT_OF_SQUARE_CELL).to_degrees() * 3600.0;
     let d6_mas = largest_center_to_vertex_distance(depth, 0.0, 0.5 * TRANSITION_LATITUDE)
-      .to_degrees() * 3600.0;
+      .to_degrees()
+      * 3600.0;
     println!("d1: {}", d1_mas); // center parabol
     println!("d2: {}", d2_mas); // smallest value
     println!("d3: {}", d3_mas); // largest in PC (polar caps)
@@ -1748,5 +1825,4 @@ mod tests {
     assert!((d5_mas - 620.3647193082197).abs() < 1e-12);
     assert!((d6_mas - 591.2475292479544).abs() < 1e-12);
   }
-  
 }

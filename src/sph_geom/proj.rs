@@ -1,7 +1,7 @@
 use std::f64::consts::FRAC_PI_2;
 
-use super::super::TWICE_PI;
 use super::super::Customf64;
+use super::super::TWICE_PI;
 
 /// Represents a spherical projection, i.e. the projection of spherical coordinates
 /// (on the unit sphere) on a two dimensional plane.
@@ -11,9 +11,9 @@ pub trait Proj: Default {
   /// - `lon` longitude of the centre of the projection, in `[0, 2pi]` radians
   /// - `lat` latitude of the centre of the projection, in `[-pi/2, pi/2]` radians
   /// # info
-  ///  If the longitude or the latitude is out of bounds, a time consuming normalization may be performed 
-  fn set_center(&mut self, lon: f64, lat :f64);
-  
+  ///  If the longitude or the latitude is out of bounds, a time consuming normalization may be performed
+  fn set_center(&mut self, lon: f64, lat: f64);
+
   /// Computes the projected coordinates of the given position on the unit sphere
   /// # Inputs
   /// - `lon` longitude of the coordinate we want to project
@@ -21,7 +21,7 @@ pub trait Proj: Default {
   /// # Output
   /// - `(x, y)` the coordinates in the projection plane (if they exists)
   fn proj(&self, lon: f64, lat: f64) -> Option<(f64, f64)>;
-  
+
   /// Computes the position in the unit sphere of the given coordinates on the projection plane
   /// # Inputs
   /// - `x` coordinates along the x-axis on the projection plane
@@ -45,7 +45,7 @@ fn normalize_lonlat(lon: &mut f64, lat: &mut f64) {
     if *lon < 0.0_f64 {
       *lon += TWICE_PI;
     }
-    *lat = z.atan2((x.pow2() + y.pow2()).sqrt()); 
+    *lat = z.atan2((x.pow2() + y.pow2()).sqrt());
   }
 }
 
@@ -60,18 +60,17 @@ pub struct ProjSIN {
 }
 
 impl ProjSIN {
-  
   /// # Inputs
   /// - `lon` longitude of the centre of the projection, in `[0, 2pi]` radians
   /// - `lat` latitude of the centre of the projection, in `[-pi/2, pi/2]` radians
   /// # info
-  ///  If the longitude or the latitude is out of bounds, a time consuming normalization is performed 
-  pub fn new(lon: f64, lat :f64) -> ProjSIN {
+  ///  If the longitude or the latitude is out of bounds, a time consuming normalization is performed
+  pub fn new(lon: f64, lat: f64) -> ProjSIN {
     let mut proj: ProjSIN = Default::default();
     proj.set_center(lon, lat);
     proj
   }
-  
+
   /// Returns the (x, y) projected position, even if the source is in the opposite hemisphere.
   /// Also returns the angular distance (computed for large values, not using the Haversine formula).
   /// The boolean tells is the projected point is in the visible hemisphere.
@@ -79,12 +78,13 @@ impl ProjSIN {
     let (sin_lat, cos_lat) = lat.sin_cos();
     let dlon = lon - self.center_lon;
     let (sin_dlon, cos_dlon) = dlon.sin_cos();
-    ((
-      cos_lat * sin_dlon,
-      self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon
-    ), 
-     (self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon).acos(),
-     self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon > 0.0
+    (
+      (
+        cos_lat * sin_dlon,
+        self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon,
+      ),
+      (self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon).acos(),
+      self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon > 0.0,
     )
   }
 }
@@ -102,12 +102,11 @@ impl Default for ProjSIN {
 }
 
 impl Proj for ProjSIN {
-  
-  fn set_center(&mut self, lon: f64, lat :f64) {
+  fn set_center(&mut self, lon: f64, lat: f64) {
     // I put assert tests here because the normalization is time consuming and I would like to
     // avoid it as much as possible
-//    debug_assert!(0.0 <= lon && lon < TWICE_PI);
-//    debug_assert!(-FRAC_PI_2 <= lat && lat < FRAC_PI_2);
+    //    debug_assert!(0.0 <= lon && lon < TWICE_PI);
+    //    debug_assert!(-FRAC_PI_2 <= lat && lat < FRAC_PI_2);
     self.center_lon = lon;
     self.center_lat = lat;
     normalize_lonlat(&mut self.center_lon, &mut self.center_lat);
@@ -115,7 +114,7 @@ impl Proj for ProjSIN {
     self.cos_center_lat = cos_lat;
     self.sin_center_lat = sin_lat;
   }
-  
+
   fn proj(&self, lon: f64, lat: f64) -> Option<(f64, f64)> {
     let (sin_lat, cos_lat) = lat.sin_cos();
     let dlon = lon - self.center_lon;
@@ -130,13 +129,13 @@ impl Proj for ProjSIN {
     if self.sin_center_lat * sin_lat + self.cos_center_lat * cos_lat * cos_dlon > 0.0 {
       Some((
         cos_lat * sin_dlon,
-        self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon
+        self.cos_center_lat * sin_lat - self.sin_center_lat * cos_lat * cos_dlon,
       ))
     } else {
       None
     }
   }
-  
+
   fn unproj(&self, x: f64, y: f64) -> Option<(f64, f64)> {
     let rho2 = x.pow2() + y.pow2();
     if rho2 < 1.0 {
@@ -151,10 +150,11 @@ impl Proj for ProjSIN {
           lon - TWICE_PI
         } else {
           lon
-        }, lat))
+        },
+        lat,
+      ))
     } else {
       None
     }
   }
-  
 }

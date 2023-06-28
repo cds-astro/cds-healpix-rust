@@ -1,4 +1,3 @@
-
 use super::super::Customf64;
 
 #[derive(Debug)]
@@ -11,12 +10,11 @@ pub struct Ellipse {
 }
 
 impl Ellipse {
-  
   /// Create a new ellipse for the given oriented ellipse parameters.
   /// # Inputs
   /// - `a` ellipse semi-major axis
   /// - `b` ellipse semi-minor axis
-  /// - `(sin(theta), cos(theta)` in which `theta` is the counterclockwise angle between the x-axis 
+  /// - `(sin(theta), cos(theta)` in which `theta` is the counterclockwise angle between the x-axis
   ///                             and the semi-major axis = `theta_radians.sin_cos()`
   pub fn from_oriented(a: f64, b: f64, theta_sin_cos: (f64, f64)) -> Ellipse {
     let a2 = a.pow2();
@@ -35,7 +33,7 @@ impl Ellipse {
       one_over_det: 1.0 / det,
     }
   }
-  
+
   /// Create a new ellipse for the given covariance matrix parameters.
   /// # Inputs
   /// - `sig_x` standard deviation along the `x`-axis
@@ -103,13 +101,9 @@ impl Ellipse {
   fn extended_geom_by_circle(&self, sig: f64) -> Ellipse {
     let sigx = self.sigx2.sqrt() + sig;
     let sigy = self.sigy2.sqrt() + sig;
-    Ellipse::from_cov_matrix(
-      sigx.pow2(),
-      sigy.pow2(),
-      self.rho_sigx_sigy,
-    )
+    Ellipse::from_cov_matrix(sigx.pow2(), sigy.pow2(), self.rho_sigx_sigy)
   }
-  
+
   fn extended_geom(&self, other: &Ellipse) -> Ellipse {
     let sigx = self.sigx2.sqrt() + other.sigx2.sqrt();
     let sigy = self.sigy2.sqrt() + other.sigy2.sqrt();
@@ -120,17 +114,17 @@ impl Ellipse {
       self.rho_sigx_sigy + other.rho_sigx_sigy,
     )
   }
-  
+
   pub fn squared_mahalanobis_distance(&self, x: f64, y: f64) -> f64 {
     let x2 = x.pow2();
     let y2 = y.pow2();
     self.one_over_det * (x2 * self.sigy2 - (self.rho_sigx_sigy * x * y).twice() + y2 * self.sigx2)
   }
-  
+
   pub fn contains(&self, x: f64, y: f64) -> bool {
     self.squared_mahalanobis_distance(x, y) <= 1.0
   }
-  
+
   pub fn overlap(&self, x: f64, y: f64, other: &Ellipse) -> bool {
     self.extended_geom(other).contains(x, y)
   }
@@ -138,7 +132,6 @@ impl Ellipse {
   #[allow(dead_code)]
   #[allow(clippy::many_single_char_names)]
   pub fn path_along_edge(a: f64, b: f64, theta: f64, half_num_points: usize) -> Box<[(f64, f64)]> {
-    
     let step = (2.0 * a) / (half_num_points as f64);
     let (sin_t, cos_t) = theta.sin_cos();
     let mut v = Vec::<(f64, f64)>::with_capacity(half_num_points << 1);
@@ -158,8 +151,5 @@ impl Ellipse {
 // TODO: verify the rotation (angle may be the opposite)!
 #[allow(dead_code)]
 fn rotate(x: f64, y: f64, cost: f64, sint: f64) -> (f64, f64) {
-  (
-    x * cost - y * sint,
-    x * sint + y * cost
-  )
+  (x * cost - y * sint, x * sint + y * cost)
 }

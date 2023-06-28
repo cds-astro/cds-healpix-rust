@@ -1,22 +1,13 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::Rng;
 
-use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_4};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use cdshealpix::{
-  TWICE_PI,
-  TRANSITION_LATITUDE, 
-  ONE_OVER_TRANSITION_Z, 
-  SQRT6, 
-  FOUR_OVER_PI,
-  F64_SIGN_BIT_MASK,
-  F64_BUT_SIGN_BIT_MASK,
-  nested::{
-    get,
-    zordercurve::get_zoc
-  }
+  nested::{get, zordercurve::get_zoc},
+  F64_BUT_SIGN_BIT_MASK, F64_SIGN_BIT_MASK, FOUR_OVER_PI, ONE_OVER_TRANSITION_Z, SQRT6,
+  TRANSITION_LATITUDE, TWICE_PI,
 };
-
 
 pub fn hash_v1(depth: u8, lon: f64, lat: f64) -> u64 {
   get(depth).hash(lon, lat)
@@ -26,7 +17,7 @@ pub fn hash_v2(depth: u8, lon: f64, lat: f64) -> u64 {
   let nside = 1u32 << depth;
   let nside_minus_1 = nside - 1;
   let time_half_nside = ((depth - 1) as i64) << 52; // WARNING DO NOT WORK WITH depth=0
-  
+
   let (d0h, l_in_d0c, h_in_d0c) = d0h_lh_in_d0c(lon, lat);
   // Coords inside the base cell
   //  - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
@@ -43,7 +34,7 @@ pub fn hash_v3(depth: u8, lon: f64, lat: f64) -> u64 {
   let nside = 1u32 << depth;
   let nside_minus_1 = nside - 1;
   let time_half_nside = ((depth - 1) as i64) << 52; // WARNING DO NOT WORK WITH depth=0
-  
+
   let (d0h, l_in_d0c, h_in_d0c) = d0h_lh_in_d0c_v2(lon, lat);
   // Coords inside the base cell
   //  - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
@@ -57,7 +48,7 @@ pub fn hash_v3(depth: u8, lon: f64, lat: f64) -> u64 {
 
 #[inline]
 fn build_hash_from_parts(depth: u8, d0h: u8, i: u32, j: u32) -> u64 {
-  build_hash(depth,(d0h as u64) << (depth << 1_u8), i, j)
+  build_hash(depth, (d0h as u64) << (depth << 1_u8), i, j)
 }
 
 #[inline]
@@ -95,13 +86,16 @@ fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
     // |\2/|
     // .3X1.
     // |/0\|
-    let q01 = (x_pm1 >   y_pm1) as u8; /* 0/1 */ debug_assert!(q01 == 0 || q01 == 1);
-    let q12 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */ debug_assert!(q12 == 0 || q12 == 1);
-    let q1 = q01 & q12; /* = 1 if q1, 0 else */      debug_assert!( q1 == 0 ||  q1 == 1);
+    let q01 = (x_pm1 > y_pm1) as u8; /* 0/1 */
+    debug_assert!(q01 == 0 || q01 == 1);
+    let q12 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */
+    debug_assert!(q12 == 0 || q12 == 1);
+    let q1 = q01 & q12; /* = 1 if q1, 0 else */
+    debug_assert!(q1 == 0 || q1 == 1);
     let q013 = q01 + (1 - q12); // = q01 + q03; /* 0/1 + 1\0 +  */
-    // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
+                                // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
     let x_proj = x_pm1 - ((q01 + q12) as i8 - 1) as f64;
-    // y: y_pm1 + 0 if q2 | y_pm1 + 1 if q1 or q3 | y_pm1 + 2 if q0 
+    // y: y_pm1 + 0 if q2 | y_pm1 + 1 if q1 or q3 | y_pm1 + 2 if q0
     let y_proj = y_pm1 + q013 as f64;
     // d0h: +8 if q0 | +4 if q3 | +5 if q1
     let d0h = (q013 << 2) + ((q + q1) & 3);
@@ -139,34 +133,39 @@ fn d0h_lh_in_d0c_v2(lon: f64, lat: f64) -> (u8, f64, f64) {
     // |\3/|
     // .2X1.
     // |/0\|
-    let q13 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */ debug_assert!(q13 == 0 || q13 == 1);
-    let q23 = (x_pm1 <=  y_pm1) as u8; /* 1/0 */ debug_assert!(q23 == 0 || q23 == 1);
+    let q13 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */
+    debug_assert!(q13 == 0 || q13 == 1);
+    let q23 = (x_pm1 <= y_pm1) as u8; /* 1/0 */
+    debug_assert!(q23 == 0 || q23 == 1);
     match q13 | (q23 << 1) {
-      0 => ( q         , x_pm1      , y_pm1 + 2.0),
+      0 => (q, x_pm1, y_pm1 + 2.0),
       1 => ((q + 5) & 7, x_pm1 - 1.0, y_pm1 + 1.0), // (q + 5) & 7 <=> (q + 1) | 4
-      2 => ( q + 4     , x_pm1 + 1.0, y_pm1 + 1.0),
-      3 => ( q + 8     , x_pm1      , y_pm1),
+      2 => (q + 4, x_pm1 + 1.0, y_pm1 + 1.0),
+      3 => (q + 8, x_pm1, y_pm1),
       _ => unreachable!(),
     }
   }
 }
 
 /// Transform the input longitude, in radians, in a value `x` in `[-1, 1[` plus a quarter in `[0, 3]`,
-/// such that `lon = (x + 1) * PI / 4 + q * PI / 2`. 
+/// such that `lon = (x + 1) * PI / 4 + q * PI / 2`.
 #[inline]
 fn xpm1_and_q(lon: f64) -> (f64, u8) {
   let lon_bits = lon.to_bits();
   let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
   let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
   let x = lon_abs * FOUR_OVER_PI;
-  let q = (x as u8 | 1_u8) & 7_u8;    debug_assert!(q < 8);
-  // Remark: to avoid the branch, we could have copied lon_sign on x - q, 
+  let q = (x as u8 | 1_u8) & 7_u8;
+  debug_assert!(q < 8);
+  // Remark: to avoid the branch, we could have copied lon_sign on x - q,
   //         but I so far lack of idea to deal with q efficiently.
-  //         And we are not supposed to have negative longitudes in ICRS 
+  //         And we are not supposed to have negative longitudes in ICRS
   //         (the most used reference system in astronomy).
-  if lon_sign == 0 { // => lon >= 0
+  if lon_sign == 0 {
+    // => lon >= 0
     (x - (q as f64), q >> 1)
-  } else { // case lon < 0 should be rare => few risks of branch miss-prediction
+  } else {
+    // case lon < 0 should be rare => few risks of branch miss-prediction
     // Since q in [0, 3]: 3 - (q >> 1)) <=> 3 & !(q >> 1)
     // WARNING: BE SURE TO HANDLE THIS CORRECTLY IN THE REMAINING OF THE CODE!
     //  - Case lon =  3/4 pi = 270 deg => x = -1, q=3
@@ -175,12 +174,17 @@ fn xpm1_and_q(lon: f64) -> (f64, u8) {
   }
 }
 
-
 fn gen_rand_lonlat(n: usize) -> Vec<(f64, f64)> {
   // let v: Vec<f64, f64> = Vec::with_capacity(n);
   let mut rng = rand::thread_rng();
-  (0..n).into_iter()
-    .map(|_| (rng.gen::<f64>() * TWICE_PI, rng.gen::<f64>() * PI - FRAC_PI_2))
+  (0..n)
+    .into_iter()
+    .map(|_| {
+      (
+        rng.gen::<f64>() * TWICE_PI,
+        rng.gen::<f64>() * PI - FRAC_PI_2,
+      )
+    })
     .collect()
 }
 
@@ -215,30 +219,33 @@ fn bench_time_pow2(c: &mut Criterion) {
   let half_nside = (1u32 << depth) as f64 / 2.0;
   let one_over_half_nside = 1.0 / half_nside;
   let val: f64 = black_box(PI);
-  group.bench_with_input(BenchmarkId::new("x2^n v1", 1), &depth, |b, _| b.iter(||
-    f64::from_bits((time_half_nside + val.to_bits() as i64) as u64)
-  ));
-  group.bench_with_input(BenchmarkId::new("x2^n v2", 2), &depth,  |b, _| b.iter(||
-    val / half_nside
-  ));
-  group.bench_with_input(BenchmarkId::new("x2^n v3", 3), &depth,  |b, _| b.iter(||
-    val * one_over_half_nside
-  ));
+  group.bench_with_input(BenchmarkId::new("x2^n v1", 1), &depth, |b, _| {
+    b.iter(|| f64::from_bits((time_half_nside + val.to_bits() as i64) as u64))
+  });
+  group.bench_with_input(BenchmarkId::new("x2^n v2", 2), &depth, |b, _| {
+    b.iter(|| val / half_nside)
+  });
+  group.bench_with_input(BenchmarkId::new("x2^n v3", 3), &depth, |b, _| {
+    b.iter(|| val * one_over_half_nside)
+  });
   group.finish();
 }
 
 fn bench_hash(c: &mut Criterion) {
   let mut group = c.benchmark_group("Hash");
   group.sample_size(10);
-  
+
   let depth = 16;
   let positions = gen_rand_lonlat(black_box(1000000));
-  group.bench_with_input(BenchmarkId::new("Hash v1", 1), &1,
-                         |b, _| b.iter(|| benchmark_hash_v1(depth, &positions)));
-  group.bench_with_input(BenchmarkId::new("Hash v2", 2), &2,
-                         |b, _| b.iter(|| benchmark_hash_v2(depth, &positions)));
-  group.bench_with_input(BenchmarkId::new("Hash v3", 3), &3,
-                         |b, _| b.iter(|| benchmark_hash_v3(depth, &positions)));
+  group.bench_with_input(BenchmarkId::new("Hash v1", 1), &1, |b, _| {
+    b.iter(|| benchmark_hash_v1(depth, &positions))
+  });
+  group.bench_with_input(BenchmarkId::new("Hash v2", 2), &2, |b, _| {
+    b.iter(|| benchmark_hash_v2(depth, &positions))
+  });
+  group.bench_with_input(BenchmarkId::new("Hash v3", 3), &3, |b, _| {
+    b.iter(|| benchmark_hash_v3(depth, &positions))
+  });
   group.finish();
 }
 
@@ -246,6 +253,3 @@ criterion_group!(hash_benches, bench_hash);
 criterion_group!(pow2_time_benches, bench_time_pow2);
 
 criterion_main!(hash_benches, pow2_time_benches);
-
-
-

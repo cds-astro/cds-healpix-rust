@@ -2,22 +2,26 @@
 //! (i.e. based on uniq cells iterators ordered following the natural Z-order curve order).
 
 // use std::cmp::{min, max, Ordering};
-use super::{HpxHash, HpxCell, HasMaxDepth, MOCIterator, CheckedIterator};
+use super::{CheckedIterator, HasMaxDepth, HpxCell, HpxHash, MOCIterator};
 
 ///
 /// # Panic
-/// * this method panics if the input iterator is not ordered following the natural Z-order 
+/// * this method panics if the input iterator is not ordered following the natural Z-order
 /// curve ordering.
 pub fn compress<H, T>(it: T) -> CompressMocIter<H, CheckedIterator<H, T>>
-  where H: HpxHash,
-        T: MOCIterator<H> {
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   let it = CheckedIterator::new(it);
   compress_unchecked(it)
 }
 
 pub fn compress_unchecked<H, T>(it: T) -> CompressMocIter<H, T>
-  where H: HpxHash,
-        T: MOCIterator<H> {
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   CompressMocIter::new_unchecked(it)
 }
 
@@ -29,8 +33,10 @@ pub fn uncompress<H: HpxHash>(compressed: &[u8]) -> UncompressMocIter<H> {
 
 /// Performs an `Compression` operation on-the-fly, on the input MOC, while iterating.
 pub struct CompressMocIter<H, T>
-  where H: HpxHash,
-        T: MOCIterator<H> {
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   it: T,
   curr: Option<HpxCell<H>>,
   d: u8,
@@ -40,15 +46,17 @@ pub struct CompressMocIter<H, T>
   is_going_down: bool,
 }
 
-impl <H, T> CompressMocIter<H, T>
-  where H: HpxHash,
-        T: MOCIterator<H> {
+impl<H, T> CompressMocIter<H, T>
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   ///
   /// # WARNING
   /// * The input iterator **MUST** be ordered following the natural Z-order curve order.
   /// If it is not the case, the result will be wrong, without errors!
-  /// * If you are not sure, use the `new` version. 
-  fn new_unchecked( mut it: T) -> CompressMocIter<H, T> {
+  /// * If you are not sure, use the `new` version.
+  fn new_unchecked(mut it: T) -> CompressMocIter<H, T> {
     let depth_max = it.depth_max();
     let curr = it.next();
     CompressMocIter {
@@ -60,9 +68,8 @@ impl <H, T> CompressMocIter<H, T>
       ibit: 8,
       is_going_down: true,
     }
-
   }
-  
+
   fn push_0(&mut self) {
     self.ibit += 1;
   }
@@ -85,13 +92,13 @@ impl <H, T> CompressMocIter<H, T>
     self.ibit -= 8;
     r
   }
-  
+
   /// Tells is there is a last byte to be taken
   fn has_last_byte(&self) -> bool {
     debug_assert!(self.ibit < 8);
     self.ibit > 0
-  } 
-  
+  }
+
   /// Take the last byte (WARNING: to be called at the end!!)
   fn take_last_byte(&mut self) -> u8 {
     debug_assert!(self.ibit < 8);
@@ -100,7 +107,7 @@ impl <H, T> CompressMocIter<H, T>
     self.ibit = 0;
     r
   }
-  
+
   /// Returns true if the first byte of the buffer is full
   /*fn push_node_empty(&mut self) -> bool {
     self.push_node_empty_notest();
@@ -125,7 +132,7 @@ impl <H, T> CompressMocIter<H, T>
     self.push_1();
     self.push_1();
   }
-  
+
   /// Returns true if the first byte of the buffer is full
   fn push_node_partial(&mut self) -> bool {
     self.push_node_partial_notest();
@@ -150,22 +157,26 @@ impl <H, T> CompressMocIter<H, T>
     self.push_leaf_full_notest();
     self.is_byte_full()
   }*/
-  fn push_leaf_full_notest(&mut self)  {
+  fn push_leaf_full_notest(&mut self) {
     self.push_1();
   }
 }
 
 impl<H, T> HasMaxDepth for CompressMocIter<H, T>
-  where H: HpxHash ,
-        T: MOCIterator<H> {
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   fn depth_max(&self) -> u8 {
     self.it.depth_max()
   }
 }
 
-impl <H, T> Iterator for CompressMocIter<H, T>
-  where H: HpxHash,
-        T: MOCIterator<H> {
+impl<H, T> Iterator for CompressMocIter<H, T>
+where
+  H: HpxHash,
+  T: MOCIterator<H>,
+{
   type Item = u8;
 
   // WE CAN PROBABLY SIMPLIFY THIS CODE!!
@@ -225,7 +236,13 @@ impl <H, T> Iterator for CompressMocIter<H, T>
         // - same level
         debug_assert_eq!(self.d, target_d);
         let n = curr_h - self.h;
-        debug_assert!(n <= three, "n: {}, curr_h: {}, self.h: {}", n, curr_h, self.h);
+        debug_assert!(
+          n <= three,
+          "n: {}, curr_h: {}, self.h: {}",
+          n,
+          curr_h,
+          self.h
+        );
         if self.d == self.depth_max() {
           self.push_n_empty_leaves_notest(n);
           self.push_leaf_full_notest()
@@ -237,9 +254,11 @@ impl <H, T> Iterator for CompressMocIter<H, T>
         self.curr = self.it.next();
         self.is_going_down = false;
         self.next()
-      },
-      None => { // Just need to complete
-        if self.d == 0 { // complete depth 0 till hash 12
+      }
+      None => {
+        // Just need to complete
+        if self.d == 0 {
+          // complete depth 0 till hash 12
           let twelve = three << 2_usize;
           let eleven = twelve - H::one();
           if self.h < eleven {
@@ -252,13 +271,24 @@ impl <H, T> Iterator for CompressMocIter<H, T>
             }
             self.next()
           } else if self.has_last_byte() {
-            debug_assert!(self.d == 0 && self.h == eleven, "d: {}, h: {}", self.d, self.h);
+            debug_assert!(
+              self.d == 0 && self.h == eleven,
+              "d: {}, h: {}",
+              self.d,
+              self.h
+            );
             Some(self.take_last_byte())
           } else {
-            debug_assert!(self.d == 0 && self.h == eleven, "d: {}, h: {}", self.d, self.h);
+            debug_assert!(
+              self.d == 0 && self.h == eleven,
+              "d: {}, h: {}",
+              self.d,
+              self.h
+            );
             None
           }
-        } else { // go up to depth 0
+        } else {
+          // go up to depth 0
           while {
             let n = three - (self.h & three);
             if self.d == self.depth_max() {
@@ -275,20 +305,19 @@ impl <H, T> Iterator for CompressMocIter<H, T>
           } {} // do-while loop
           self.next()
         }
-      },
+      }
     }
   }
 
   /*fn size_hint(&self) -> (usize, Option<usize>) {
     let size_hint = self.it.size_hint();
     if let Some(n) = size_hint.1 {
-      (0, 4 + 3 * n) 
+      (0, 4 + 3 * n)
     } else {
       (0, None)
     }
   }*/
 }
-
 
 /// Performs an `Uncompression` operation on-the-fly, while iterating.
 pub struct UncompressMocIter<'a, H: HpxHash> {
@@ -301,12 +330,12 @@ pub struct UncompressMocIter<'a, H: HpxHash> {
   hash: H,
 }
 
-impl <'a, H: HpxHash> UncompressMocIter<'a, H> {
+impl<'a, H: HpxHash> UncompressMocIter<'a, H> {
   ///
   /// # WARNING
   /// * The input iterator **MUST** be ordered following the natural Z-order curve order.
   /// If it is not the case, the result will be wrong, without errors!
-  /// * If you are not sure, use the `new` version. 
+  /// * If you are not sure, use the `new` version.
   fn new(cmoc: &'a [u8]) -> UncompressMocIter<'a, H> {
     let depth_max = cmoc[0];
     UncompressMocIter {
@@ -365,24 +394,26 @@ impl <'a, H: HpxHash> UncompressMocIter<'a, H> {
     self.hash <<= 2;
     self.depth += 1;
   }
-
 }
 
 impl<'a, H> HasMaxDepth for UncompressMocIter<'a, H>
-  where H: HpxHash  {
+where
+  H: HpxHash,
+{
   fn depth_max(&self) -> u8 {
     self.depth_max
   }
 }
 
-impl <'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
+impl<'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
   type Item = HpxCell<H>;
 
   fn next(&mut self) -> Option<Self::Item> {
     let three = H::one() | (H::one() << 1);
     let twelve = three << 2_usize;
     while self.depth != 0 || self.hash != twelve {
-      if self.get() { // bit = 1
+      if self.get() {
+        // bit = 1
         if self.depth == self.depth_max || self.get() {
           let res = Some(self.get_current_cell());
           self.increment();
@@ -390,9 +421,11 @@ impl <'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
         } else {
           self.increment();
         }
-      } else if self.depth == self.depth_max { // bit == 0
-          self.increment();
-      } else { // bit == 0
+      } else if self.depth == self.depth_max {
+        // bit == 0
+        self.increment();
+      } else {
+        // bit == 0
         debug_assert!(self.depth < self.depth_max);
         self.go_down_of_1_depth();
       }
@@ -404,5 +437,4 @@ impl <'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
     let n_remains = 8 * (self.cmoc.len() - self.ibyte) - (self.ibit as usize);
     (0, Some(n_remains))
   }
-
 }

@@ -1,7 +1,6 @@
-
+use crate::sph_geom::cone::{mec_3, Cone};
+use crate::sph_geom::coo3d::{vec3_of, HALF_PI};
 use crate::{PI, TWICE_PI};
-use crate::sph_geom::coo3d::{HALF_PI, vec3_of};
-use crate::sph_geom::cone::{Cone, mec_3};
 
 #[derive(Debug)]
 pub struct Zone {
@@ -30,13 +29,17 @@ impl Zone {
     assert!((-HALF_PI..HALF_PI).contains(&lat_min) && -HALF_PI < lat_max && lat_max <= HALF_PI);
     assert!(lat_min < lat_max);
     // Because of inequalities (< lat_max), we have to make an exception for the north pole
-    let lat_max = if lat_max == HALF_PI { HALF_PI + 1e-15 } else { lat_max };
+    let lat_max = if lat_max == HALF_PI {
+      HALF_PI + 1e-15
+    } else {
+      lat_max
+    };
     Zone {
       lon_min,
       lat_min,
       lon_max,
       lat_max,
-      cross_primary_meridian: lon_min > lon_max
+      cross_primary_meridian: lon_min > lon_max,
     }
   }
 
@@ -53,8 +56,9 @@ impl Zone {
   }
 
   pub fn crossed_vertically(&self, lon: f64, lat_up: f64, lat_down: f64) -> bool {
-    lat_down < self.lat_min && self.lat_max <= lat_up &&
-      if self.cross_primary_meridian {
+    lat_down < self.lat_min
+      && self.lat_max <= lat_up
+      && if self.cross_primary_meridian {
         self.lon_min <= lon || lon < self.lon_max
       } else {
         self.lon_min <= lon && lon < self.lon_max
@@ -62,8 +66,9 @@ impl Zone {
   }
 
   pub fn crossed_horizontally(&self, lon_left: f64, lon_right: f64, lat: f64) -> bool {
-    self.lat_min <= lat && lat < self.lat_max &&
-      if self.cross_primary_meridian {
+    self.lat_min <= lat
+      && lat < self.lat_max
+      && if self.cross_primary_meridian {
         if lon_right < lon_left {
           lon_left < self.lon_min && self.lon_max <= lon_right
         } else {
@@ -97,8 +102,9 @@ impl Zone {
   }
 
   pub fn contains(&self, lon: f64, lat: f64) -> bool {
-    self.lat_min <= lat && lat < self.lat_max &&
-      if self.cross_primary_meridian {
+    self.lat_min <= lat
+      && lat < self.lat_max
+      && if self.cross_primary_meridian {
         self.lon_min <= lon || lon < self.lon_max
       } else {
         self.lon_min <= lon && lon < self.lon_max
@@ -110,7 +116,7 @@ impl Zone {
       (self.lon_min, self.lat_min),
       (self.lon_min, self.lat_max),
       (self.lon_max, self.lat_max),
-      (self.lon_max, self.lat_min)
+      (self.lon_max, self.lat_min),
     ]
   }
 }

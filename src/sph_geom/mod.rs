@@ -1,18 +1,18 @@
-//! Module containing spherical geometry structures and methods like 3D vectors, 
+//! Module containing spherical geometry structures and methods like 3D vectors,
 //! polygon or cone on the unit sphere...
 
-pub mod coo3d; // made public for polygon query et webasembly
 pub(super) mod cone;
-pub(super) mod zone;
+pub mod coo3d; // made public for polygon query et webasembly
 pub(super) mod elliptical_cone;
-pub(super) mod proj;
 pub(super) mod frame;
+pub(super) mod proj;
+pub(super) mod zone;
 
-use std::f64::consts::{PI};
 use super::TWICE_PI;
+use std::f64::consts::PI;
 
+use self::coo3d::{cross_product, dot_product, Coo3D, LonLat, LonLatT, UnitVect3, Vec3, Vect3};
 use crate::Customf64;
-use self::coo3d::{Vect3, Vec3, UnitVect3, LonLat, LonLatT, Coo3D, cross_product, dot_product};
 
 trait ContainsSouthPoleComputer {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool;
@@ -22,7 +22,7 @@ trait ContainsSouthPoleComputer {
 struct ProvidedTrue;
 impl ContainsSouthPoleComputer for ProvidedTrue {
   #[inline]
-  fn contains_south_pole(&self, _polygon: &Polygon ) -> bool {
+  fn contains_south_pole(&self, _polygon: &Polygon) -> bool {
     true
   }
 }
@@ -81,26 +81,26 @@ pub enum ContainsSouthPoleMethod {
 impl ContainsSouthPoleComputer for ContainsSouthPoleMethod {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool {
     match self {
-      ContainsSouthPoleMethod::Default =>
-        BASIC.contains_south_pole(polygon),
-      ContainsSouthPoleMethod::DefaultComplement =>
-        !BASIC.contains_south_pole(polygon),
-      ContainsSouthPoleMethod::ContainsSouthPole =>
-        PROVIDED_TRUE.contains_south_pole(polygon),
-      ContainsSouthPoleMethod::DoNotContainsSouthPole =>
-        PROVIDED_FALSE.contains_south_pole(polygon),
-      ContainsSouthPoleMethod::ControlPointIn(control_point) =>
+      ContainsSouthPoleMethod::Default => BASIC.contains_south_pole(polygon),
+      ContainsSouthPoleMethod::DefaultComplement => !BASIC.contains_south_pole(polygon),
+      ContainsSouthPoleMethod::ContainsSouthPole => PROVIDED_TRUE.contains_south_pole(polygon),
+      ContainsSouthPoleMethod::DoNotContainsSouthPole => {
+        PROVIDED_FALSE.contains_south_pole(polygon)
+      }
+      ContainsSouthPoleMethod::ControlPointIn(control_point) => {
         if polygon.contains(control_point) {
           polygon.contains_south_pole
         } else {
           !polygon.contains_south_pole
-        },
-      ContainsSouthPoleMethod::ControlPointOut(control_point) =>
+        }
+      }
+      ContainsSouthPoleMethod::ControlPointOut(control_point) => {
         if polygon.contains(control_point) {
           !polygon.contains_south_pole
         } else {
           polygon.contains_south_pole
-        },
+        }
+      }
     }
   }
 }
@@ -144,14 +144,14 @@ impl Polygon {
   pub fn vertices(&self) -> &[Coo3D] {
     &self.vertices
   }
-  
+
   /// Returns `true` if the polygon contain the point of given coordinates `coo`.
   #[inline]
   pub fn contains(&self, coo: &Coo3D) -> bool {
     self.contains_south_pole ^ self.odd_num_intersect_going_south(coo)
   }
 
-  /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the 
+  /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
   /// two given points (we consider the arc having a length < PI).
   pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Option<UnitVect3> {
     // Ensure a < b in longitude
@@ -160,7 +160,7 @@ impl Polygon {
     if a.lon() > b.lon() {
       std::mem::swap(&mut a, &mut b);
     }
-    
+
     let mut left = self.vertices.last().unwrap();
     for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
       // Ensures pA < pB in longitude
@@ -173,7 +173,8 @@ impl Polygon {
         let ua = dot_product(a, cross_prod);
         let ub = dot_product(b, cross_prod);
         if polygon_edge_intersects_great_circle(ua, ub) {
-          if let Some(intersect) = intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub) {
+          if let Some(intersect) = intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub)
+          {
             return Some(intersect);
           }
         }
@@ -191,7 +192,7 @@ impl Polygon {
   /// with a parallel defined by a latitude (this may suffer from numerical precision at poles
   /// for polygon of size < 0.1 arcsec).
   /// Returns `None` if no intersection has been found
-  /// 
+  ///
   /// This code relies on the resolution of the following system:
   /// * N.I   = 0         (i)   (The intersection I lies on the great circle of normal N)
   /// * ||I|| = 1         (ii)  (I lies on the unit sphere)
@@ -226,10 +227,10 @@ impl Polygon {
 
           let b = 2.0 * n.y() * n.z() * z / xn2;
           let c = (zn2 * z2 / xn2) - lat_cos.pow2();
-  
+
           // Iy is a 2nd degree polynomia
           let delta = b * b - 2.0 * two_a * c;
-  
+
           // Case A.1: there are 2 solutions for Iy
           if delta > 0.0 {
             // Case A.1.a: first solution
@@ -243,10 +244,10 @@ impl Polygon {
             if dot_product(&cross_product(&p1, &pa), &cross_product(&p1, &pb)) < 0.0 {
               return Some(p1);
             } else {
-            // Otherwise return the other one
+              // Otherwise return the other one
               let y2 = (-b + delta_root_sq) / two_a;
               let x = -(n.y() * y2 + n.z() * z) / n.x();
-  
+
               return Some(UnitVect3::new_unsafe(x, y2, z));
             }
           // Case A.2: there are one solution
@@ -306,8 +307,8 @@ impl Polygon {
     let mut left = &self.vertices[n_vertices - 1];
     for i in 0..n_vertices {
       let right = &self.vertices[i];
-      if is_in_lon_range(coo,  left,  right)
-        && cross_plane_going_south(coo, &self.cross_products[i]) {
+      if is_in_lon_range(coo, left, right) && cross_plane_going_south(coo, &self.cross_products[i])
+      {
         c = !c;
       }
       left = right;
@@ -318,7 +319,8 @@ impl Polygon {
 
 #[inline]
 fn lonlat2coo3d(vertices: &[LonLat]) -> Box<[Coo3D]> {
-  vertices.iter()
+  vertices
+    .iter()
     .map(|lonlat| Coo3D::from_sph_coo(lonlat.lon, lonlat.lat))
     .collect::<Vec<Coo3D>>()
     .into_boxed_slice()
@@ -334,18 +336,13 @@ fn compute_cross_products(vertices: &[Coo3D]) -> Box<[Vect3]> {
       i = j;
       cross_product(v1, v2)
     })
-    .map(|v|
-      if v.z() < 0.0 {
-        v.opposite()
-      } else {
-        v
-      })
+    .map(|v| if v.z() < 0.0 { v.opposite() } else { v })
     .collect();
   cross_products.into_boxed_slice()
 }
 
 /// Returns `true` if the given point `p` longitude is between the given vertices `v1` and `v2`
-/// longitude range.rust 
+/// longitude range.rust
 #[inline]
 fn is_in_lon_range<T1, T2, T3>(coo: &T1, v1: &T2, v2: &T3) -> bool
 where
@@ -353,21 +350,21 @@ where
   T2: LonLatT,
   T3: LonLatT,
 {
-  // First version of the code: 
+  // First version of the code:
   //   ((v2.lon() - v1.lon()).abs() > PI) != ((v2.lon() > coo.lon()) != (v1.lon() > coo.lon()))
-  // 
-  // Lets note 
+  //
+  // Lets note
   //   - lonA = v1.lon()
   //   - lonB = v2.lon()
   //   - lon0 = coo.lon()
-  // When (lonB - lonA).abs() <= PI 
+  // When (lonB - lonA).abs() <= PI
   //   => lonB > lon0 != lonA > lon0  like in PNPOLY
   //   A    B    lonA <= lon0 && lon0 < lonB
   // --[++++[--
   //   B    A    lonB <= lon0 && lon0 < lonA
   //
-  // But when (lonB - lonA).abs() > PI, then the test should be 
-  //  =>   lonA >= lon0 == lonB >= lon0 
+  // But when (lonB - lonA).abs() > PI, then the test should be
+  //  =>   lonA >= lon0 == lonB >= lon0
   // <=> !(lonA >= lon0 != lonB >= lon0)
   //    A  |  B    (lon0 < lonB) || (lonA <= lon0)
   //  --[++|++[--
@@ -379,17 +376,17 @@ where
   //  --]++|++]--
   //    B  |  A    (lon0 <= lonA) || (lonB < lon0)
   //
-  // So the previous code was bugged in this very specific case: 
+  // So the previous code was bugged in this very specific case:
   // - `lon0` has the same value as a vertex being part of:
   //   - one segment that do not cross RA=0
   //   - plus one segment crossing RA=0.
-  //   - the point have an odd number of intersections with the polygon 
+  //   - the point have an odd number of intersections with the polygon
   //     (since it will be counted 0 or 2 times instead of 1).
   let dlon = v2.lon() - v1.lon();
   if dlon < 0.0 {
     (dlon >= -PI) == (v2.lon() <= coo.lon() && coo.lon() < v1.lon())
   } else {
-    (dlon <=  PI) == (v1.lon() <= coo.lon() && coo.lon() < v2.lon())
+    (dlon <= PI) == (v1.lon() <= coo.lon() && coo.lon() < v2.lon())
   }
 }
 
@@ -399,13 +396,13 @@ where
 /// * `pa.lon() <= pb.lon()`
 /// * `a.lon() <= b.lon()`
 fn great_circle_arcs_are_overlapping_in_lon(a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb: &Coo3D) -> bool {
-  debug_assert!( a.lon() <=  b.lon());
+  debug_assert!(a.lon() <= b.lon());
   debug_assert!(pa.lon() <= pb.lon());
   match (b.lon() - a.lon() < PI, pb.lon() - pa.lon() <= PI) {
-    (true, true)   => pb.lon() >= a.lon() && pa.lon() <= b.lon(), //  a - b  AND  pa - pb
-    (true, false)  => pb.lon() <= b.lon() || pa.lon() >= a.lon(), //  a - b  AND pb -|- pa
-    (false, true)  => pb.lon() >= b.lon() || pa.lon() <= a.lon(), // b -|- a AND  pa - pb
-    (false, false) => true, // b -|- a AND pb -|- pa
+    (true, true) => pb.lon() >= a.lon() && pa.lon() <= b.lon(), //  a - b  AND  pa - pb
+    (true, false) => pb.lon() <= b.lon() || pa.lon() >= a.lon(), //  a - b  AND pb -|- pa
+    (false, true) => pb.lon() >= b.lon() || pa.lon() <= a.lon(), // b -|- a AND  pa - pb
+    (false, false) => true,                                     // b -|- a AND pb -|- pa
   }
   /* Test if their is a perf differenc (should be neglectable!!)
   if b.lon() - a.lon() < PI {
@@ -424,11 +421,14 @@ fn great_circle_arcs_are_overlapping_in_lon(a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb
 /// z coordinate (=> must be in the north hemisphere)
 #[inline]
 fn cross_plane_going_south<T1, T2>(coo: &T1, plane_normal_dir_in_north_hemisphere: &T2) -> bool
-  where T1: Vec3, T2: Vec3 {
+where
+  T1: Vec3,
+  T2: Vec3,
+{
   dot_product(coo, plane_normal_dir_in_north_hemisphere) > 0.0
 }
 
-/// Tells if the great-circle arc from vector a to vector b intersects the plane of the 
+/// Tells if the great-circle arc from vector a to vector b intersects the plane of the
 /// great circle defined by its normal vector N.
 /// # Inputs:
 /// - `a_dot_edge_normal` the dot product of vector a with the great circle normal vector N.
@@ -443,23 +443,33 @@ fn polygon_edge_intersects_great_circle(a_dot_edge_normal: f64, b_dot_edge_norma
 /// Tells if the intersection line (i) between the two planes defined by vector a, b and pA, pB
 /// respectively is inside the zone `[pA, pB]`.
 fn intersect_point_in_polygon_great_circle_arc(
-  a: &Coo3D, b: &Coo3D, pa: &Coo3D, pb: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> Option<UnitVect3> {
+  a: &Coo3D,
+  b: &Coo3D,
+  pa: &Coo3D,
+  pb: &Coo3D,
+  a_dot_edge_normal: f64,
+  b_dot_edge_normal: f64,
+) -> Option<UnitVect3> {
   let intersect = normalized_intersect_point(a, b, a_dot_edge_normal, b_dot_edge_normal);
   let papb = dot_product(pa, pb);
-  if dot_product(pa,&intersect).abs() > papb && dot_product(pb, &intersect).abs() > papb {
+  if dot_product(pa, &intersect).abs() > papb && dot_product(pb, &intersect).abs() > papb {
     Some(intersect)
   } else {
     None
   }
 }
 
-
 #[allow(clippy::many_single_char_names)]
-fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_dot_edge_normal: f64) -> UnitVect3 {
+fn normalized_intersect_point(
+  a: &Coo3D,
+  b: &Coo3D,
+  a_dot_edge_normal: f64,
+  b_dot_edge_normal: f64,
+) -> UnitVect3 {
   // We note u = pA x pB
   // Intersection vector i defined by
   // lin
-  // i = i / ||i|| 
+  // i = i / ||i||
   let x = b_dot_edge_normal * a.x() - a_dot_edge_normal * b.x();
   let y = b_dot_edge_normal * a.y() - a_dot_edge_normal * b.y();
   let z = b_dot_edge_normal * a.z() - a_dot_edge_normal * b.z();
@@ -470,25 +480,40 @@ fn normalized_intersect_point(a: &Coo3D, b: &Coo3D, a_dot_edge_normal: f64, b_do
 
 #[cfg(test)]
 mod tests {
+  use super::super::nested::vertices;
   use super::*;
-  use super::super::nested::{vertices};
-  
+
   #[test]
   fn test_vec3() {
     let mut v = Vect3::new(1.0, 2.0, 3.0);
-    assert_eq!("x: 1; y: 2; z: 3", format!("x: {}; y: {}; z: {}", Vec3::x(&v), Vec3::y(&v), Vec3::z(&v)));
+    assert_eq!(
+      "x: 1; y: 2; z: 3",
+      format!("x: {}; y: {}; z: {}", Vec3::x(&v), Vec3::y(&v), Vec3::z(&v))
+    );
     {
       let vref = &v;
-      assert_eq!("x: 1; y: 2; z: 3", format!("x: {}; y: {}; z: {}", vref.x(), vref.y(), vref.z()));
+      assert_eq!(
+        "x: 1; y: 2; z: 3",
+        format!("x: {}; y: {}; z: {}", vref.x(), vref.y(), vref.z())
+      );
     }
     let vrefmut = &mut v;
-    assert_eq!("x: 1; y: 2; z: 3", format!("x: {}; y: {}; z: {}", vrefmut.x(), vrefmut.y(), vrefmut.z()));
+    assert_eq!(
+      "x: 1; y: 2; z: 3",
+      format!("x: {}; y: {}; z: {}", vrefmut.x(), vrefmut.y(), vrefmut.z())
+    );
   }
-  
+
   fn create_polygon_from_lonlat(lonlat: &[(f64, f64)]) -> Polygon {
     Polygon::new(
-      lonlat.iter().map(|(lon, lat)| LonLat { lon: *lon, lat: *lat} )
-        .collect::<Vec<LonLat>>().into_boxed_slice()
+      lonlat
+        .iter()
+        .map(|(lon, lat)| LonLat {
+          lon: *lon,
+          lat: *lat,
+        })
+        .collect::<Vec<LonLat>>()
+        .into_boxed_slice(),
     )
   }
 
@@ -498,12 +523,13 @@ mod tests {
     let poly = create_polygon_from_lonlat(&v);
     let depth = 3_u8;
     let hash = 305_u64;
-    let [(l_south, b_south), (l_east, b_east), (l_north, b_north), (l_west, b_west)] = vertices(depth, hash);
+    let [(l_south, b_south), (l_east, b_east), (l_north, b_north), (l_west, b_west)] =
+      vertices(depth, hash);
     let v = [
       Coo3D::from_sph_coo(l_south, b_south),
       Coo3D::from_sph_coo(l_east, b_east),
       Coo3D::from_sph_coo(l_north, b_north),
-      Coo3D::from_sph_coo(l_west, b_west)
+      Coo3D::from_sph_coo(l_west, b_west),
     ];
     assert_eq!(poly.contains(&v[0]), false);
     assert_eq!(poly.contains(&v[1]), false);
@@ -518,7 +544,11 @@ mod tests {
     let poly = create_polygon_from_lonlat(&v);
     assert_eq!(poly.is_intersecting_parallel(0.12), true);
 
-    let v = [(0.0, HALF_PI - 1e-3), (TWO_PI / 3.0, HALF_PI - 1e-3), (2.0 * TWO_PI / 3.0, HALF_PI - 1e-3)];
+    let v = [
+      (0.0, HALF_PI - 1e-3),
+      (TWO_PI / 3.0, HALF_PI - 1e-3),
+      (2.0 * TWO_PI / 3.0, HALF_PI - 1e-3),
+    ];
     let poly = create_polygon_from_lonlat(&v);
     assert_eq!(poly.is_intersecting_parallel(HALF_PI), false);
   }

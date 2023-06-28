@@ -1,4 +1,3 @@
-
 use crate::TWICE_PI;
 
 /// Components of the 3x3 rotation matrix transforming a vector into the
@@ -11,9 +10,15 @@ use crate::TWICE_PI;
 /// * `r13 =  sin(lat)`
 #[derive(Debug)]
 pub(crate) struct RefToLocalRotMatrix {
-  r11: f64, r12: f64, r13: f64,
-  r21: f64, r22: f64, r23: f64,
-  r31: f64, r32: f64, r33: f64,
+  r11: f64,
+  r12: f64,
+  r13: f64,
+  r21: f64,
+  r22: f64,
+  r23: f64,
+  r31: f64,
+  r32: f64,
+  r33: f64,
 }
 
 impl RefToLocalRotMatrix {
@@ -22,9 +27,15 @@ impl RefToLocalRotMatrix {
     let (sa, ca) = lon.sin_cos(); // ca, sa stands for cos(alpha), sin(alpha)
     let (sd, cd) = lat.sin_cos(); // cd, sd stands for cos(delta), sin(delta)
     RefToLocalRotMatrix {
-      r11:  ca * cd, r12:  sa * cd, r13:  sd,
-      r21:      -sa, r22:       ca, r23: 0.0,
-      r31: -ca * sd, r32: -sa * sd, r33:  cd,
+      r11: ca * cd,
+      r12: sa * cd,
+      r13: sd,
+      r21: -sa,
+      r22: ca,
+      r23: 0.0,
+      r31: -ca * sd,
+      r32: -sa * sd,
+      r33: cd,
     }
   }
 
@@ -34,7 +45,7 @@ impl RefToLocalRotMatrix {
     (
       self.r11 * x + self.r21 * y + self.r31 * z,
       self.r12 * x + self.r22 * y + self.r32 * z,
-      self.r13 * x + self.r23 * y + self.r33 * z
+      self.r13 * x + self.r23 * y + self.r33 * z,
     )
   }
 
