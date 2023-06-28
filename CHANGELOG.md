@@ -3,12 +3,23 @@
 
 ## 0.6.5
 
-Released 2023-06-27
+Released 2023-06-28
 
 ### Add
 
 * Add `OrdinalSet` in module `compass_point`
 * Update dependencies versions
+    + update base64 code
+
+### Change
+
+* Use cargo fmt with option `--config tab_spaces=2` to reformat the code
+
+### Bug correction
+
+* fix numerical issue in 'intersect_small_circle' when great circle arc is small
+  (<1 arcsec) by resorting to locally flat approximation
+
 
 --------------------------------------------------------------------------------
 
