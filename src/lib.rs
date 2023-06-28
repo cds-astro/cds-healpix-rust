@@ -1603,7 +1603,7 @@ pub mod ring;
 /// No need to make those public!
 mod xy_geom;
 pub mod sph_geom;
-mod special_points_finder;
+pub mod special_points_finder;
 
 #[cfg(test)]
 mod tests {

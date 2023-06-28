@@ -544,7 +544,7 @@ fn f_over_df_npc(z: f64, cone_center_lon_mod_half_pi: f64, z0: f64, w0: f64, cte
 /// \left\{
 ///   \begin{array}{rcl}
 ///     y & = & - \left(x\frac{x_0}{y_0} - \frac{zz_0}{y_0}\right) \\
-///     0 & = & x^2(1+\frac{x_0^2}{y_0^2}) + x\frac{2x_0zz_0}{y_0^2} + (\frac{zz_0}{y_0})^2 - (x_0^2 + y_0^2)
+///     0 & = & x^2(1+\frac{x_0^2}{y_0^2}) + x\frac{2x_0zz_0}{y_0^2} + (\frac{zz_0}{y_0})^2 + z^2 - 1
 ///   \end{array}
 /// \right.
 /// ```
@@ -575,7 +575,10 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
   debug_assert!((-1.0..=1.0).contains(&z));
   if  (p1.z() < z && z < p2.z()) || (p2.z() < z && z < p1.z()) {
     let p1_dot_p2 = dot_product(p1, p2);
-    let p1_x_p2 = cross_product(p1, p2).normalized();
+    let p1_x_p2 = cross_product(p1, p2);
+    let p1_x_p2_norm = p1_x_p2.norm();
+    let ang_dist = p1_x_p2_norm.atan2(p1_dot_p2);
+    let p1_x_p2 = p1_x_p2.normalized();
     let x0= p1_x_p2.x();
     let y0= p1_x_p2.y();
     let z0= p1_x_p2.z();
@@ -592,13 +595,24 @@ pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVe
       } else {
         unreachable!();
       }
+    } else if ang_dist < (1_f64 / 3600.0).to_degrees() {
+      // dist < 1 arcsec: use local flat approximation and compute position on the segment
+      //   x = (x2 - x1)t + x1
+      //   y = (y2 - y1)t + y1
+      //   z = (z2 - z1)t + z1
+      // => t = (z - z1) / (z2 - z1)
+      let t = (z - p1.z()) / (p2.z() - p1.z());
+      let x = (p2.x() - p1.x()) * t + p1.x();
+      let y = (p2.y() - p1.y()) * t + p1.y();
+      Some(UnitVect3::new(x, y, z))
     } else {
       let x0_y0 = x0 / y0;
       let zz0_y0 = z * z0 / y0;
       let a = 1.0 + x0_y0.pow2();
       let b = 2.0 * x0_y0 * zz0_y0;
       let c = zz0_y0.pow2() + z.pow2() - 1.0;
-      let sqrt_delta = (b.pow2() - 4.0 * a * c).sqrt();
+      let delta = b.pow2() -  4.0 * a * c;
+      let sqrt_delta = delta.sqrt();
       let x1 = (-b + sqrt_delta) / a.twice();
       let y1 = -x1 * x0_y0 - zz0_y0;
       let x2 = (-b - sqrt_delta) / a.twice();

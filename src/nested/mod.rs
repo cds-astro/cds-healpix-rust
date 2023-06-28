@@ -4589,7 +4589,23 @@ mod tests {
       }
     }
   }
-  
+
+  #[test]
+  fn testok_polygone_aladinlite() {
+    let depth = 9;
+    let vertices = [(-1.3220905656465063 + TWICE_PI, -1.2576425633152113),
+      (-1.322092139407076 + TWICE_PI, -1.2576425633127768),
+      (-1.3220921394018748 + TWICE_PI, -1.2576422856351774),
+      (-1.3220905656426547 + TWICE_PI, -1.257642285637612)
+    ];
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    to_aladin_moc(&actual_res_exact);
+    /*for h in actual_res_exact.flat_iter() {
+      if h == 4806091 || h == 4806094 {
+        assert!(false, "Contains 10/4806091 or 10/4806094")
+      }
+    }*/
+  }
   
   /*
   Just used to test visually, everything was OK
