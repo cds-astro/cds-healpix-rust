@@ -1,5 +1,16 @@
 # `cdshealpix` Change Log
 
+## 0.6.6
+
+Released 2023-06-29
+
+### Add
+
+* Method `is_empty` and traits `Copy, Clone, Eq, ...` on `OrdinalSet` and `CardinalSet`
+
+--------------------------------------------------------------------------------
+
+
 
 ## 0.6.5
 

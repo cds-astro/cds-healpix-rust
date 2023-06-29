@@ -124,6 +124,7 @@ impl Cardinal {
 
 /// Cardinal set.
 /// Internally the information is stored on 4 bits.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CardinalSet {
   // Byte storing the 4 boolean values
   byte: u8,
@@ -141,6 +142,10 @@ impl CardinalSet {
     CardinalSet { byte: 0_u8 }
   }
 
+  pub fn is_empty(&self) -> bool {
+    self.byte == 0
+  }
+  
   /// Returns a cardinal set with all directions set
   pub fn all() -> CardinalSet {
     CardinalSet {
@@ -256,7 +261,7 @@ impl<V: Copy> CardinalMap<V> {
 // Ordinal //
 /////////////
 
-/// Cardinal points
+/// Ordinal points
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Ordinal {
@@ -314,6 +319,9 @@ impl Ordinal {
   }
 }
 
+/// Ordinal set.
+/// Internally the information is stored on 4 bits.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct OrdinalSet {
   byte: u8,
 }
@@ -330,6 +338,10 @@ impl OrdinalSet {
     OrdinalSet { byte: 0 }
   }
 
+  pub fn is_empty(&self) -> bool {
+    self.byte == 0
+  }
+  
   /// Returns a cardinal set with all directions set
   pub fn all() -> OrdinalSet {
     OrdinalSet {
