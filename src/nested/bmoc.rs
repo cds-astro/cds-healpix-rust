@@ -2030,13 +2030,6 @@ mod tests {
     bmoc.compress_lossy()
   }
 
-  fn to_aladin_moc(bmoc: &BMOC) {
-    print!("draw moc {}/", bmoc.get_depth_max());
-    for cell in bmoc.flat_iter() {
-      print!("{}, ", cell);
-    }
-  }
-
   #[test]
   fn testok_compressed_moc_empty_d0() {
     let compressed = build_compressed_moc_empty(0);
