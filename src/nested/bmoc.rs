@@ -445,6 +445,12 @@ impl BMOC {
     BMOC { depth_max, entries: Vec::with_capacity(capacity) }
   }*/
 
+  pub fn new_allsky(depth: u8) -> Self {
+    let mut builder = BMOCBuilderUnsafe::new(depth, 12);
+    builder.push_all(0, 0, 11, true);
+    builder.to_bmoc()
+  }
+
   pub fn size(&self) -> usize {
     self.entries.len()
   }
