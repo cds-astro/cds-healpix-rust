@@ -153,8 +153,9 @@ impl Polygon {
 
   /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
   /// two given points (we consider the arc having a length < PI).
-  pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Option<UnitVect3> {
+  pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Vec<UnitVect3> {
     // Ensure a < b in longitude
+    let mut vertices = vec![];
     let mut a = a;
     let mut b = b;
     if a.lon() > b.lon() {
@@ -175,17 +176,43 @@ impl Polygon {
         if polygon_edge_intersects_great_circle(ua, ub) {
           if let Some(intersect) = intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub)
           {
-            return Some(intersect);
+            vertices.push(intersect);
           }
         }
       }
       left = right
     }
-    None
+    vertices
   }
 
   pub fn is_intersecting_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> bool {
-    self.intersect_great_circle_arc(a, b).is_some()
+    // Ensure a < b in longitude
+    let mut a = a;
+    let mut b = b;
+    if a.lon() > b.lon() {
+      std::mem::swap(&mut a, &mut b);
+    }
+
+    let mut left = self.vertices.last().unwrap();
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in longitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lon() > pb.lon() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+      if great_circle_arcs_are_overlapping_in_lon(a, b, pa, pb) {
+        let ua = dot_product(a, cross_prod);
+        let ub = dot_product(b, cross_prod);
+        if polygon_edge_intersects_great_circle(ua, ub) {
+          if let Some(_) = intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub) {
+            return true;
+          }
+        }
+      }
+      left = right
+    }
+    false
   }
 
   /// Returns the coordinate of the intersection from an edge of the polygon
@@ -198,7 +225,8 @@ impl Polygon {
   /// * ||I|| = 1         (ii)  (I lies on the unit sphere)
   /// * I_z   = sin(lat)  (iii) (I lies on the given parallel)
   /// Knowing Iz (cf the third equation), we end up finding Ix and Iy thanks to (i) and (ii)
-  pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
+  pub fn intersect_parallel(&self, lat: f64) -> Vec<UnitVect3> {
+    let mut vertices = vec![];
     let (lat_sin, lat_cos) = lat.sin_cos();
     let z = lat_sin;
     let z2 = z.pow2();
@@ -242,22 +270,19 @@ impl Polygon {
 
             // If it lies on the great circle arc defined by pa and pb, this is the "good one" to return
             if dot_product(&cross_product(&p1, &pa), &cross_product(&p1, &pb)) < 0.0 {
-              return Some(p1);
+              vertices.push(p1);
             } else {
               // Otherwise return the other one
               let y2 = (-b + delta_root_sq) / two_a;
               let x = -(n.y() * y2 + n.z() * z) / n.x();
 
-              return Some(UnitVect3::new_unsafe(x, y2, z));
+              vertices.push(UnitVect3::new_unsafe(x, y2, z));
             }
           // Case A.2: there are one solution
           } else if delta == 0.0 {
             let y = -b / two_a;
             let x = -(n.y() * y + n.z() * z) / n.x();
-            return Some(UnitVect3::new_unsafe(x, y, z));
-          } else {
-            // No real solutions
-            return None;
+            vertices.push(UnitVect3::new_unsafe(x, y, z));
           }
         // Case B: Nx == 0
         } else {
@@ -266,9 +291,7 @@ impl Polygon {
             // Case B.1.a: N is pointing towards ez. Only the great circle of lat = 0 can fall in that case.
             // Therefore a solution can only be found if pa and pb lies on the equator too (lat = 0)
             if z == 0.0 && z == pa.z() {
-              return Some(UnitVect3::new_unsafe(pa.x(), pa.y(), pa.z()));
-            } else {
-              return None;
+              vertices.push(UnitVect3::new_unsafe(pa.x(), pa.y(), pa.z()));
             }
           // Case B.2: Ny != 0
           } else {
@@ -279,9 +302,9 @@ impl Polygon {
 
             let p = UnitVect3::new_unsafe(x, y, z);
             if dot_product(&cross_product(&p, &pa), &cross_product(&p, &pb)) < 0.0 {
-              return Some(p);
+              vertices.push(p);
             } else {
-              return Some(UnitVect3::new_unsafe(-x, y, z));
+              vertices.push(UnitVect3::new_unsafe(-x, y, z));
             }
           }
         }
@@ -290,14 +313,69 @@ impl Polygon {
       left = right;
     }
 
-    None
+    vertices
   }
 
   /// Returns `true` if there is an intersection between an edge of the polygon
   /// and a parallel defined by a latitude (this may suffer from numerical precision
   /// for polygon of size < 0.1 arcsec).
   pub fn is_intersecting_parallel(&self, lat: f64) -> bool {
-    self.intersect_parallel(lat).is_some()
+    let (lat_sin, lat_cos) = lat.sin_cos();
+    let z = lat_sin;
+    let z2 = z.pow2();
+
+    let mut left = self.vertices.last().unwrap();
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in latitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lat() > pb.lat() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+
+      // Discard great arc circles that do not overlap the given latitude
+      if (pa.lat()..pb.lat()).contains(&lat) {
+        let n = &cross_prod;
+
+        // Case A: Nx != 0
+        if n.x() != 0.0 {
+          let xn2 = n.x().pow2();
+          let yn2 = n.y().pow2();
+          let zn2 = n.z().pow2();
+
+          let a = (yn2 / xn2) + 1.0;
+          let two_a = a.twice();
+
+          let b = 2.0 * n.y() * n.z() * z / xn2;
+          let c = (zn2 * z2 / xn2) - lat_cos.pow2();
+
+          // Iy is a 2nd degree polynomia
+          let delta = b * b - 2.0 * two_a * c;
+
+          // Case A.1: there are 2 solutions for Iy
+          if delta >= 0.0 {
+            return true;
+          }
+        // Case B: Nx == 0
+        } else {
+          // Case B.1: Ny = 0
+          if n.y() == 0.0 {
+            // Case B.1.a: N is pointing towards ez. Only the great circle of lat = 0 can fall in that case.
+            // Therefore a solution can only be found if pa and pb lies on the equator too (lat = 0)
+            if z == 0.0 && z == pa.z() {
+              return true;
+            }
+          // Case B.2: Ny != 0
+          } else {
+            return true;
+          }
+        }
+      }
+
+      left = right;
+    }
+
+    false
   }
 
   #[inline]
