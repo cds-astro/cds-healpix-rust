@@ -652,7 +652,7 @@ impl BMOC {
         }
         Ordering::Equal => {
           debug_assert_eq!(l.depth, r.depth);
-          match l.depth.cmp(&r.depth) {
+          match l.hash.cmp(&r.hash) {
             Ordering::Less => left = it_left.next(),
             Ordering::Greater => right = it_right.next(),
             Ordering::Equal => {
@@ -923,6 +923,7 @@ impl BMOC {
     builder.to_bmoc_packing()
   }
 
+  // add elements of the low resolution cell which are not in the c cell
   fn not_in_cell_4_xor(
     &self,
     low_resolution: &Cell,
@@ -985,49 +986,41 @@ impl BMOC {
     while let (Some(l), Some(r)) = (&left, &right) {
       match l.depth.cmp(&r.depth) {
         Ordering::Less => {
+          // The l cell is larger than the r cell
+          // - degrade r cell at the l cell depth
           let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
           if l.hash < hr_at_dl {
             builder.push(l.depth, l.hash, l.is_full);
             left = it_left.next();
           } else if l.hash > hr_at_dl {
-            if !r.is_full {
-              debug_assert!(!l.is_full);
-              builder.push(r.depth, r.hash, r.is_full);
-            }
             right = it_right.next();
           } else if l.is_full {
             debug_assert_eq!(l.hash, hr_at_dl);
-            // TODO: CHECK: right = self.not_in_cell_4_xor(l, r, &mut it_right, &mut builder);
+            // add elements of the l cell which are not in common with the r cell
+            right = self.not_in_cell_4_xor(l, r, &mut it_right, &mut builder);
             left = it_left.next();
           } else {
             debug_assert_eq!(l.hash, hr_at_dl);
             debug_assert!(!l.is_full);
-            builder.push(l.depth, l.hash, l.is_full);
+            builder.push(l.depth, l.hash, false);
             right = consume_while_overlapped(l, &mut it_right);
             left = it_left.next();
           }
         }
         Ordering::Greater => {
+          // The r cell is larger than the l cell
+          // - degrade l cell at the r cell depth
           let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
           if hl_at_dr < r.hash {
             builder.push(l.depth, l.hash, l.is_full);
             left = it_left.next();
           } else if hl_at_dr > r.hash {
-            if !r.is_full {
-              builder.push(r.depth, r.hash, r.is_full);
-            }
+            // remove the r cell
             right = it_right.next();
-          } else if r.is_full {
+          } else if !r.is_full || !l.is_full {
             debug_assert_eq!(hl_at_dr, r.hash);
-            // TODO: CHECK: left = self.not_in_cell_4_xor(r, l, &mut it_left, &mut builder);
-            right = it_right.next();
-          } else {
-            debug_assert_eq!(hl_at_dr, r.hash);
-            debug_assert!(!r.is_full);
-            // DO NOT ADD R, BUT ADD ALL LEFT (WHILE LEFT IS IN R)!!
-            // builder.push(r.depth, r.hash, r.is_full);
-            // TODO: CHECK:  left = consume_while_overlapped(r, &mut it_left);
-            right = it_right.next();
+            builder.push(l.depth, l.hash, false);
+            left = it_left.next();
           }
         }
         Ordering::Equal => {
@@ -1038,10 +1031,6 @@ impl BMOC {
               left = it_left.next();
             }
             Ordering::Greater => {
-              if !r.is_full {
-                debug_assert!(!l.is_full);
-                builder.push(r.depth, r.hash, r.is_full);
-              }
               right = it_right.next();
             }
             Ordering::Equal => {
@@ -1062,77 +1051,8 @@ impl BMOC {
       builder.push(l.depth, l.hash, l.is_full);
       left = it_left.next();
     }
-    while let Some(r) = &right {
-      debug_assert!(left.is_none());
-      if !r.is_full {
-        builder.push(r.depth, r.hash, r.is_full);
-      }
-      right = it_right.next();
-    }
     builder.to_bmoc_packing()
   }
-
-  /* KEEP THIS METHOD FOR A MOC
-    pub fn from_ranges_unsafe(depth_max: u8, ranges: &[range]) {
-      final long dMask = (1L << hhCoder.nBits(d, d)) - 1; // 11 for HEALPix
-      final long dNHash = hhCoder.nHash(d, d); // 4 for HEALLPix
-      final SortedHHashSet res = new SortedHHashSet(hhCoder);
-      // We recall that hM is exclusive!
-      // We ignore successive ranges (range_i_max == range_i+1_min)
-      for range in ranges {
-        width = range.to - range.from;
-        // Deal with level 0 range
-        if ranges.len() == 1 && width == n_hash_unsafe(depth_max) {
-          assert_eq!(range.from, 0_u64);
-          for (hm = 0; hm < hhCoder.nHash(0); hm++) {
-            res.add(new HHImpl(0, hm));
-          }
-          hm = hM;
-        }
-              // ++ pre part
-              // While we don't start with the 2 last bits = 00.
-              while ((((hm & dMask) != 0 // Hash don't end by a series of 0
-                      || (hM - hm) < dNHash))// Not enough distinct hash to fill the depth
-                      //|| (d == 0 && hM - hm == 12)) // Special case of d=0 and range=0-12
-                      && hm < hM) { // Still elements in the range
-                  final HHash hh = new HHImpl(d, hm);
-  if (debug) System.out.println("Add1 " + hh + " --> " + hhCoder.hashRange(hh.depth(), hh.hashValue(), d));
-                  res.add(hh);
-                  ++hm;
-              }
-              while (hm < hM) { // Still elements in the range
-                  // ++ med part
-                  rangeWidth = hM - hm;
-  if (debug) System.out.println("hm: " + hm + "; bits: " + Long.toBinaryString(hm));
-                  // get number of depth fille by the last 0 bits
-                  int ddFromMin = hhCoder.nFilledDepthOnLastBits(d, (int) Long.numberOfTrailingZeros(hm));
-  if (debug) System.out.println("ddFromMin: " + ddFromMin);
-                  int ddFromRangeWidth = hhCoder.nFilledDepth(d, rangeWidth);
-  if (debug) System.out.println("ddFromRangeWidth: " + ddFromRangeWidth);
-                  int dd = ddFromRangeWidth < ddFromMin ? ddFromRangeWidth : ddFromMin;
-                  final HHash hhh = new HHImpl(d - dd, hhCoder.hash(d, hm, d - dd));
-                  res.add(hhh);
-  if (debug) System.out.println("Add2 " + hhh + " --> " + hhCoder.hashRange(hhh.depth(), hhh.hashValue(), d));
-  if (debug) System.out.println("nHash (from=" + ( d - dd + 1) + ", to= --> " + d + ") =  " + hhCoder.nHash(( d - dd + 1), d));
-                  hm += hhCoder.nHash(d - dd + 1, d); // 1 << (d << 1) = 2^(2*d) = 4^d
-                  //System.out.println("dd: " + dd + "; new hm = " + hm);
-                  //++ post part
-                  if (hM - hm < dNHash) {
-                      while (hm < hM) {
-                          final HHash hh = new HHImpl(d, hm);
-  if (debug) System.out.println("Add3 " + hh);
-                          res.add(hh);
-                          ++hm;
-                      }
-                  }
-              }
-          }
-
-    }*/
-
-  /*pub(super) fn add(&mut self, depth: u8, hash: u64, is_full: u8) {
-    self.entries.push(build_raw_value(depth, hash, is_full, self.depth_max));
-  }*/
 
   pub fn from_raw_value(&self, raw_value: u64) -> Cell {
     Cell::new(raw_value, self.depth_max)
@@ -2106,6 +2026,13 @@ mod tests {
     bmoc.compress_lossy()
   }
 
+  fn to_aladin_moc(bmoc: &BMOC) {
+    print!("draw moc {}/", bmoc.get_depth_max());
+    for cell in bmoc.flat_iter() {
+      print!("{}, ", cell);
+    }
+  }
+
   #[test]
   fn testok_compressed_moc_empty_d0() {
     let compressed = build_compressed_moc_empty(0);
@@ -2200,5 +2127,115 @@ mod tests {
     println!("len: {}", moc_not.size());
     println!("len: {}", moc_out.size());
     assert_eq!(moc_org, moc_out);
+  }
+
+  #[test]
+  fn test_ok_bmoc_union_and_not() {
+    let poly1_vertices_deg = [
+      272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
+      -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
+    ];
+    let poly2_vertices_deg = [
+      272.630446, -19.234210, 272.637274, -19.248542, 272.638942, -19.231476, 272.630868,
+      -19.226364,
+    ];
+    let v1: Vec<(f64, f64)> = poly1_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly1_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let v2: Vec<(f64, f64)> = poly2_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly2_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let moc1 = polygon_coverage(10, v1.as_slice(), true);
+    let moc2 = polygon_coverage(10, v2.as_slice(), true);
+    let not_moc1 = moc1.not();
+    let not_moc2 = moc2.not();
+    let union = moc1.or(&moc2);
+    let not_inter = not_moc1.and(&not_moc2);
+    let union_bis = not_inter.not();
+    //to_aladin_moc(&moc1);
+    //println!("\n");
+    //to_aladin_moc(&moc2);
+    //println!("\n");
+    //to_aladin_moc(&union);
+    //println!("\n");
+    to_aladin_moc(&union_bis);
+    //println!("\n");
+    assert_eq!(union, union_bis);
+  }
+
+  #[test]
+  fn test_ok_bmoc_xor_minus_coherency() {
+    // No overlapping parts, so we do no test thoroughly XOR and MINUS!!
+    let poly1_vertices_deg = [
+      272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
+      -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
+    ];
+    let poly2_vertices_deg = [
+      272.630446, -19.234210, 272.637274, -19.248542, 272.638942, -19.231476, 272.630868,
+      -19.226364,
+    ];
+    let poly3_vertices_deg = [
+      272.536719, -19.461249, 272.542612, -19.476380, 272.537389, -19.491509, 272.540192,
+      -19.499823, 272.535455, -19.505218, 272.528024, -19.505216, 272.523437, -19.500298,
+      272.514082, -19.503376, 272.502271, -19.500966, 272.488647, -19.490390, 272.481932,
+      -19.490913, 272.476737, -19.486589, 272.487633, -19.455645, 272.500386, -19.444996,
+      272.503003, -19.437557, 272.512303, -19.432436, 272.514132, -19.423973, 272.522103,
+      -19.421523, 272.524511, -19.413250, 272.541021, -19.400024, 272.566264, -19.397500,
+      272.564202, -19.389111, 272.569055, -19.383210, 272.588186, -19.386539, 272.593376,
+      -19.381832, 272.596327, -19.370541, 272.624911, -19.358915, 272.629256, -19.347842,
+      272.642277, -19.341020, 272.651322, -19.330424, 272.653174, -19.325079, 272.648903,
+      -19.313708, 272.639616, -19.311098, 272.638128, -19.303083, 272.632705, -19.299839,
+      272.627971, -19.289408, 272.628226, -19.276293, 272.633750, -19.270590, 272.615109,
+      -19.241810, 272.614704, -19.221196, 272.618224, -19.215572, 272.630809, -19.209945,
+      272.633540, -19.198681, 272.640711, -19.195292, 272.643028, -19.186751, 272.651477,
+      -19.182729, 272.649821, -19.174859, 272.656782, -19.169272, 272.658933, -19.161883,
+      272.678012, -19.159481, 272.689173, -19.176982, 272.689395, -19.183512, 272.678006,
+      -19.204016, 272.671112, -19.206598, 272.664854, -19.203523, 272.662760, -19.211156,
+      272.654435, -19.214434, 272.652969, -19.222085, 272.656724, -19.242136, 272.650071,
+      -19.265092, 272.652868, -19.274296, 272.660871, -19.249462, 272.670041, -19.247807,
+      272.675533, -19.254935, 272.673291, -19.273917, 272.668710, -19.279245, 272.671460,
+      -19.287043, 272.667507, -19.293933, 272.669261, -19.300601, 272.663969, -19.307130,
+      272.672626, -19.308954, 272.675225, -19.316490, 272.657188, -19.349105, 272.657638,
+      -19.367455, 272.662447, -19.372035, 272.662232, -19.378566, 272.652479, -19.386871,
+      272.645819, -19.387933, 272.642279, -19.398277, 272.629282, -19.402739, 272.621487,
+      -19.398197, 272.611782, -19.405716, 272.603367, -19.404667, 272.586162, -19.422703,
+      272.561792, -19.420008, 272.555815, -19.413012, 272.546500, -19.415611, 272.537427,
+      -19.424213, 272.533081, -19.441402,
+    ];
+    let v1: Vec<(f64, f64)> = poly1_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly1_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let v2: Vec<(f64, f64)> = poly2_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly2_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let v3: Vec<(f64, f64)> = poly3_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly3_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let moc1 = polygon_coverage(10, v1.as_slice(), true);
+    let moc2 = polygon_coverage(10, v2.as_slice(), true);
+    let moc3 = polygon_coverage(10, v3.as_slice(), true);
+
+    let union12 = moc1.or(&moc2);
+    let res1 = moc3.xor(&union12);
+    let res2 = moc3.minus(&union12);
+    let res3 = moc3.and(&union12.not());
+
+    assert_eq!(res1, res2);
+    assert_eq!(res1, res3);
   }
 }

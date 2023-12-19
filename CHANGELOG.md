@@ -2,11 +2,15 @@
 
 ## 0.6.7
 
-Released 2023-XX-XX
+Released 2023-12-19
 
 ### Add
 
-* BMOC methods `new_allsky` and `new_empty`
+* BMOC methods `new_allsky`, `new_empty` and `minus`
+
+### Bug correction
+
+* Fix a bug in BMOC AND operation
 
 --------------------------------------------------------------------------------
 
