@@ -145,7 +145,7 @@ impl CardinalSet {
   pub fn is_empty(&self) -> bool {
     self.byte == 0
   }
-  
+
   /// Returns a cardinal set with all directions set
   pub fn all() -> CardinalSet {
     CardinalSet {
@@ -155,7 +155,7 @@ impl CardinalSet {
 
   /// Add or remove (or do nothing) the given direction to the set.
   pub fn set(&mut self, key: Cardinal, value: bool) {
-    let i = key.index() as u8;
+    let i = key.index();
     let mask = 1u8 << i;
     if value {
       self.byte |= mask;
@@ -341,7 +341,7 @@ impl OrdinalSet {
   pub fn is_empty(&self) -> bool {
     self.byte == 0
   }
-  
+
   /// Returns a cardinal set with all directions set
   pub fn all() -> OrdinalSet {
     OrdinalSet {
@@ -739,7 +739,7 @@ impl<V: Copy> MainWindMap<V> {
 
   /// Associate None with the given direction
   pub fn put_none(&mut self, key: MainWind) -> Option<V> {
-    mem::replace(&mut self.array[key.index() as usize], None)
+    self.array[key.index() as usize].take()
   }
 
   /// Associate the given Option with the given direction

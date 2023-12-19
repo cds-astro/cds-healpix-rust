@@ -1952,7 +1952,7 @@ impl CompressedMOC {
   }
 
   pub fn from_b64(b64_encoded: String) -> Result<CompressedMOC, DecodeError> {
-    let decoded = STANDARD.decode(&b64_encoded)?;
+    let decoded = STANDARD.decode(b64_encoded)?;
     let depth_max = decoded[0];
     Ok(CompressedMOC {
       moc: decoded.into_boxed_slice(),

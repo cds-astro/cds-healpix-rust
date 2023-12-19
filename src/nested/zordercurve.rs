@@ -461,7 +461,7 @@ impl ZOrderCurve for LargeZOC {
   }
   fn h2ij(&self, h: u64) -> u64 {
     let bytes: [u8; 8] = h.to_le_bytes();
-    LUPT_TO_IJ_INT[bytes[0] as usize] as u64
+    LUPT_TO_IJ_INT[bytes[0] as usize]
       | LUPT_TO_IJ_INT[bytes[1] as usize] << 4
       | LUPT_TO_IJ_INT[bytes[2] as usize] << 8
       | LUPT_TO_IJ_INT[bytes[3] as usize] << 12

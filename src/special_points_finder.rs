@@ -194,7 +194,7 @@ pub fn arc_special_point_in_eqr(
   z_eps_max: f64,
   n_iter_max: u8,
 ) -> Option<LonLat> {
-  let cone_center = cross_product(&p1, &p2).normalized();
+  let cone_center = cross_product(p1, p2).normalized();
   let z0 = cone_center.z();
   let z1 = p1.z();
   let z2 = p2.z();

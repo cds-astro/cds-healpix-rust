@@ -43,7 +43,7 @@ impl ContainsSouthPoleComputer for Basic {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool {
     let mut gravity_center_z = 0.0_f64;
     let mut sum_delta_lon = 0.0_f64;
-    let mut j = (polygon.vertices.len() - 1) as usize;
+    let mut j = polygon.vertices.len() - 1;
     let to = j; // variable defined to remove a clippy warning
     for i in 0..=to {
       let delta_lon = polygon.vertices[i].lon() - polygon.vertices[j].lon();
@@ -241,7 +241,7 @@ impl Polygon {
             let p1 = UnitVect3::new_unsafe(x, y1, z);
 
             // If it lies on the great circle arc defined by pa and pb, this is the "good one" to return
-            if dot_product(&cross_product(&p1, &pa), &cross_product(&p1, &pb)) < 0.0 {
+            if dot_product(&cross_product(&p1, pa), &cross_product(&p1, pb)) < 0.0 {
               return Some(p1);
             } else {
               // Otherwise return the other one
@@ -278,7 +278,7 @@ impl Polygon {
             let (x, y) = ((lat_cos.pow2() - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
 
             let p = UnitVect3::new_unsafe(x, y, z);
-            if dot_product(&cross_product(&p, &pa), &cross_product(&p, &pb)) < 0.0 {
+            if dot_product(&cross_product(&p, pa), &cross_product(&p, pb)) < 0.0 {
               return Some(p);
             } else {
               return Some(UnitVect3::new_unsafe(-x, y, z));
@@ -328,7 +328,7 @@ fn lonlat2coo3d(vertices: &[LonLat]) -> Box<[Coo3D]> {
 
 #[inline]
 fn compute_cross_products(vertices: &[Coo3D]) -> Box<[Vect3]> {
-  let mut i = (vertices.len() - 1) as usize;
+  let mut i = vertices.len() - 1;
   let cross_products: Vec<Vect3> = (0..=i)
     .map(|j| {
       let v1 = vertices.get(i).unwrap();

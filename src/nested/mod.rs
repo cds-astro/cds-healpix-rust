@@ -2343,10 +2343,10 @@ impl Layer {
           let h = hash(d, center.lon(), center.lat());
           (d, neighbours(d, h, true).sorted_values_vec())
         } else {
-          (0, (0..12).into_iter().collect::<Vec<u64>>())
+          (0, (0..12).collect::<Vec<u64>>())
         }
       })
-      .unwrap_or((0, (0..12).into_iter().collect::<Vec<u64>>()));
+      .unwrap_or((0, (0..12).collect::<Vec<u64>>()));
     let zone_perimeter = 2.0 * (zone.dlon() + zone.dlat());
     let aprox_cell_side_at_depth_max = 2.0 * (PI / n_hash(self.depth) as f64).sqrt();
     let mut bmoc_builder = BMOCBuilderUnsafe::new(
