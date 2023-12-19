@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.6.6"
+version = "0.6.7"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2018"
 license = "Apache-2.0 OR MIT"

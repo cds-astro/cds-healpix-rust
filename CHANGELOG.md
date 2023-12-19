@@ -1,5 +1,16 @@
 # `cdshealpix` Change Log
 
+## 0.6.7
+
+Released 2023-XX-XX
+
+### Add
+
+* BMOC methods `new_allsky` and `new_empty`
+
+--------------------------------------------------------------------------------
+
+
 ## 0.6.6
 
 Released 2023-06-29
@@ -9,7 +20,6 @@ Released 2023-06-29
 * Method `is_empty` and traits `Copy, Clone, Eq, ...` on `OrdinalSet` and `CardinalSet`
 
 --------------------------------------------------------------------------------
-
 
 
 ## 0.6.5

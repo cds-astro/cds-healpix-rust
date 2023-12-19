@@ -408,6 +408,7 @@ impl BMOCBuilderFixedDepth {
 ///    ascending order (flag information is lost).
 /// - `bmoc.flat_iter_cell() -> Iterator<Cell>` same as `flat_iter()` but conserving then `flag`
 ///    information (and the depth which must always equals the BMOC depth).
+#[derive(Debug, PartialEq, Eq)]
 pub struct BMOC {
   depth_max: u8,
   pub entries: Box<[u64]>,
@@ -440,14 +441,14 @@ impl Cell {
 }
 
 impl BMOC {
-  /* Use this for a BMOC builder!
-  pub(super) fn new(depth_max: u8, capacity: usize) -> BMOC {
-    BMOC { depth_max, entries: Vec::with_capacity(capacity) }
-  }*/
+  pub fn new_empty(depth: u8) -> Self {
+    let builder = BMOCBuilderUnsafe::new(depth, 0);
+    builder.to_bmoc()
+  }
 
   pub fn new_allsky(depth: u8) -> Self {
     let mut builder = BMOCBuilderUnsafe::new(depth, 12);
-    builder.push_all(0, 0, 11, true);
+    builder.push_all(0, 0, 12, true);
     builder.to_bmoc()
   }
 
@@ -959,6 +960,116 @@ impl BMOC {
       builder,
     );
     cell
+  }
+
+  /// Returns the difference of this BMOC (left) with the given BMOC (right):
+  /// - all non overlapping cells of this (left) BMOC are kept
+  /// - non overlapping cells of the other (right) BMOC are removed
+  ///   if full, and kept if partially covered (since A MINUS B = A AND (NOT(B))
+  /// - when two cells are overlapping, the overlapping part is:
+  ///   - removed if both flags = 1
+  ///   - kept if one of the flags = 0 (since 0 meas partially covered but O don't know which part)
+  /// Poor's man implementation: A MINUS B = A AND NOT(B)
+  pub fn minus(&self, other: &BMOC) -> BMOC {
+    let mut builder = BMOCBuilderUnsafe::new(
+      max(self.depth_max, other.depth_max),
+      max(self.entries.len(), other.entries.len()),
+    );
+    let mut it_left = self.into_iter();
+    let mut it_right = other.into_iter();
+    let mut left = it_left.next();
+    let mut right = it_right.next();
+    // We have 9 cases to take into account:
+    // -  3: dL == dR, dL < dR and dR < dL
+    // - x3: hL == hR, hL < hR and hR < hL
+    while let (Some(l), Some(r)) = (&left, &right) {
+      match l.depth.cmp(&r.depth) {
+        Ordering::Less => {
+          let hr_at_dl = r.hash >> ((r.depth - l.depth) << 1);
+          if l.hash < hr_at_dl {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if l.hash > hr_at_dl {
+            if !r.is_full {
+              debug_assert!(!l.is_full);
+              builder.push(r.depth, r.hash, r.is_full);
+            }
+            right = it_right.next();
+          } else if l.is_full {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            // TODO: CHECK: right = self.not_in_cell_4_xor(l, r, &mut it_right, &mut builder);
+            left = it_left.next();
+          } else {
+            debug_assert_eq!(l.hash, hr_at_dl);
+            debug_assert!(!l.is_full);
+            builder.push(l.depth, l.hash, l.is_full);
+            right = consume_while_overlapped(l, &mut it_right);
+            left = it_left.next();
+          }
+        }
+        Ordering::Greater => {
+          let hl_at_dr = l.hash >> ((l.depth - r.depth) << 1);
+          if hl_at_dr < r.hash {
+            builder.push(l.depth, l.hash, l.is_full);
+            left = it_left.next();
+          } else if hl_at_dr > r.hash {
+            if !r.is_full {
+              builder.push(r.depth, r.hash, r.is_full);
+            }
+            right = it_right.next();
+          } else if r.is_full {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            // TODO: CHECK: left = self.not_in_cell_4_xor(r, l, &mut it_left, &mut builder);
+            right = it_right.next();
+          } else {
+            debug_assert_eq!(hl_at_dr, r.hash);
+            debug_assert!(!r.is_full);
+            // DO NOT ADD R, BUT ADD ALL LEFT (WHILE LEFT IS IN R)!!
+            // builder.push(r.depth, r.hash, r.is_full);
+            // TODO: CHECK:  left = consume_while_overlapped(r, &mut it_left);
+            right = it_right.next();
+          }
+        }
+        Ordering::Equal => {
+          debug_assert_eq!(l.depth, r.depth);
+          match l.hash.cmp(&r.hash) {
+            Ordering::Less => {
+              builder.push(l.depth, l.hash, l.is_full);
+              left = it_left.next();
+            }
+            Ordering::Greater => {
+              if !r.is_full {
+                debug_assert!(!l.is_full);
+                builder.push(r.depth, r.hash, r.is_full);
+              }
+              right = it_right.next();
+            }
+            Ordering::Equal => {
+              debug_assert_eq!(l.hash, r.hash);
+              let both_fully_covered = r.is_full && l.is_full;
+              if !both_fully_covered {
+                builder.push(l.depth, l.hash, both_fully_covered);
+              }
+              left = it_left.next();
+              right = it_right.next();
+            }
+          }
+        }
+      }
+    }
+    while let Some(l) = &left {
+      debug_assert!(right.is_none());
+      builder.push(l.depth, l.hash, l.is_full);
+      left = it_left.next();
+    }
+    while let Some(r) = &right {
+      debug_assert!(left.is_none());
+      if !r.is_full {
+        builder.push(r.depth, r.hash, r.is_full);
+      }
+      right = it_right.next();
+    }
+    builder.to_bmoc_packing()
   }
 
   /* KEEP THIS METHOD FOR A MOC
@@ -1978,6 +2089,7 @@ impl CompressedMOC {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::nested::polygon_coverage;
 
   fn build_compressed_moc_empty(depth: u8) -> CompressedMOC {
     let mut builder = BMOCBuilderFixedDepth::new(depth, true);
@@ -2057,5 +2169,36 @@ mod tests {
         .to_b64(),
       b64
     );
+  }
+
+  #[test]
+  fn test_ok_allsky_and_empty_bmoc() {
+    let bmoc_allsky = BMOC::new_allsky(18);
+    assert_eq!(bmoc_allsky.entries.len(), 12);
+    let bmoc_empty = BMOC::new_empty(18);
+    assert_eq!(bmoc_empty.entries.len(), 0);
+    assert_eq!(bmoc_allsky.not(), bmoc_empty);
+    assert_eq!(bmoc_allsky, bmoc_empty.not());
+  }
+
+  #[test]
+  fn test_ok_bmoc_not_round_trip() {
+    let poly_vertices_deg = [
+      272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
+      -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
+    ];
+    let vertices: Vec<(f64, f64)> = poly_vertices_deg
+      .iter()
+      .copied()
+      .step_by(2)
+      .zip(poly_vertices_deg.iter().copied().skip(1).step_by(2))
+      .collect();
+    let moc_org = polygon_coverage(18, vertices.as_slice(), true);
+    let moc_not = moc_org.not();
+    let moc_out = moc_not.not();
+    println!("len: {}", moc_org.size());
+    println!("len: {}", moc_not.size());
+    println!("len: {}", moc_out.size());
+    assert_eq!(moc_org, moc_out);
   }
 }
