@@ -2110,17 +2110,20 @@ mod tests {
 
   #[test]
   fn test_ok_bmoc_not_round_trip() {
-    let poly_vertices_deg = [
+    let mut poly_vertices_deg: [f64; 14] = [
       272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
       -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
     ];
+    for v in poly_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
     let vertices: Vec<(f64, f64)> = poly_vertices_deg
       .iter()
       .copied()
       .step_by(2)
       .zip(poly_vertices_deg.iter().copied().skip(1).step_by(2))
       .collect();
-    let moc_org = polygon_coverage(18, vertices.as_slice(), true);
+    let moc_org = polygon_coverage(14, vertices.as_slice(), true);
     let moc_not = moc_org.not();
     let moc_out = moc_not.not();
     println!("len: {}", moc_org.size());
@@ -2131,14 +2134,20 @@ mod tests {
 
   #[test]
   fn test_ok_bmoc_union_and_not() {
-    let poly1_vertices_deg = [
+    let mut poly1_vertices_deg: [f64; 14] = [
       272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
       -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
     ];
-    let poly2_vertices_deg = [
+    for v in poly1_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
+    let mut poly2_vertices_deg: [f64; 8] = [
       272.630446, -19.234210, 272.637274, -19.248542, 272.638942, -19.231476, 272.630868,
       -19.226364,
     ];
+    for v in poly2_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
     let v1: Vec<(f64, f64)> = poly1_vertices_deg
       .iter()
       .copied()
@@ -2151,8 +2160,8 @@ mod tests {
       .step_by(2)
       .zip(poly2_vertices_deg.iter().copied().skip(1).step_by(2))
       .collect();
-    let moc1 = polygon_coverage(10, v1.as_slice(), true);
-    let moc2 = polygon_coverage(10, v2.as_slice(), true);
+    let moc1 = polygon_coverage(14, v1.as_slice(), true);
+    let moc2 = polygon_coverage(14, v2.as_slice(), true);
     let not_moc1 = moc1.not();
     let not_moc2 = moc2.not();
     let union = moc1.or(&moc2);
@@ -2162,9 +2171,9 @@ mod tests {
     //println!("\n");
     //to_aladin_moc(&moc2);
     //println!("\n");
-    //to_aladin_moc(&union);
+    // to_aladin_moc(&union);
     //println!("\n");
-    to_aladin_moc(&union_bis);
+    // to_aladin_moc(&union_bis);
     //println!("\n");
     assert_eq!(union, union_bis);
   }
@@ -2172,15 +2181,21 @@ mod tests {
   #[test]
   fn test_ok_bmoc_xor_minus_coherency() {
     // No overlapping parts, so we do no test thoroughly XOR and MINUS!!
-    let poly1_vertices_deg = [
+    let mut poly1_vertices_deg: [f64; 14] = [
       272.511081, -19.487278, 272.515300, -19.486595, 272.517029, -19.471442, 272.511714,
       -19.458837, 272.506430, -19.459001, 272.496401, -19.474322, 272.504821, -19.484924,
     ];
-    let poly2_vertices_deg = [
+    for v in poly1_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
+    let mut poly2_vertices_deg: [f64; 8] = [
       272.630446, -19.234210, 272.637274, -19.248542, 272.638942, -19.231476, 272.630868,
       -19.226364,
     ];
-    let poly3_vertices_deg = [
+    for v in poly2_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
+    let mut poly3_vertices_deg: [f64; 178] = [
       272.536719, -19.461249, 272.542612, -19.476380, 272.537389, -19.491509, 272.540192,
       -19.499823, 272.535455, -19.505218, 272.528024, -19.505216, 272.523437, -19.500298,
       272.514082, -19.503376, 272.502271, -19.500966, 272.488647, -19.490390, 272.481932,
@@ -2208,6 +2223,9 @@ mod tests {
       272.561792, -19.420008, 272.555815, -19.413012, 272.546500, -19.415611, 272.537427,
       -19.424213, 272.533081, -19.441402,
     ];
+    for v in poly3_vertices_deg.iter_mut() {
+      *v = (*v).to_radians();
+    }
     let v1: Vec<(f64, f64)> = poly1_vertices_deg
       .iter()
       .copied()
@@ -2226,9 +2244,9 @@ mod tests {
       .step_by(2)
       .zip(poly3_vertices_deg.iter().copied().skip(1).step_by(2))
       .collect();
-    let moc1 = polygon_coverage(10, v1.as_slice(), true);
-    let moc2 = polygon_coverage(10, v2.as_slice(), true);
-    let moc3 = polygon_coverage(10, v3.as_slice(), true);
+    let moc1 = polygon_coverage(18, v1.as_slice(), true);
+    let moc2 = polygon_coverage(18, v2.as_slice(), true);
+    let moc3 = polygon_coverage(18, v3.as_slice(), true);
 
     let union12 = moc1.or(&moc2);
     let res1 = moc3.xor(&union12);
