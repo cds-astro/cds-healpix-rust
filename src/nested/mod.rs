@@ -1278,6 +1278,29 @@ impl Layer {
     ]
   }
 
+  /// Computes the projected coordinates of the 4 vertcies of the given cell.
+  ///  
+  /// # Input
+  /// - `hash`: the hash value of the cell we look for the positions of its vertices
+  ///
+  /// # Output
+  /// - `[(x_S, y_S), (x_E, y_E), (x_N, y_N), (x_W, y_W)]` are the projected
+  ///   the positions of the vertices.
+  ///
+  /// # Panics
+  /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
+  #[inline]
+  pub fn projected_vertices(&self, hash:u64) -> [(f64, f64); 4] {
+    let (x,y) = self.center_of_projected_cell(hash);
+    let t = self.one_over_nside;
+    [
+        (x, y - t), // S
+        (x + t, y), // E
+        (x, y + t), // N
+        (x - t, y), // W
+    ]
+  }
+
   /// Computes the positions on the unit sphere of the vertices of the given cell which direction
   /// are in the given set.
   /// If you don't care about the association between position and direction,
