@@ -1270,11 +1270,12 @@ impl Layer {
   #[inline]
   pub fn vertices(&self, hash: u64) -> [(f64, f64); 4] {
     let (x, y) = self.center_of_projected_cell(hash);
+    let t = self.one_over_nside;
     [
-      super::unproj(x, y - self.one_over_nside), // S
-      super::unproj(x + self.one_over_nside, y), // E
-      super::unproj(x, y + self.one_over_nside), // N
-      super::unproj(ensures_x_is_positive(x - self.one_over_nside), y), // W
+      super::unproj(x, y - t),                        // S
+      super::unproj(x + t, y),                        // E
+      super::unproj(x, y + t),                        // N
+      super::unproj(ensures_x_is_positive(x - t), y), // W
     ]
   }
 
@@ -1290,14 +1291,14 @@ impl Layer {
   /// # Panics
   /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
   #[inline]
-  pub fn projected_vertices(&self, hash:u64) -> [(f64, f64); 4] {
-    let (x,y) = self.center_of_projected_cell(hash);
+  pub fn projected_vertices(&self, hash: u64) -> [(f64, f64); 4] {
+    let (x, y) = self.center_of_projected_cell(hash);
     let t = self.one_over_nside;
     [
-        (x, y - t), // S
-        (x + t, y), // E
-        (x, y + t), // N
-        (x - t, y), // W
+      (x, y - t), // S
+      (x + t, y), // E
+      (x, y + t), // N
+      (x - t, y), // W
     ]
   }
 

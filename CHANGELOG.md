@@ -6,6 +6,7 @@ Released 2024-05-14
 
 ### Add
 
+* Add `projected_vertices` (external contribution)
 * Add a test on polygon (because of a bug in the Java lib, but already fixed in the Rust lib).
 
 ### Bug correction

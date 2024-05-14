@@ -12,6 +12,7 @@ libpython/target/
 libpython/*.so
 
 # Ignore files
+NOTICE.md
 Notes.txt
 GIT_NOTICE.txt
 RELEASE_NOTICE.md
