@@ -1170,7 +1170,11 @@ impl BMOC {
     let mut ranges: Vec<(std::ops::Range<u64>, bool)> = Vec::with_capacity(self.entries.len());
     let mut prev_min = 0_u64;
     let mut prev_max = 0_u64;
-    let mut prev_flag = false;
+    let mut prev_flag = self
+      .entries
+      .get(0)
+      .map(|v| (v & 1_u64) == 1_u64)
+      .unwrap_or(false);
     for cell in self.into_iter() {
       if cell.depth < self.depth_max {
         let range = to_range(cell.hash, self.depth_max - cell.depth);
@@ -2009,7 +2013,7 @@ impl CompressedMOC {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::nested::polygon_coverage;
+  use crate::nested::{cone_coverage_approx_custom, polygon_coverage};
 
   fn build_compressed_moc_empty(depth: u8) -> CompressedMOC {
     let mut builder = BMOCBuilderFixedDepth::new(depth, true);
@@ -2255,5 +2259,29 @@ mod tests {
 
     assert_eq!(res1, res2);
     assert_eq!(res1, res3);
+  }
+
+  #[test]
+  fn test_ok_bmoc_not() {
+    let lon = 13.158329_f64.to_radians();
+    let lat = -72.80028_f64.to_radians();
+    let radius = 5.64323_f64.to_radians();
+    let depth = 6;
+    let delta_depth = 5;
+
+    let bmoc = cone_coverage_approx_custom(depth, delta_depth, lon, lat, radius);
+
+    let not_bmoc = bmoc.not();
+
+    println!("BMOC");
+    for (range, flag) in bmoc.to_flagged_ranges() {
+      println!("flag: {}; range: {:?}", flag, range);
+    }
+    println!("NOT BMOC");
+    for (range, flag) in not_bmoc.to_flagged_ranges() {
+      println!("flag: {}; range: {:?}", flag, range);
+    }
+    // Asssert that the first range has the flag 'true'.
+    assert!(not_bmoc.to_flagged_ranges().first().unwrap().1)
   }
 }

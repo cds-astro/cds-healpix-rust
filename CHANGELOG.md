@@ -1,5 +1,21 @@
 # `cdshealpix` Change Log
 
+## 0.6.8
+
+Released 2024-05-14
+
+### Add
+
+* Add a test on polygon (because of a bug in the Java lib, but already fixed in the Rust lib).
+
+### Bug correction
+
+* Fix a bug in `BMOC.to_flagged_ranges`: remove possible spurious flag 'not_full'
+  on the first returned range 
+
+--------------------------------------------------------------------------------
+
+
 ## 0.6.7
 
 Released 2023-12-19

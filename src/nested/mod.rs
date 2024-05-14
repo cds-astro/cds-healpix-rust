@@ -6504,6 +6504,60 @@ mod tests {
   }
 
   #[test]
+  fn testok_polygone_exact_mt_pb_with_java_lib() {
+    // In Aladin:
+    // draw polygon(...)
+    let depth = 12;
+    // First polygone
+    let coos = [
+      -1.5702949547333407,
+      -0.7295093151415473,
+      -1.5702171673769950,
+      -0.7295093016804524,
+      -1.5701393800214274,
+      -0.7295092852142693,
+      -1.5700615926667945,
+      -0.7295092657429985,
+    ];
+    let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(coos.len() >> 1);
+    for i in (0..coos.len()).step_by(2) {
+      vertices.push((coos[i], coos[i + 1]))
+    }
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    to_aladin_moc(&actual_res_exact);
+    let mut s = String::new();
+    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+      s.push(',');
+      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+    }
+    println!("draw polygon({})", &s.as_str()[1..]);
+
+    // Second polygon
+    let coos = [
+      -1.5706045044233712,
+      -0.7295105218483977,
+      -1.5705168372776197,
+      -0.7295105199399403,
+      -1.5704291701320918,
+      -0.7295105142145686,
+      -1.5703415029870114,
+      -0.7295105046722821,
+    ];
+    let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(coos.len() >> 1);
+    for i in (0..coos.len()).step_by(2) {
+      vertices.push((coos[i], coos[i + 1]))
+    }
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    to_aladin_moc(&actual_res_exact);
+    let mut s = String::new();
+    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+      s.push(',');
+      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+    }
+    println!("draw polygon({})", &s.as_str()[1..]);
+  }
+
+  #[test]
   fn testok_zone_1() {
     let depth = 5;
     let (lon_min, lat_min, lon_max, lat_max) = (
