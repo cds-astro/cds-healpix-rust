@@ -6582,6 +6582,21 @@ mod tests {
   }
 
   #[test]
+  fn testok_polygone_exact_7() {
+    // In Aladin: draw polygon(ra1, dec1, ra2, dec2, ...)
+    let depth = 4;
+    let vertices = [(PI, 1.000), (PI + 1e-3, 1.001), (PI - 1e-3, 1.002)];
+    let expected_res_exact: [u64; 3] = [373, 375, 698];
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
   fn testok_zone_1() {
     let depth = 5;
     let (lon_min, lat_min, lon_max, lat_max) = (

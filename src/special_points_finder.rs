@@ -425,8 +425,17 @@ pub fn arc_special_point_in_pc<'a>(
       let n2_x = lon2_div_half_pi & 1;
       let n2 = Coo3D::from_vec3(n2_x as f64, (n2_x ^ 1) as f64, 0.0);
       let intersect2 = Coo3D::from(intersect_point_pc(p1, p2, &p1p2_n, &n2));
-      debug_assert!(intersect2.lon() < p2.lon());
-      res_z2 = arc_special_point_in_pc_same_quarter(&intersect2, p2, z_eps_max, n_iter_max);
+      debug_assert!(
+        intersect2.lon() <= p2.lon(),
+        "Failed: {} < {}",
+        intersect2.lon(),
+        p2.lon()
+      );
+      if intersect2.lon() < p2.lon() {
+        res_z2 = arc_special_point_in_pc_same_quarter(&intersect2, p2, z_eps_max, n_iter_max);
+      } else {
+        res_z2 = None
+      }
     }
     if res_z1.is_some() {
       res_z1
