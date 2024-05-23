@@ -224,7 +224,7 @@ impl Polygon {
   }
 
   /// Returns the first intersection of a small-circle with the polygon
-  pub fn intersect_small_circle_arc(&self, lat: f64) -> Option<UnitVect3> {
+  pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     // Get the z coordinates from the latitude
     let z = lat.sin();
     let mut left = self.vertices.last().unwrap();
@@ -235,7 +235,7 @@ impl Polygon {
       if pa.lon() > pb.lon() {
         std::mem::swap(&mut pa, &mut pb);
       }
-      if let Some(intersect) = special_points_finder::intersect_small_circle(pa, pb, z) {
+      if let Some(intersect) = special_points_finder::intersect_parallel(pa, pb, z) {
         return Some(intersect);
       }
       left = right
@@ -244,7 +244,7 @@ impl Polygon {
   }
 
   /// Returns all the intersecting vertices of the polygon with a small-circle
-  pub fn intersect_small_circle_arc_all(&self, lat: f64) -> Vec<UnitVect3> {
+  pub fn intersect_parallel_all(&self, lat: f64) -> Vec<UnitVect3> {
     // Get the z coordinates from the latitude
     let z = lat.sin();
     let mut vertices = vec![];
@@ -257,7 +257,7 @@ impl Polygon {
       if pa.lon() > pb.lon() {
         std::mem::swap(&mut pa, &mut pb);
       }
-      if let Some(intersect) = special_points_finder::intersect_small_circle(pa, pb, z) {
+      if let Some(intersect) = special_points_finder::intersect_parallel(pa, pb, z) {
         vertices.push(intersect);
       }
       left = right
@@ -267,8 +267,8 @@ impl Polygon {
 
   /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
   /// two given points (we consider the arc having a length < PI).
-  pub fn is_intersecting_small_circle_arc(&self, lat: f64) -> bool {
-    self.intersect_small_circle_arc(lat).is_some()
+  pub fn is_intersecting_parallel(&self, lat: f64) -> bool {
+    self.intersect_parallel(lat).is_some()
   }
 
   #[inline]
@@ -513,7 +513,7 @@ mod tests {
   fn test_intersect_parallel() {
     let v = [(0.1, 0.0), (0.0, 0.5), (0.25, 0.25)];
     let poly = create_polygon_from_lonlat(&v);
-    assert_eq!(poly.is_intersecting_small_circle_arc(0.12), true);
+    assert_eq!(poly.is_intersecting_parallel(0.12), true);
 
     let v = [
       (0.0, HALF_PI - 1e-3),
@@ -521,6 +521,6 @@ mod tests {
       (2.0 * TWO_PI / 3.0, HALF_PI - 1e-3),
     ];
     let poly = create_polygon_from_lonlat(&v);
-    assert_eq!(poly.is_intersecting_small_circle_arc(HALF_PI), false);
+    assert_eq!(poly.is_intersecting_parallel(HALF_PI), false);
   }
 }
