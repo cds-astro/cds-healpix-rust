@@ -151,7 +151,8 @@ impl Polygon {
     self.contains_south_pole ^ self.odd_num_intersect_going_south(coo)
   }
 
-  /// Returns the first intersection of a the polygon with a great circle arc
+  /// Returns the first intersection between (an edge of) the polygon and the great circle arc
+  /// defined by the two given points (we consider the arc having a length < PI)
   pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Option<UnitVect3> {
     // Ensure a < b in longitude
     let mut a = a;
