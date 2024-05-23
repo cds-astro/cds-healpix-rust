@@ -12,7 +12,7 @@ use super::TWICE_PI;
 use std::f64::consts::PI;
 
 use self::coo3d::{cross_product, dot_product, Coo3D, LonLat, LonLatT, UnitVect3, Vec3, Vect3};
-use crate::Customf64;
+use crate::special_points_finder;
 
 trait ContainsSouthPoleComputer {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool;
@@ -151,8 +151,8 @@ impl Polygon {
     self.contains_south_pole ^ self.odd_num_intersect_going_south(coo)
   }
 
-  /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
-  /// two given points (we consider the arc having a length < PI).
+  /// Returns the first intersection between (an edge of) the polygon and the great circle arc
+  /// defined by the two given points (we consider the arc having a length < PI)
   pub fn intersect_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> Option<UnitVect3> {
     // Ensure a < b in longitude
     let mut a = a;
@@ -184,10 +184,67 @@ impl Polygon {
     None
   }
 
+  /// Returns all the intersections of a the polygon with a great circle arc
+  pub fn intersect_great_circle_arc_all(&self, a: &Coo3D, b: &Coo3D) -> Vec<UnitVect3> {
+    // Ensure a < b in longitude
+    let mut vertices = vec![];
+    let mut a = a;
+    let mut b = b;
+    if a.lon() > b.lon() {
+      std::mem::swap(&mut a, &mut b);
+    }
+
+    let mut left = self.vertices.last().unwrap();
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in longitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lon() > pb.lon() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+      if great_circle_arcs_are_overlapping_in_lon(a, b, pa, pb) {
+        let ua = dot_product(a, cross_prod);
+        let ub = dot_product(b, cross_prod);
+        if polygon_edge_intersects_great_circle(ua, ub) {
+          if let Some(intersect) = intersect_point_in_polygon_great_circle_arc(a, b, pa, pb, ua, ub)
+          {
+            vertices.push(intersect);
+          }
+        }
+      }
+      left = right
+    }
+    vertices
+  }
+
+  /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
+  /// two given points (we consider the arc having a length < PI).
   pub fn is_intersecting_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> bool {
     self.intersect_great_circle_arc(a, b).is_some()
   }
 
+  /// Returns the first intersection of a small-circle with the polygon
+  pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
+    // Get the z coordinates from the latitude
+    let z = lat.sin();
+    let mut left = self.vertices.last().unwrap();
+    for right in self.vertices.iter() {
+      // Ensures pA < pB in longitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lon() > pb.lon() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+      if let Some(intersect) = special_points_finder::intersect_parallel(pa, pb, z) {
+        return Some(intersect);
+      }
+      left = right
+    }
+    None
+  }
+
+
+  /* PREVIOUS CODE, KEPT THE TIME TO COMPARE WITH special_points_finder::intersect_parallel
   /// Returns the coordinate of the intersection from an edge of the polygon
   /// with a parallel defined by a latitude (this may suffer from numerical precision at poles
   /// for polygon of size < 0.1 arcsec).
@@ -289,13 +346,33 @@ impl Polygon {
 
       left = right;
     }
-
     None
+  }*/
+
+  /// Returns all the intersecting vertices of the polygon with a small-circle
+  pub fn intersect_parallel_all(&self, lat: f64) -> Vec<UnitVect3> {
+    // Get the z coordinates from the latitude
+    let z = lat.sin();
+    let mut vertices = vec![];
+
+    let mut left = self.vertices.last().unwrap();
+    for right in self.vertices.iter() {
+      // Ensures pA < pB in longitude
+      let mut pa = left;
+      let mut pb = right;
+      if pa.lon() > pb.lon() {
+        std::mem::swap(&mut pa, &mut pb);
+      }
+      if let Some(intersect) = special_points_finder::intersect_parallel(pa, pb, z) {
+        vertices.push(intersect);
+      }
+      left = right
+    }
+    vertices
   }
 
-  /// Returns `true` if there is an intersection between an edge of the polygon
-  /// and a parallel defined by a latitude (this may suffer from numerical precision
-  /// for polygon of size < 0.1 arcsec).
+  /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
+  /// two given points (we consider the arc having a length < PI).
   pub fn is_intersecting_parallel(&self, lat: f64) -> bool {
     self.intersect_parallel(lat).is_some()
   }

@@ -228,7 +228,7 @@ pub fn arc_special_point_in_eqr(
   // TODO: is not met, then try a binary/dichotomic approach (slower, but more robust)
   if z.abs() < TRANSITION_Z && ((z1 <= z2 && z1 <= z && z <= z2) || (z2 < z1 && z2 <= z && z <= z1))
   {
-    intersect_small_circle(p1, p2, z).map(|v| v.lonlat())
+    intersect_parallel(p1, p2, z).map(|v| v.lonlat())
   } else {
     None
   }
@@ -525,10 +525,10 @@ fn arc_special_point_in_pc_same_quarter(
   // Return result if seems correct
   if z.is_finite() && z > TRANSITION_Z && ((z1 < z && z < z2) || (z2 < z && z < z1)) {
     if spc {
-      let v = intersect_small_circle(p1, p2, -z).unwrap();
+      let v = intersect_parallel(p1, p2, -z).unwrap();
       Some(v.lonlat())
     } else {
-      let v = intersect_small_circle(p1, p2, z).unwrap();
+      let v = intersect_parallel(p1, p2, z).unwrap();
       Some(v.lonlat())
     }
   } else {
@@ -654,7 +654,7 @@ fn f_over_df_npc(
 /// In both cases, two solutions are available.
 /// We select the pair $`(x, y)`$ such that both scalar products with the two great-circle arc
 /// points are higher than the two points scalar product.
-pub fn intersect_small_circle<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVect3>
+pub fn intersect_parallel<T1, T2>(p1: &T1, p2: &T2, z: f64) -> Option<UnitVect3>
 where
   T1: UnitVec3,
   T2: UnitVec3,
@@ -730,7 +730,7 @@ fn have_same_sign(d1: f64, d2: f64) -> bool {
 
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance
 /// between the two given points) and the small circle of equation $`z=2/3`$.
-/// (Internally, we simply call [intersect_small_circle](fn.intersect_small_circle.html) with
+/// (Internally, we simply call [intersect_parallel](fn.intersect_parallel.html) with
 /// z = 2/3).
 #[inline]
 fn intersect_with_transition_lat_npc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
@@ -738,12 +738,12 @@ where
   T1: UnitVec3,
   T2: UnitVec3,
 {
-  intersect_small_circle(p1, p2, TRANSITION_Z)
+  intersect_parallel(p1, p2, TRANSITION_Z)
 }
 
 /// Returns the intersection of the given great-circle arc (defined by the smallest distance
 /// between the two given points) and the small circle of equation $`z=-2/3`$.
-/// (Internally, we simply call [intersect_small_circle](fn.intersect_small_circle.html) with
+/// (Internally, we simply call [intersect_parallel](fn.intersect_parallel.html) with
 /// z = -2/3).
 #[inline]
 fn intersect_with_transition_lat_spc<T1, T2>(p1: &T1, p2: &T2) -> Option<UnitVect3>
@@ -751,5 +751,5 @@ where
   T1: UnitVec3,
   T2: UnitVec3,
 {
-  intersect_small_circle(p1, p2, -TRANSITION_Z)
+  intersect_parallel(p1, p2, -TRANSITION_Z)
 }
