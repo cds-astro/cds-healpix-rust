@@ -3812,6 +3812,7 @@ impl Layer {
         .into_boxed_slice(),
       south_pole_method,
     );
+
     let bounding_cone: Cone = Cone::bounding_cone(poly.vertices());
     let mut depth_start = 0;
     let neigs: Vec<u64> = if let ContainsSouthPoleMethod::Default = south_pole_method {

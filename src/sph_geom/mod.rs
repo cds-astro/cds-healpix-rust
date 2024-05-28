@@ -217,6 +217,34 @@ impl Polygon {
     vertices
   }
 
+  /// Returns all the intersections between this polygon edges and the great circle of given normal `n`.
+  pub fn intersect_great_circle(&self, n: &UnitVect3) -> Vec<UnitVect3> {
+    // Ensure a < b in longitude
+    let mut vertices = vec![];
+
+    let mut left = self.vertices.last().unwrap();
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in longitude
+      let pa = left;
+      let pb = right;
+      let papb = dot_product(pa, pb);
+
+      let i = cross_product(cross_prod, n).normalized();
+
+      // Check if the intersection i belongs to the edge,
+      // else check if the intersection of the opposite of i belongs to the edge,
+      if dot_product(pa, &i) > papb && dot_product(pb, &i) > papb {
+        vertices.push(i);
+      } else if dot_product(pa, &i.opposite()) > papb && dot_product(pb, &i.opposite()) > papb {
+        vertices.push(i.opposite());
+      }
+
+      left = right
+    }
+
+    vertices
+  }
+
   /// Returns `true` if an edge of the polygon intersects the great-circle arc defined by the
   /// two given points (we consider the arc having a length < PI).
   pub fn is_intersecting_great_circle_arc(&self, a: &Coo3D, b: &Coo3D) -> bool {
@@ -242,7 +270,6 @@ impl Polygon {
     }
     None
   }
-
 
   /* PREVIOUS CODE, KEPT THE TIME TO COMPARE WITH special_points_finder::intersect_parallel
   /// Returns the coordinate of the intersection from an edge of the polygon

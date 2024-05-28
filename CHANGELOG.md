@@ -1,5 +1,15 @@
 # `cdshealpix` Change Log
 
+## 0.6.9
+
+Released 2024-05-28
+
+### Add
+
+* Add `intersect_great_circle` as needed in Aladin Lite
+
+
+
 ## 0.6.8
 
 Released 2024-05-14
