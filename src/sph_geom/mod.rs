@@ -9,10 +9,11 @@ pub(super) mod proj;
 pub(super) mod zone;
 
 use super::TWICE_PI;
-use std::f64::consts::PI;
+use crate::Customf64;
 
 use self::coo3d::{cross_product, dot_product, Coo3D, LonLat, LonLatT, UnitVect3, Vec3, Vect3};
-use crate::special_points_finder;
+//use crate::special_points_finder;
+use std::f64::consts::PI;
 
 trait ContainsSouthPoleComputer {
   fn contains_south_pole(&self, polygon: &Polygon) -> bool;
@@ -218,7 +219,7 @@ impl Polygon {
   }
 
   /// Returns all the intersections between this polygon edges and the great circle of given normal `n`.
-  pub fn intersect_great_circle(&self, n: &UnitVect3) -> Vec<UnitVect3> {
+  pub fn intersect_great_circle_all(&self, n: &UnitVect3) -> Vec<UnitVect3> {
     // Ensure a < b in longitude
     let mut vertices = vec![];
 
@@ -251,6 +252,7 @@ impl Polygon {
     self.intersect_great_circle_arc(a, b).is_some()
   }
 
+  /*
   /// Returns the first intersection of a small-circle with the polygon
   pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     // Get the z coordinates from the latitude
@@ -270,8 +272,8 @@ impl Polygon {
     }
     None
   }
+  */
 
-  /* PREVIOUS CODE, KEPT THE TIME TO COMPARE WITH special_points_finder::intersect_parallel
   /// Returns the coordinate of the intersection from an edge of the polygon
   /// with a parallel defined by a latitude (this may suffer from numerical precision at poles
   /// for polygon of size < 0.1 arcsec).
@@ -374,26 +376,96 @@ impl Polygon {
       left = right;
     }
     None
-  }*/
+  }
 
   /// Returns all the intersecting vertices of the polygon with a small-circle
   pub fn intersect_parallel_all(&self, lat: f64) -> Vec<UnitVect3> {
-    // Get the z coordinates from the latitude
-    let z = lat.sin();
+    let (lat_sin, lat_cos) = lat.sin_cos();
+    let z = lat_sin;
+    let z2 = z.pow2();
+
     let mut vertices = vec![];
 
     let mut left = self.vertices.last().unwrap();
-    for right in self.vertices.iter() {
-      // Ensures pA < pB in longitude
+    for (right, cross_prod) in self.vertices.iter().zip(self.cross_products.iter()) {
+      // Ensures pA < pB in latitude
       let mut pa = left;
       let mut pb = right;
-      if pa.lon() > pb.lon() {
+      if pa.lat() > pb.lat() {
         std::mem::swap(&mut pa, &mut pb);
       }
-      if let Some(intersect) = special_points_finder::intersect_parallel(pa, pb, z) {
-        vertices.push(intersect);
+
+      // Discard great arc circles that do not overlap the given latitude
+      if (pa.lat()..pb.lat()).contains(&lat) {
+        let n = &cross_prod;
+
+        // Case A: Nx != 0
+        if n.x() != 0.0 {
+          let xn2 = n.x().pow2();
+          let yn2 = n.y().pow2();
+          let zn2 = n.z().pow2();
+
+          let a = (yn2 / xn2) + 1.0;
+          let two_a = a.twice();
+
+          let b = 2.0 * n.y() * n.z() * z / xn2;
+          let c = (zn2 * z2 / xn2) - lat_cos.pow2();
+
+          // Iy is a 2nd degree polynomia
+          let delta = b * b - 2.0 * two_a * c;
+
+          // Case A.1: there are 2 solutions for Iy
+          if delta > 0.0 {
+            // Case A.1.a: first solution
+            let delta_root_sq = delta.sqrt();
+            let y1 = (-b - delta_root_sq) / two_a;
+            let x = -(n.y() * y1 + n.z() * z) / n.x();
+
+            let p1 = UnitVect3::new_unsafe(x, y1, z);
+
+            // If it lies on the great circle arc defined by pa and pb, this is the "good one" to return
+            if dot_product(&cross_product(&p1, pa), &cross_product(&p1, pb)) < 0.0 {
+              vertices.push(p1);
+            } else {
+              // Otherwise return the other one
+              let y2 = (-b + delta_root_sq) / two_a;
+              let x = -(n.y() * y2 + n.z() * z) / n.x();
+
+              vertices.push(UnitVect3::new_unsafe(x, y2, z));
+            }
+          // Case A.2: there are one solution
+          } else if delta == 0.0 {
+            let y = -b / two_a;
+            let x = -(n.y() * y + n.z() * z) / n.x();
+            vertices.push(UnitVect3::new_unsafe(x, y, z));
+          }
+        // Case B: Nx == 0
+        } else {
+          // Case B.1: Ny = 0
+          if n.y() == 0.0 {
+            // Case B.1.a: N is pointing towards ez. Only the great circle of lat = 0 can fall in that case.
+            // Therefore a solution can only be found if pa and pb lies on the equator too (lat = 0)
+            if z == 0.0 && z == pa.z() {
+              vertices.push(UnitVect3::new_unsafe(pa.x(), pa.y(), pa.z()));
+            }
+          // Case B.2: Ny != 0
+          } else {
+            let yn2 = n.y().pow2();
+            let zn2 = n.z().pow2();
+
+            let (x, y) = ((lat_cos.pow2() - zn2 * z2 / yn2).sqrt(), -n.z() * z / n.y());
+
+            let p = UnitVect3::new_unsafe(x, y, z);
+            if dot_product(&cross_product(&p, pa), &cross_product(&p, pb)) < 0.0 {
+              vertices.push(p);
+            } else {
+              vertices.push(UnitVect3::new_unsafe(-x, y, z));
+            }
+          }
+        }
       }
-      left = right
+
+      left = right;
     }
     vertices
   }
