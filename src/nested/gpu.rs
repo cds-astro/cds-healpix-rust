@@ -54,6 +54,102 @@ pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
   }
 }
 
+/// Returns the position in on the unit sphere `(x, y, z)` of the give position in the HEALPix
+/// 2D Euclidean projection plane.
+/// # Inputs
+/// - `X`: coordinate along the X-axis in the projection plane, in `[-4, 4]`
+/// - `Y`: coordinate along the Y-axis in the projection plane, in `[-2, 2]`
+/// # Output:
+/// - `x`: in `[-1.0, 1.0]`
+/// - `y`: in `[-1.0, 1.0]`
+/// - `z`: in `[-1.0, 1.0]`
+/// # Remark
+/// From the HPX projection as defined in Calabreta, use:
+///   - `X /= PI / 4`
+///   - `Y /= PI / 4`
+pub fn unproj_gpu(mut x: f32, y: f32) -> (f32, f32, f32) {
+  use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+  const ONE_OVER_SQRT6: f32 = 0.408_248_290_463_863_f32;
+  assert!((-2f32..=2f32).contains(&y)); // check y
+  if y > 1.0 {
+    // North Polar Cap
+    assert!((-4f32..=4f32).contains(&x));
+    let x = if x < 0.0 { 8.0 + x } else { x };
+    debug_assert!(x > 0.0);
+    let OffsetAndPM1 { offset, pm1 } = pm1_offset_decompose(x);
+    let sqrt_of_three_time_one_minus_sin_of = 2.0 - y;
+    let x = if sqrt_of_three_time_one_minus_sin_of > 1e-6 {
+      deal_with_numerical_approx_in_edges(pm1 / sqrt_of_three_time_one_minus_sin_of)
+    } else {
+      pm1
+    } + offset as f32;
+    // It would be faster, but less accurate, to use:
+    // let z = 1.0 - sqrt_of_three_time_one_minus_sin_of.pow2() / 3.0;
+    // let cos_lat = sqrt(1 - z^2);
+    let lat = 2.0 * f32::acos(sqrt_of_three_time_one_minus_sin_of * ONE_OVER_SQRT6) - FRAC_PI_2;
+    let (sin_lat, cos_lat) = lat.sin_cos();
+    let (sin_lon, cos_lon) = (x * FRAC_PI_4).sin_cos();
+    (cos_lon * cos_lat, sin_lon * cos_lat, sin_lat)
+  } else if y < -1.0 {
+    // South polar cap
+    let x = if x < 0.0 { 8.0 + x } else { x };
+    debug_assert!(x > 0.0);
+    let OffsetAndPM1 { offset, pm1 } = pm1_offset_decompose(x);
+    let sqrt_of_three_time_one_minus_sin_of = 2.0 + y;
+    let x = if sqrt_of_three_time_one_minus_sin_of > 1e-6 {
+      deal_with_numerical_approx_in_edges(pm1 / sqrt_of_three_time_one_minus_sin_of)
+    } else {
+      pm1
+    } + offset as f32;
+    // It would be faster, but less accurate, to use:
+    // let z = -1.0 + sqrt_of_three_time_one_minus_sin_of.pow2() / 3.0;
+    // let cos_lat = sqrt(1 - z^2);
+    let lat = FRAC_PI_2 - 2.0 * f32::acos(sqrt_of_three_time_one_minus_sin_of * ONE_OVER_SQRT6);
+    let (sin_lat, cos_lat) = lat.sin_cos();
+    let (sin_lon, cos_lon) = (x * FRAC_PI_4).sin_cos();
+    (cos_lon * cos_lat, sin_lon * cos_lat, sin_lat)
+  } else {
+    // Equatorial region
+    let z = y * TRANSITION_Z; // = sin(lat)
+    let cos_lat = if z < 1e-2 {
+      // sqrt(1 - x²) = 1 - x²/2 - x⁴/8 - x⁶/16
+      let tmp = 0.5 * z * z;
+      1.0 - tmp - 0.5 * tmp * tmp
+    } else {
+      (1.0 - z * z).sqrt()
+    };
+    let (sin_lon, cos_lon) = (x * FRAC_PI_4).sin_cos();
+    (cos_lon * cos_lat, sin_lon * cos_lat, z)
+  }
+}
+
+// Decompose the given positive real value in
+// --* an integer offset in [1, 3, 5, 7] (*PI/4) and
+// --* a real value in [-1.0, 1.0] (*PI/4)
+pub(crate) struct OffsetAndPM1 {
+  offset: u8, // = 1, 3, 5 or 7
+  pm1: f32,   // in [-1.0, 1.0]
+}
+#[inline]
+pub(crate) fn pm1_offset_decompose(x: f32) -> OffsetAndPM1 {
+  let floor: u8 = x as u8;
+  let odd_floor: u8 = floor | 1u8;
+  OffsetAndPM1 {
+    offset: odd_floor & 7u8, // value modulo 8 = 1/3/5/7
+    pm1: x - (odd_floor as f32),
+  }
+}
+
+fn deal_with_numerical_approx_in_edges(x: f32) -> f32 {
+  if x > 1.0 {
+    1.0
+  } else if x < -1.0 {
+    -1.0
+  } else {
+    x
+  }
+}
+
 /// Returns the cell number (hash value) associated with the given position on the unit sphere,
 /// together with the offset `(dx, dy)` on the Euclidean plane of the projected position with
 /// respect to the origin of the cell (South vertex).
@@ -239,6 +335,24 @@ fn ij2z(mut i: u32, mut j: u32) -> u32 {
   j = (i ^ (i >> 1)) & 0x22222222_u32;
   i = i ^ j ^ (j << 1);
   i
+}
+
+// Returns the absolute value of the given double together with its bit of sign
+struct AbsAndSign {
+  abs: f32,
+  sign: u32,
+}
+#[inline]
+pub(crate) fn abs_sign_decompose(x: f32) -> AbsAndSign {
+  /// Mask to keep only the f32 sign
+  pub const F32_SIGN_BIT_MASK: u32 = 0x80000000;
+  /// Equals !F32_SIGN_BIT_MASK (the inverse of the f32 sign mask)
+  pub const F32_BUT_SIGN_BIT_MASK: u32 = 0x7FFFFFFF;
+  let bits = f32::to_bits(x);
+  AbsAndSign {
+    abs: f32::from_bits(bits & F32_BUT_SIGN_BIT_MASK),
+    sign: bits & F32_SIGN_BIT_MASK,
+  }
 }
 
 #[cfg(test)]
@@ -591,10 +705,10 @@ mod tests {
     }
   }
 
-  /* No a real test, used to check the projection code visually
+  // No a real test, used to check the projection code visually
   #[test]
   fn testok_proj_gpu() {
-    println!("ra,dec,x,y,color");
+    println!("ra,dec,x,y,color,ra_unproj,dec_unproj");
     for ra in 0..=360 {
       for dec in 0..=180 {
         let ra = (ra as f32).to_radians();
@@ -603,8 +717,25 @@ mod tests {
         let y = ra.sin() * dec.cos();
         let z = dec.sin();
         let (x_proj, y_proj) = proj_gpu(x, y, z);
-        println!("{},{},{},{},{}", ra, dec, x_proj, y_proj, ra + (dec + 2.0) * 2.0 * PI);
+        let (x, y, z) = unproj_gpu(x_proj, y_proj);
+        let r = (x * x + y * y).sqrt();
+        let mut ra_unproj = y.atan2(x).to_degrees();
+        let dec_unproj = z.atan2(r).to_degrees();
+        if ra_unproj < 0.0 {
+          ra_unproj += 360.0;
+        }
+
+        println!(
+          "{},{},{},{},{},{},{}",
+          ra.to_degrees(),
+          dec.to_degrees(),
+          x_proj,
+          y_proj,
+          ra + (dec + 2.0) * 2.0 * PI,
+          ra_unproj,
+          dec_unproj
+        );
       }
     }
-  }*/
+  }
 }

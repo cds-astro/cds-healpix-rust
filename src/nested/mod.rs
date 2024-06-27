@@ -1446,7 +1446,7 @@ impl Layer {
     } else {
       starting_vertex.counter_clockwise_cycle()
     };
-    // - make the five sides
+    // - make the four sides
     self.path_along_cell_side_internal(
       proj_center,
       &v1,
