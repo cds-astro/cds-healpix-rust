@@ -1,5 +1,17 @@
 # `cdshealpix` Change Log
 
+## 0.6.10
+
+Released 2024-07-19
+
+## Bug correction
+
+* Values in `SMALLER_EDGE2OPEDGE_DIST` (used in `best_starting_depth`) were
+  slightly overestimated due to a "moving" reference point for depth >= 2,
+  see github issue #10.
+  The error on the values should now be below the microarcsec. 
+
+
 ## 0.6.9
 
 Released 2024-05-28
