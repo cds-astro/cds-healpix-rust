@@ -3,12 +3,12 @@ extern crate serde_derive;
 
 extern crate cdshealpix;
 
-use std::io::prelude::*;
 use std::fs::File;
+use std::io::prelude::*;
 use std::time::{Duration, Instant};
 
-use serde_derive::{Deserialize, Serialize};
 use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Result;
 
 use cdshealpix::nested::bmoc::*;
@@ -42,11 +42,22 @@ pub struct Sdss {
 }
 
 impl Sdss {
-  
   pub fn to_bmoc(&self) -> BMOC {
-    let mut builder = BMOCBuilderUnsafe::new(12, self.d1.len() + self.d2.len() + self.d3.len() + self.d4.len() 
-      + self.d5.len() + self.d6.len() + self.d7.len() + self.d8.len() + self.d9.len() 
-      + self.d10.len() + self.d11.len() + self.d12.len());
+    let mut builder = BMOCBuilderUnsafe::new(
+      12,
+      self.d1.len()
+        + self.d2.len()
+        + self.d3.len()
+        + self.d4.len()
+        + self.d5.len()
+        + self.d6.len()
+        + self.d7.len()
+        + self.d8.len()
+        + self.d9.len()
+        + self.d10.len()
+        + self.d11.len()
+        + self.d12.len(),
+    );
     for h in &self.d1 {
       builder.push(1, *h, true);
     }
@@ -85,41 +96,50 @@ impl Sdss {
     }
     builder.to_bmoc_from_unordered()
   }
-  
 }
 
 pub fn load_sdss() -> Result<Sdss> {
-  let mut file = File::open("resources/sdss.moc.json").expect("Unable to open the SDSS file");
+  let mut file = File::open("resources/moc/sdss.moc.json").expect("Unable to open the SDSS file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the SDSS file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the SDSS file");
   let sdss: Sdss = serde_json::from_str(&contents)?;
   Ok(sdss)
 }
 
 pub fn load_sdss_not() -> Result<Sdss> {
-  let mut file = File::open("resources/sdss_not.moc.json").expect("Unable to open the SDSS not file");
+  let mut file =
+    File::open("resources/moc/sdss_not.moc.json").expect("Unable to open the SDSS not file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the SDSS not file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the SDSS not file");
   let sdss: Sdss = serde_json::from_str(&contents)?;
   Ok(sdss)
 }
 
 pub fn load_s_or_g() -> Result<Sdss> {
-  let mut file = File::open("resources/sdss_or_glimpse.moc.json").expect("Unable to open the SDSS OR GLIMPSE not file");
+  let mut file = File::open("resources/moc/sdss_or_glimpse.moc.json")
+    .expect("Unable to open the SDSS OR GLIMPSE not file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the SDSS OR GLIMPSE not file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the SDSS OR GLIMPSE not file");
   let sdss: Sdss = serde_json::from_str(&contents)?;
   Ok(sdss)
 }
 
 pub fn load_s_xor_g() -> Result<Sdss> {
-  let mut file = File::open("resources/sdss_xor_glimpse.moc.json").expect("Unable to open the SDSS XOR GLIMPSE not file");
+  let mut file = File::open("resources/moc/sdss_xor_glimpse.moc.json")
+    .expect("Unable to open the SDSS XOR GLIMPSE not file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the SDSS XOR GLIMPSE not file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the SDSS XOR GLIMPSE not file");
   let sdss: Sdss = serde_json::from_str(&contents)?;
   Ok(sdss)
 }
-
 
 #[derive(Serialize, Deserialize)]
 pub struct Glimpse {
@@ -138,10 +158,11 @@ pub struct Glimpse {
 }
 
 impl Glimpse {
-
   pub fn to_bmoc(&self) -> BMOC {
-    let mut builder = BMOCBuilderUnsafe::new(9, self.d4.len() + self.d5.len() + self.d6.len() 
-      + self.d7.len() + self.d8.len() + self.d9.len());
+    let mut builder = BMOCBuilderUnsafe::new(
+      9,
+      self.d4.len() + self.d5.len() + self.d6.len() + self.d7.len() + self.d8.len() + self.d9.len(),
+    );
     for h in &self.d4 {
       builder.push(4, *h, true);
     }
@@ -162,13 +183,15 @@ impl Glimpse {
     }
     builder.to_bmoc_from_unordered()
   }
-
 }
 
 pub fn load_glimpse() -> Result<Glimpse> {
-  let mut file = File::open("resources/glimpse.moc.json").expect("Unable to open the Glimpse file");
+  let mut file =
+    File::open("resources/moc/glimpse.moc.json").expect("Unable to open the Glimpse file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the Glimpse file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the Glimpse file");
   let glimpse: Glimpse = serde_json::from_str(&contents)?;
   Ok(glimpse)
 }
@@ -198,11 +221,20 @@ pub struct NotGlimpse {
 }
 
 impl NotGlimpse {
-
   pub fn to_bmoc(&self) -> BMOC {
-    let mut builder = BMOCBuilderUnsafe::new(9,  self.d0.len() + self.d1.len() + self.d2.len() 
-      + self.d3.len() + self.d4.len() + self.d5.len() + self.d6.len() + self.d7.len() 
-      + self.d8.len() + self.d9.len());
+    let mut builder = BMOCBuilderUnsafe::new(
+      9,
+      self.d0.len()
+        + self.d1.len()
+        + self.d2.len()
+        + self.d3.len()
+        + self.d4.len()
+        + self.d5.len()
+        + self.d6.len()
+        + self.d7.len()
+        + self.d8.len()
+        + self.d9.len(),
+    );
     for h in &self.d0 {
       builder.push(0, *h, true);
     }
@@ -238,15 +270,15 @@ impl NotGlimpse {
 }
 
 pub fn load_not_glimpse() -> Result<NotGlimpse> {
-  let mut file = File::open("resources/glimpse_not.moc.json").expect("Unable to open the Not Glimpse file");
+  let mut file =
+    File::open("resources/moc/glimpse_not.moc.json").expect("Unable to open the Not Glimpse file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the Glimpse file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the Glimpse file");
   let glimpse: NotGlimpse = serde_json::from_str(&contents)?;
   Ok(glimpse)
 }
-
-
-
 
 #[derive(Serialize, Deserialize)]
 pub struct SandG {
@@ -270,8 +302,17 @@ pub struct SandG {
 
 impl SandG {
   pub fn to_bmoc(&self) -> BMOC {
-    let mut builder = BMOCBuilderUnsafe::new(12, self.d5.len() + self.d6.len() + self.d7.len()
-      + self.d8.len() + self.d9.len() + self.d10.len() + self.d11.len() + self.d12.len());
+    let mut builder = BMOCBuilderUnsafe::new(
+      12,
+      self.d5.len()
+        + self.d6.len()
+        + self.d7.len()
+        + self.d8.len()
+        + self.d9.len()
+        + self.d10.len()
+        + self.d11.len()
+        + self.d12.len(),
+    );
     for h in &self.d5 {
       builder.push(5, *h, true);
     }
@@ -301,30 +342,24 @@ impl SandG {
 }
 
 pub fn load_s_and_g() -> Result<SandG> {
-  let mut file = File::open("resources/sdss_and_glimpse.moc.json").expect("Unable to open the s and g file");
+  let mut file =
+    File::open("resources/moc/sdss_and_glimpse.moc.json").expect("Unable to open the s and g file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Unable to read the s and g file");
+  file
+    .read_to_string(&mut contents)
+    .expect("Unable to read the s and g file");
   let s_and_g: SandG = serde_json::from_str(&contents)?;
   Ok(s_and_g)
 }
 
-
-
-
-
-
-
-
-
-
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   fn test_sdss_not() {
     let sdss = load_sdss().unwrap().to_bmoc();
-    
+
     /*println!("n_cell in 1: {}", sdss.d1.len());
     println!("n_cell in 2: {}", sdss.d2.len());
     println!("n_cell in 3: {}", sdss.d3.len());
@@ -340,12 +375,16 @@ mod tests {
     let sdss_moc = sdss.to_bmoc();*/
 
     let sdss_not = load_sdss_not().unwrap().to_bmoc();
-    
+
     let now = Instant::now();
     let not_sdss = sdss.not();
-    println!("SDSS 'not' operation done in {} ms. In / Out sizes: {} / {}", 
-             now.elapsed().as_millis(), sdss.entries.len(), not_sdss.entries.len());
-    
+    println!(
+      "SDSS 'not' operation done in {} ms. In / Out sizes: {} / {}",
+      now.elapsed().as_millis(),
+      sdss.entries.len(),
+      not_sdss.entries.len()
+    );
+
     /*let l1 = sdss_not.entries.len();
     let l2 = not_sdss.entries.len();
     println!("l1: {}, l2: {}", l1, l2);
@@ -361,7 +400,7 @@ mod tests {
         panic!("Toto");
       }
     }*/
-    
+
     // sdss_not.assert_equals(&not_sdss);
     assert!(sdss_not.equals(&not_sdss));
   }
@@ -376,12 +415,16 @@ mod tests {
     println!("n_cell in 8: {}", glimpse.d8.len());
     println!("n_cell in 9: {}", glimpse.d9.len());*/
     let not_glimpse = load_not_glimpse().unwrap().to_bmoc();
-    
+
     let now = Instant::now();
     let glimpse_not = glimpse.not();
-    println!("GLIMPSE 'not' operation done in {} ms. In / Out sizes: {} / {}", 
-             now.elapsed().as_millis(), glimpse.entries.len(), not_glimpse.entries.len());
-    
+    println!(
+      "GLIMPSE 'not' operation done in {} ms. In / Out sizes: {} / {}",
+      now.elapsed().as_millis(),
+      glimpse.entries.len(),
+      not_glimpse.entries.len()
+    );
+
     assert!(not_glimpse.equals(&glimpse_not));
   }
 
@@ -391,27 +434,36 @@ mod tests {
     let sdss = load_sdss().unwrap().to_bmoc();
 
     let s_and_g = load_s_and_g().unwrap().to_bmoc();
-    
+
     let now = Instant::now();
     let sandg = sdss.and(&glimpse);
-    println!("SDSS/GLIMPSE 'and' operation done in {} ms. In / Out sizes: {} and {} => {}",
-             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sandg.entries.len());
-    
+    println!(
+      "SDSS/GLIMPSE 'and' operation done in {} ms. In / Out sizes: {} and {} => {}",
+      now.elapsed().as_millis(),
+      sdss.entries.len(),
+      glimpse.entries.len(),
+      sandg.entries.len()
+    );
+
     assert!(s_and_g.equals(&sandg));
   }
 
-  
   #[test]
   fn test_or() {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     let sdss = load_sdss().unwrap().to_bmoc();
     let s_or_g = load_s_or_g().unwrap().to_bmoc();
-    
+
     let now = Instant::now();
     let sorg = &sdss.or(&glimpse);
-    println!("SDSS/GLIMPSE 'or' operation done in {} ms. In / Out sizes: {} or {} => {}",
-             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sorg.entries.len());
-    
+    println!(
+      "SDSS/GLIMPSE 'or' operation done in {} ms. In / Out sizes: {} or {} => {}",
+      now.elapsed().as_millis(),
+      sdss.entries.len(),
+      glimpse.entries.len(),
+      sorg.entries.len()
+    );
+
     s_or_g.assert_equals(&sorg);
     assert!(s_or_g.equals(&sorg));
   }
@@ -421,12 +473,17 @@ mod tests {
     let glimpse = load_glimpse().unwrap().to_bmoc();
     let sdss = load_sdss().unwrap().to_bmoc();
     let s_xor_g = load_s_xor_g().unwrap().to_bmoc();
-    
+
     let now = Instant::now();
     let sxorg = sdss.xor(&glimpse);
-    println!("SDSS/GLIMPSE 'xor' operation done in {} ms. In / Out sizes: {} xor {} => {}",
-             now.elapsed().as_millis(), sdss.entries.len(), glimpse.entries.len(), sxorg.entries.len());
-    
+    println!(
+      "SDSS/GLIMPSE 'xor' operation done in {} ms. In / Out sizes: {} xor {} => {}",
+      now.elapsed().as_millis(),
+      sdss.entries.len(),
+      glimpse.entries.len(),
+      sxorg.entries.len()
+    );
+
     s_xor_g.assert_equals(&sxorg);
     assert!(s_xor_g.equals(&sdss.xor(&glimpse)));
   }
@@ -435,7 +492,7 @@ mod tests {
   fn test_sdss_build_from_ordered_input() {
     let sdss = load_sdss().unwrap().to_bmoc();
     let deep_size = sdss.deep_size();
-    
+
     let mut builder = BMOCBuilderFixedDepth::new(sdss.get_depth_max(), true);
 
     let now = Instant::now();
@@ -443,11 +500,13 @@ mod tests {
       builder.push(h);
     }
     let sdss2 = builder.to_bmoc().unwrap();
-    println!("SDSS 'build' operation (from SDSS flat iterator, deep size: {}) done in {} ms", deep_size, now.elapsed().as_millis());
-    
-    
+    println!(
+      "SDSS 'build' operation (from SDSS flat iterator, deep size: {}) done in {} ms",
+      deep_size,
+      now.elapsed().as_millis()
+    );
+
     sdss.assert_equals(&sdss2);
     assert!(sdss.equals(&sdss2));
   }
-  
 }
