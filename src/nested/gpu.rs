@@ -67,7 +67,7 @@ pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
 /// From the HPX projection as defined in Calabreta, use:
 ///   - `X /= PI / 4`
 ///   - `Y /= PI / 4`
-pub fn unproj_gpu(mut x: f32, y: f32) -> (f32, f32, f32) {
+pub fn unproj_gpu(x: f32, y: f32) -> (f32, f32, f32) {
   use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
   const ONE_OVER_SQRT6: f32 = 0.408_248_290_463_863_f32;
   assert!((-2f32..=2f32).contains(&y)); // check y
@@ -335,24 +335,6 @@ fn ij2z(mut i: u32, mut j: u32) -> u32 {
   j = (i ^ (i >> 1)) & 0x22222222_u32;
   i = i ^ j ^ (j << 1);
   i
-}
-
-// Returns the absolute value of the given double together with its bit of sign
-struct AbsAndSign {
-  abs: f32,
-  sign: u32,
-}
-#[inline]
-pub(crate) fn abs_sign_decompose(x: f32) -> AbsAndSign {
-  /// Mask to keep only the f32 sign
-  pub const F32_SIGN_BIT_MASK: u32 = 0x80000000;
-  /// Equals !F32_SIGN_BIT_MASK (the inverse of the f32 sign mask)
-  pub const F32_BUT_SIGN_BIT_MASK: u32 = 0x7FFFFFFF;
-  let bits = f32::to_bits(x);
-  AbsAndSign {
-    abs: f32::from_bits(bits & F32_BUT_SIGN_BIT_MASK),
-    sign: bits & F32_SIGN_BIT_MASK,
-  }
 }
 
 #[cfg(test)]

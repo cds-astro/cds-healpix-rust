@@ -335,6 +335,7 @@ pub trait Customf64 {
   fn twice(self) -> f64;
   fn half(self) -> f64;
   fn div_eucl(self, rhs: f64) -> f64;
+  fn eq0(self) -> bool;
 }
 
 impl Customf64 for f64 {
@@ -363,6 +364,10 @@ impl Customf64 for f64 {
       return if rhs > 0.0 { q - 1.0 } else { q + 1.0 };
     }
     q
+  }
+
+  fn eq0(self) -> bool {
+    self.abs() < f64::EPSILON
   }
 }
 // All types that implement `f64` get methods defined in `Customf64` for free.

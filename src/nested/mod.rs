@@ -1,13 +1,33 @@
-use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
-use std::ops::Shr;
+use std::{
+  f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
+  ops::Shr,
+};
 
-use super::compass_point::*;
-use super::external_edge::*;
-use super::*;
+use super::{
+  compass_point::{
+    MainWind::{C, E, N, NE, NW, S, SE, SW, W},
+    *, {Cardinal, CardinalMap, CardinalSet},
+  },
+  direction_from_neighbour, edge_cell_direction_from_neighbour,
+  external_edge::*,
+  ring::triangular_number_x4,
+  special_points_finder::arc_special_points,
+  sph_geom::{
+    cone::Cone, coo3d::*, elliptical_cone::EllipticalCone, frame::RefToLocalRotMatrix, zone::Zone,
+    ContainsSouthPoleMethod, Polygon,
+  },
+  *,
+};
 
+use self::{
+  bmoc::*,
+  zordercurve::{get_zoc, ZOrderCurve, ZOC},
+};
+
+pub mod bmoc;
+pub mod gpu;
+pub mod map;
 pub mod zordercurve;
-
-use self::zordercurve::{get_zoc, ZOrderCurve, ZOC};
 
 // We use an array here since operations on f64 are not yet stable for `const fn` :o/
 // Run the following code on e.g. https://play.rust-lang.org/
@@ -468,22 +488,6 @@ pub fn custom_polygon_coverage(
 pub fn zone_coverage(depth: u8, lon_min: f64, lat_min: f64, lon_max: f64, lat_max: f64) -> BMOC {
   get(depth).zone_coverage(lon_min, lat_min, lon_max, lat_max)
 }
-
-pub mod bmoc;
-pub mod gpu;
-
-use self::bmoc::*;
-use super::compass_point::MainWind::{C, E, N, NE, NW, S, SE, SW, W};
-use super::compass_point::{Cardinal, CardinalMap, CardinalSet};
-use super::ring::triangular_number_x4;
-use super::special_points_finder::arc_special_points;
-use super::sph_geom::cone::Cone;
-use super::sph_geom::coo3d::*;
-use super::sph_geom::elliptical_cone::EllipticalCone;
-use super::sph_geom::zone::Zone;
-use super::sph_geom::{ContainsSouthPoleMethod, Polygon};
-use super::{direction_from_neighbour, edge_cell_direction_from_neighbour};
-use crate::sph_geom::frame::RefToLocalRotMatrix;
 
 /// Defines an HEALPix layer in the NESTED scheme.
 /// A layer is simply an utility structure containing all constants and methods related
