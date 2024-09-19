@@ -12,9 +12,11 @@ use mapproj::CanonicalProjection;
 // Make a trait SkyMap: Iterable<Item=(u64, V)> { depth(), get(hash) }
 // => Make a map from a FITS file without loading data in memory (bot implicit and explicit)
 
+#[cfg(not(target_arch = "wasm32"))]
+use super::img::show_with_default_app;
 use super::{
   fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits},
-  img::{show_with_default_app, to_png, ColorMapFunctionType, PosConversion},
+  img::{to_png, ColorMapFunctionType, PosConversion},
 };
 
 // Implicit map
@@ -33,12 +35,14 @@ pub enum SkyMapArray {
 }
 
 impl SkyMap {
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
     File::open(path)
       .map_err(FitsError::Io)
       .map(BufReader::new)
       .and_then(SkyMap::from_fits)
   }
+
   pub fn from_fits<R: Read + Seek>(reader: BufReader<R>) -> Result<Self, FitsError> {
     from_fits_skymap(reader)
   }
@@ -54,6 +58,7 @@ impl SkyMap {
     }
   }
 
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn to_png_file<P: CanonicalProjection, W: AsRef<Path>>(
     &self,
     img_size: (u16, u16),

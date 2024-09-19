@@ -3,8 +3,6 @@
 //!
 use std::ops::{Add, Sub};
 
-use num_traits::FloatConst;
-
 use crate::Customf64;
 
 pub trait HasLocalRotMatrix {
@@ -335,7 +333,8 @@ impl M3x3 {
   /// obtained by:
   /// * a first rotation of `angle_z_rad` radians around the `z-axis`, leading to `x'y'z'`
   /// * a second rotation of `angle_yp_rad` radians around the `y'-axis`, leading to `x''y''z''`
-  /// * a thrid rotation of `angle_zpp_rad` radians around the `z''-axis`, leading to `XYZ`  
+  /// * a thrid rotation of `angle_zpp_rad` radians around the `z''-axis`, leading to `XYZ`
+  #[allow(dead_code)]
   fn from_zyz_euler_intrinsic(angle_z_rad: f64, angle_yp_rad: f64, angle_zpp_rad: f64) -> Self {
     // z1-y′-z2″ (intrinsic rotations) or z2-y-z1 (extrinsic rotations)
     let (s1, c1) = angle_z_rad.sin_cos();
@@ -501,22 +500,7 @@ impl M3x3 {
 #[cfg(test)]
 mod tests {
 
-  use super::{M3x3, XYZt};
-  // use crate::qty::{coo::Coo, HasLocalRotMatrix};
-
-  fn relative_diff(theo: f64, meas: f64) -> f64 {
-    (meas - theo).abs() / theo
-  }
-
-  fn assert_eq_f64(theo: f64, meas: f64) {
-    assert!(
-      relative_diff(theo, meas) < 1.0e-13,
-      "{:e} != {:e}: rdiff: {:e}",
-      theo,
-      meas,
-      relative_diff(theo, meas)
-    )
-  }
+  use super::M3x3;
 
   #[test]
   fn test_from_zyz_euler_intrinsic() {

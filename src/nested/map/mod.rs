@@ -6,14 +6,15 @@ pub mod skymap;
 #[cfg(test)]
 mod tests {
   use super::{
-    img::{to_png_file, ColorMapFunctionType, PosConversion},
-    skymap::*,
+    img::{ColorMapFunctionType, PosConversion},
+    skymap::SkyMap,
   };
   use mapproj::pseudocyl::mol::Mol;
 
   #[test]
+  #[cfg(not(target_arch = "wasm32"))]
   fn test_skymap() {
-    let mut path = "test/resources/skymap/skymap.fits";
+    let path = "test/resources/skymap/skymap.fits";
     let skymap = SkyMap::from_fits_file(path).unwrap();
     skymap
       .to_png_file::<Mol, _>(
