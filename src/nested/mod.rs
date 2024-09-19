@@ -172,6 +172,26 @@ const fn to_uniq_ivoa_unsafe(depth: u8, hash: u64) -> u64 {
   (4_u64 << (depth << 1)) + hash
 }
 
+pub fn to_zuniq(depth: u8, hash: u64) -> u64 {
+  check_depth(depth);
+  to_zuniq_unsafe(depth, hash)
+}
+#[inline]
+pub const fn to_zuniq_unsafe(depth: u8, hash: u64) -> u64 {
+  let twice_delta_depth = (DEPTH_MAX - depth) << 1;
+  // Add the sentinel bit a the rightmost position
+  let zuniq = (hash << 1) | 1;
+  zuniq << twice_delta_depth
+}
+
+pub const fn from_zuniq(zuniq: u64) -> (u8, u64) {
+  let n_trailing_zero = zuniq.trailing_zeros() as u8;
+  let delta_depth = n_trailing_zero >> 1;
+  let depth = DEPTH_MAX - delta_depth;
+  let idx = zuniq >> (n_trailing_zero + 1);
+  (depth, idx)
+}
+
 /// Returns the depth and the hash number from the uniq representation.
 /// Inverse operation of [to_uniq](fn.to_uniq.html).
 pub fn from_uniq(uniq_hash: u64) -> (u8, u64) {
