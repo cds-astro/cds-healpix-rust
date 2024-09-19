@@ -31,9 +31,17 @@ doc = true
 
 [dependencies]
 katex-doc = "0.1.0"
+log = "0.4"
 base64 = "0.21"   # Added for Compressed MOC
 num = "0.4"       # Added for MOC
 num-traits = "0.2"  # Added for MOC
+# Skymaps
+byteorder = "1.4.3"
+thiserror = "1.0"
+colorous = "1.0"
+mapproj = "0.3"
+png = "0.17"
+flate2 = "1.0" # Compression/decompression
 
 [dev-dependencies]
 criterion = "0.4"
