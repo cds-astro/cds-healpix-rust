@@ -161,7 +161,7 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells);
   it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
   it.next().unwrap()[0..20].copy_from_slice(b"OBJECT  = 'FULLSKY '");
-  it.next().unwrap()[0..26].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
+  it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
   it.next().unwrap()[0..3].copy_from_slice(b"END");
   // Do write the header
   writer.write_all(&header_block[..]).map_err(FitsError::Io)
