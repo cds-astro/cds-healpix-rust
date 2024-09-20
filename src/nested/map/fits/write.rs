@@ -104,6 +104,10 @@ pub fn write_implicit_skymap_fits<R: Write, T: FitsCompatibleValue>(
   mut writer: R,
   values: &[T],
 ) -> Result<(), FitsError> {
+  // We could have called 'write_implicit_skymap_fits_from_it' but we
+  // wanted to avoid counting the number of elements in the iterator
+  // since we already know it.
+  // In the end, using monomorphisation, the binary code is duplicated so...
   let n_cells = values.len() as u64;
   let depth = (values.len() / 12).trailing_zeros() as u8 >> 1;
   if n_cells != n_hash(depth) {
@@ -118,12 +122,49 @@ pub fn write_implicit_skymap_fits<R: Write, T: FitsCompatibleValue>(
   for value in values {
     writer.write_all(value.to_be_bytes().as_ref())?;
   }
-  // Complete FITS block of 2880 bytes
-  let mod2880 = (n_cells as usize * T::fits_naxis1() as usize) % 2880;
-  if mod2880 != 0 {
-    writer.write_all(&vec![0_u8; 2880 - mod2880])?;
+  write_final_padding(writer, n_cells as usize * T::fits_naxis1() as usize)
+}
+
+pub fn write_implicit_skymap_fits_from_it<R, I>(
+  mut writer: R,
+  depth: u8,
+  it: I,
+) -> Result<(), FitsError>
+where
+  R: Write,
+  I: Iterator,
+  I::Item: FitsCompatibleValue,
+{
+  let n_cells = n_hash(depth);
+  write_skymap_fits_header::<_, I::Item>(&mut writer, depth)?;
+  let mut n = 0;
+  for value in it {
+    writer.write_all(value.to_be_bytes().as_ref())?;
+    n += 1;
   }
-  Ok(())
+  if n != n_cells {
+    return Err(FitsError::new_custom(format!(
+      "Wrong number of HEALPix cells writen at depth {}. Expected: {}. Actual: {}.",
+      depth, n_cells, n
+    )));
+  }
+  write_final_padding(writer, n_cells as usize * I::Item::fits_naxis1() as usize)
+}
+
+/// Possible add blanks at the end of the FITS file to complete the last
+/// 2880 bytes block.
+fn write_final_padding<R: Write>(
+  mut writer: R,
+  n_bytes_already_written: usize,
+) -> Result<(), FitsError> {
+  let mod2880 = n_bytes_already_written % 2880;
+  if mod2880 != 0 {
+    writer
+      .write_all(&vec![0_u8; 2880 - mod2880])
+      .map_err(FitsError::Io)
+  } else {
+    Ok(())
+  }
 }
 
 #[allow(dead_code)]
