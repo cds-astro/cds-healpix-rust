@@ -2,96 +2,9 @@ use std::io::Write;
 
 use num_traits::ToBytes;
 
-use crate::{n_hash, nside};
+use crate::{n_hash, nested::map::skymap::SkyMapValue, nside};
 
 use super::error::FitsError;
-
-/// Trait marking the type of the values written in the FITS map.
-pub trait FitsCompatibleValue: ToBytes {
-  /// Size, in bytes, of a value.
-  fn fits_naxis1() -> u8;
-  fn fits_tform() -> &'static str;
-}
-
-impl FitsCompatibleValue for u8 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "B"
-  }
-}
-
-impl FitsCompatibleValue for i16 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "I"
-  }
-}
-
-impl FitsCompatibleValue for i32 {
-  fn fits_naxis1() -> u8 {
-    4
-  }
-
-  fn fits_tform() -> &'static str {
-    "J"
-  }
-}
-
-impl FitsCompatibleValue for i64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "K"
-  }
-}
-
-impl FitsCompatibleValue for u32 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "J"
-  }
-}
-
-impl FitsCompatibleValue for u64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "K"
-  }
-}
-
-impl FitsCompatibleValue for f32 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "E"
-  }
-}
-
-impl FitsCompatibleValue for f64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-
-  fn fits_tform() -> &'static str {
-    "D"
-  }
-}
 
 // Add read map from fits!!
 
@@ -100,7 +13,7 @@ impl FitsCompatibleValue for f64 {
 /// # Params
 /// * `values`: array of values, the index of the value correspond to the HEALPix cell the value is
 /// associated with.
-pub fn write_implicit_skymap_fits<R: Write, T: FitsCompatibleValue>(
+pub fn write_implicit_skymap_fits<R: Write, T: SkyMapValue>(
   mut writer: R,
   values: &[T],
 ) -> Result<(), FitsError> {
@@ -133,7 +46,7 @@ pub fn write_implicit_skymap_fits_from_it<R, I>(
 where
   R: Write,
   I: Iterator,
-  I::Item: FitsCompatibleValue,
+  I::Item: SkyMapValue,
 {
   let n_cells = n_hash(depth);
   write_skymap_fits_header::<_, I::Item>(&mut writer, depth)?;
@@ -219,7 +132,7 @@ fn write_primary_hdu<R: Write>(writer: &mut R) -> Result<(), FitsError> {
   writer.write_all(&header_block[..]).map_err(FitsError::Io)
 }
 
-fn write_skymap_fits_header<R: Write, T: FitsCompatibleValue>(
+fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   mut writer: R,
   depth: u8,
 ) -> Result<(), FitsError> {

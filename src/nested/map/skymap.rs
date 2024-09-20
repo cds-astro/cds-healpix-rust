@@ -2,15 +2,19 @@ use std::{
   error::Error,
   fs::File,
   io::{BufReader, BufWriter, Read, Seek, Write},
+  iter::{Enumerate, Map},
+  marker::PhantomData,
   ops::{Deref, RangeInclusive},
   path::Path,
+  slice::Iter,
 };
 
+use crate::n_hash;
 use colorous::Gradient;
 use mapproj::CanonicalProjection;
+use num_traits::ToBytes;
 
-// Make a trait SkyMap: Iterable<Item=(u64, V)> { depth(), get(hash) }
-// => Make a map from a FITS file without loading data in memory (bot implicit and explicit)
+use crate::nested::map::HHash;
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::show_with_default_app;
@@ -19,28 +23,173 @@ use super::{
   img::{to_png, ColorMapFunctionType, PosConversion},
 };
 
-// Implicit map
-pub struct SkyMap {
-  pub depth: u8,
-  pub values: SkyMapArray,
+/// Trait marking the type of the values writable in a FITS skymap.
+pub trait SkyMapValue: ToBytes {
+  /// FITS size, in bytes, of a value.
+  fn fits_naxis1() -> u8;
+  /// FITS type of the value
+  fn fits_tform() -> &'static str;
 }
 
-pub enum SkyMapArray {
-  U8(Box<[u8]>),
-  I16(Box<[i16]>),
-  I32(Box<[i32]>),
-  I64(Box<[i64]>),
-  F32(Box<[f32]>),
-  F64(Box<[f64]>),
+impl SkyMapValue for u8 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "B"
+  }
+}
+impl SkyMapValue for i16 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "I"
+  }
+}
+impl SkyMapValue for i32 {
+  fn fits_naxis1() -> u8 {
+    4
+  }
+  fn fits_tform() -> &'static str {
+    "J"
+  }
+}
+impl SkyMapValue for i64 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "K"
+  }
+}
+impl SkyMapValue for u32 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "J"
+  }
+}
+impl SkyMapValue for u64 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "K"
+  }
+}
+impl SkyMapValue for f32 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "E"
+  }
+}
+impl SkyMapValue for f64 {
+  fn fits_naxis1() -> u8 {
+    size_of::<Self>() as u8
+  }
+  fn fits_tform() -> &'static str {
+    "D"
+  }
 }
 
-impl SkyMap {
+pub trait SkyMap<'a> {
+  type HashType: HHash;
+  type ValueType: 'a + SkyMapValue;
+  type ValuesIt: Iterator<Item = &'a Self::ValueType>;
+  type EntriesIt: Iterator<Item = (Self::HashType, &'a Self::ValueType)>;
+
+  fn depth(&self) -> u8;
+
+  /// Tells wether the map is implicit or not.
+  /// If implicit, method `values` and `entries` will return as many items as the number
+  /// of HEALPix cell at the map HEALPix depth.
+  fn is_implicit(&self) -> bool;
+
+  /// Returns the value associated with the HEALPix cell of given hash number.
+  fn get(&self, hash: Self::HashType) -> &Self::ValueType;
+
+  /// Returns all values associated with HEALPix cells, ordered by increasing cell hash number.
+  fn values(&'a self) -> Self::ValuesIt;
+
+  /// Returns all entries, i.e. HEALPix cell hash / value tuples, ordered by increasing cell hash number.
+  fn entries(&'a self) -> Self::EntriesIt;
+}
+
+pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
+  depth: u8,
+  values: Box<[V]>,
+  _htype: PhantomData<H>,
+}
+impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
+  /// WARNING: we assume that the coherency between the depth and the number of elements in the
+  ///array has already been tested.
+  pub fn new(depth: u8, values: Box<[V]>) -> Self {
+    assert_eq!(
+      n_hash(depth) as usize,
+      values.deref().len(),
+      "Wrong implicit skymap size. Epecgted: {}. Actual: {}.",
+      n_hash(depth),
+      values.len()
+    );
+    Self {
+      depth,
+      values,
+      _htype: PhantomData,
+    }
+  }
+}
+impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V> {
+  type HashType = H;
+  type ValueType = V;
+  type ValuesIt = Iter<'a, Self::ValueType>;
+  type EntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &V)) -> (H, &V)>;
+
+  fn depth(&self) -> u8 {
+    self.depth
+  }
+
+  fn is_implicit(&self) -> bool {
+    true
+  }
+
+  fn get(&self, hash: Self::HashType) -> &Self::ValueType {
+    &self.values.deref()[hash.as_()]
+  }
+
+  fn values(&'a self) -> Self::ValuesIt {
+    self.values.deref().iter()
+  }
+
+  fn entries(&'a self) -> Self::EntriesIt {
+    self
+      .values
+      .deref()
+      .iter()
+      .enumerate()
+      .map(move |(h, v)| (H::from_usize(h), v))
+  }
+}
+
+pub enum SkyMapEnum {
+  ImplicitU64U8(ImplicitSkyMapArray<u64, u8>),
+  ImplicitU64I16(ImplicitSkyMapArray<u64, i16>),
+  ImplicitU64I32(ImplicitSkyMapArray<u64, i32>),
+  ImplicitU64I64(ImplicitSkyMapArray<u64, i64>),
+  ImplicitU64F32(ImplicitSkyMapArray<u64, f32>),
+  ImplicitU64F64(ImplicitSkyMapArray<u64, f64>),
+}
+
+impl SkyMapEnum {
   #[cfg(not(target_arch = "wasm32"))]
   pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
     File::open(path)
       .map_err(FitsError::Io)
       .map(BufReader::new)
-      .and_then(SkyMap::from_fits)
+      .and_then(SkyMapEnum::from_fits)
   }
 
   pub fn from_fits<R: Read + Seek>(reader: BufReader<R>) -> Result<Self, FitsError> {
@@ -48,13 +197,13 @@ impl SkyMap {
   }
 
   pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
-    match &self.values {
-      SkyMapArray::U8(b) => write_implicit_skymap_fits(writer, b.deref()),
-      SkyMapArray::I16(b) => write_implicit_skymap_fits(writer, b.deref()),
-      SkyMapArray::I32(b) => write_implicit_skymap_fits(writer, b.deref()),
-      SkyMapArray::I64(b) => write_implicit_skymap_fits(writer, b.deref()),
-      SkyMapArray::F32(b) => write_implicit_skymap_fits(writer, b.deref()),
-      SkyMapArray::F64(b) => write_implicit_skymap_fits(writer, b.deref()),
+    match &self {
+      Self::ImplicitU64U8(s) => write_implicit_skymap_fits(writer, s.values.deref()),
+      Self::ImplicitU64I16(s) => write_implicit_skymap_fits(writer, s.values.deref()),
+      Self::ImplicitU64I32(s) => write_implicit_skymap_fits(writer, s.values.deref()),
+      Self::ImplicitU64I64(s) => write_implicit_skymap_fits(writer, s.values.deref()),
+      Self::ImplicitU64F32(s) => write_implicit_skymap_fits(writer, s.values.deref()),
+      Self::ImplicitU64F64(s) => write_implicit_skymap_fits(writer, s.values.deref()),
     }
   }
 
@@ -106,9 +255,9 @@ impl SkyMap {
     color_map_func_type: Option<ColorMapFunctionType>,
     writer: W,
   ) -> Result<(), Box<dyn Error>> {
-    match &self.values {
-      SkyMapArray::U8(b) => to_png(
-        b.deref(),
+    match &self {
+      Self::ImplicitU64U8(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,
@@ -118,8 +267,8 @@ impl SkyMap {
         color_map_func_type,
         writer,
       ),
-      SkyMapArray::I16(b) => to_png(
-        b.deref(),
+      Self::ImplicitU64I16(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,
@@ -129,8 +278,8 @@ impl SkyMap {
         color_map_func_type,
         writer,
       ),
-      SkyMapArray::I32(b) => to_png(
-        b.deref(),
+      Self::ImplicitU64I32(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,
@@ -140,8 +289,8 @@ impl SkyMap {
         color_map_func_type,
         writer,
       ),
-      SkyMapArray::I64(b) => to_png(
-        b.deref(),
+      Self::ImplicitU64I64(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,
@@ -151,8 +300,8 @@ impl SkyMap {
         color_map_func_type,
         writer,
       ),
-      SkyMapArray::F32(b) => to_png(
-        b.deref(),
+      Self::ImplicitU64F32(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,
@@ -162,8 +311,8 @@ impl SkyMap {
         color_map_func_type,
         writer,
       ),
-      SkyMapArray::F64(b) => to_png(
-        b.deref(),
+      Self::ImplicitU64F64(s) => to_png(
+        s,
         img_size,
         proj,
         proj_center,

@@ -14,7 +14,9 @@ use mapproj::{
 };
 
 use crate::nested::map::astrometry::math::Coo;
-use crate::nested::{self, map::astrometry::gal::Galactic, n_hash};
+use crate::nested::map::skymap::SkyMap;
+use crate::nested::map::HHash;
+use crate::nested::{self, map::astrometry::gal::Galactic};
 
 /// Wanted image coordinate frame.
 pub enum ImgCooFrame {
@@ -338,20 +340,24 @@ impl ColorMapFunction {
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
 ///                  which depends on the projection. For unbounded projections, de default value
 ///                  is `(-PI..PI, -PI..PI)`.
-pub fn to_img_default<V: Val>(
-  skymap_implicit: &[V],
+pub fn to_img_default<'a, S>(
+  skymap: &'a S,
   img_size: (u16, u16),
   proj_center: Option<(f64, f64)>,
   proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
   pos_convert: Option<PosConversion>,
   color_map: Option<Gradient>,
   color_map_func_type: Option<ColorMapFunctionType>,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+  S: SkyMap<'a>,
+  S::ValueType: Val,
+{
   let proj = Mol::new();
   let color_map = color_map.unwrap_or(colorous::TURBO);
   let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
   to_img(
-    skymap_implicit,
+    skymap,
     img_size,
     proj,
     proj_center,
@@ -362,6 +368,131 @@ pub fn to_img_default<V: Val>(
   )
 }
 
+/// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA).
+///
+/// # Params
+/// * `smoc`: the Spatial MOC to be print;
+/// * `size`: the `(X, Y)` number of pixels in the image;
+/// * `proj`: a projection, if different from Mollweide;
+/// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
+///                      if different from `(0, 0)`;
+/// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
+///                  which depends on the projection. For unbounded projections, de default value
+///                  is `(-PI..PI, -PI..PI)`.
+/// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
+/// * `color_map`:
+/// * `color_map_func`: the color map fonction, build it using:
+pub fn to_img<'a, P, S>(
+  skymap: &'a S,
+  img_size: (u16, u16),
+  proj: P,
+  proj_center: Option<(f64, f64)>,
+  proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+  pos_convert: Option<PosConversion>,
+  color_map: Gradient,
+  color_map_func_type: ColorMapFunctionType,
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  S: SkyMap<'a>,
+  S::ValueType: Val,
+{
+  let depth = skymap.depth();
+
+  // Unwrap is ok here since we already tested 'n_cell' which must be > 0.
+  let mut iter = skymap.values();
+  let first_value = iter.next().unwrap();
+  let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
+    (
+      std::cmp::min_by(val, min, |a, b| a.partial_cmp(b).unwrap()),
+      std::cmp::max_by(val, max, |a, b| a.partial_cmp(b).unwrap()),
+    )
+  });
+  let (min, max) = (min.to_f64(), max.to_f64());
+  let color_map_func = ColorMapFunction::new_from(color_map_func_type, min, max);
+
+  let (size_x, size_y) = img_size;
+  let mut v: Vec<u8> = Vec::with_capacity((size_x as usize * size_y as usize) << 2);
+
+  let (proj_range_x, proj_range_y) = proj_bounds.unwrap_or((
+    proj
+      .bounds()
+      .x_bounds()
+      .as_ref()
+      .cloned()
+      .unwrap_or_else(|| -PI..=PI),
+    proj
+      .bounds()
+      .y_bounds()
+      .as_ref()
+      .cloned()
+      .unwrap_or_else(|| -PI..=PI),
+  ));
+
+  let img2proj =
+    ReversedEastPngImgXY2ProjXY::from((size_x, size_y), (&proj_range_x, &proj_range_y));
+  let mut img2cel = Img2Celestial::new(img2proj, CenteredProjection::new(proj));
+  if let Some((lon, lat)) = proj_center {
+    img2cel.set_proj_center_from_lonlat(&LonLat::new(lon, lat));
+  }
+
+  let hpx = nested::get(depth);
+
+  let pos_convert = pos_convert.unwrap_or(PosConversion::SameMapAndImg);
+  let mappos2imgpos = pos_convert.convert_map_pos_to_img_pos();
+  let imgpos2mappos = pos_convert.convert_img_pos_to_map_pos();
+
+  for y in 0..size_y {
+    for x in 0..size_x {
+      if let Some(lonlat) = img2cel.img2lonlat(&ImgXY::new(x as f64, y as f64)) {
+        let (lon, lat) = imgpos2mappos(lonlat.lon(), lonlat.lat());
+        let idx = hpx.hash(lon, lat);
+        let val = skymap.get(S::HashType::from_u64(idx));
+        // num_traits::cast::ToPrimitive contains to_f64
+        let color = color_map.eval_continuous(color_map_func.value(val.to_f64()));
+        v.push(color.r);
+        v.push(color.g);
+        v.push(color.b);
+        v.push(255);
+      } else {
+        // Not in the proj area
+        v.push(255);
+        v.push(255);
+        v.push(255);
+        v.push(0);
+      }
+    }
+  }
+  // But, in case of sparse map with cells smaller than img pixels
+  for (idx, val) in skymap.entries().filter_map(|(idx, val)| {
+    let val = val.to_f64();
+    if val > 0.0 {
+      Some((idx.to_u64(), val))
+    } else {
+      None
+    }
+  }) {
+    let (lon_rad, lat_rad) = nested::center(depth, idx);
+    let (lon_rad, lat_rad) = mappos2imgpos(lon_rad, lat_rad);
+    if let Some(xy) = img2cel.lonlat2img(&LonLat::new(lon_rad, lat_rad)) {
+      let ix = xy.x() as u16;
+      let iy = xy.y() as u16;
+      if ix < img_size.0 && iy < img_size.1 {
+        let from = (xy.y() as usize * size_x as usize + ix as usize) << 2; // <<2 <=> *4
+        if v[from] == 0 {
+          let color = color_map.eval_continuous(color_map_func.value(val));
+          v[from] = color.r;
+          v[from + 1] = color.g;
+          v[from + 2] = color.b;
+          v[from + 3] = 128;
+        }
+      }
+    }
+  }
+  Ok(v)
+}
+
+/*
 /// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA).
 ///
 /// # Params
@@ -496,6 +627,7 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
   }
   Ok(v)
 }
+*/
 
 /// # Params
 /// * `smoc`: the Spatial MOC to be print;
@@ -507,8 +639,8 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
 ///                  which depends on the projection. For unbounded projections, de default value
 ///                  is `(-PI..PI, -PI..PI)`.
 /// * `writer`: the writer in which the image is going to be written
-pub fn to_png<V: Val, P: CanonicalProjection, W: Write>(
-  skymap_implicit: &[V],
+pub fn to_png<'a, P, S, W>(
+  skymap: &'a S,
   img_size: (u16, u16),
   proj: Option<P>,
   proj_center: Option<(f64, f64)>,
@@ -517,13 +649,19 @@ pub fn to_png<V: Val, P: CanonicalProjection, W: Write>(
   color_map: Option<Gradient>,
   color_map_func_type: Option<ColorMapFunctionType>,
   writer: W,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  S: SkyMap<'a>,
+  S::ValueType: Val,
+  W: Write,
+{
   let (xsize, ysize) = img_size;
   let data = if let Some(proj) = proj {
     let color_map = color_map.unwrap_or(colorous::TURBO);
     let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
     to_img(
-      skymap_implicit,
+      skymap,
       img_size,
       proj,
       proj_center,
@@ -534,7 +672,7 @@ pub fn to_png<V: Val, P: CanonicalProjection, W: Write>(
     )
   } else {
     to_img_default(
-      skymap_implicit,
+      skymap,
       img_size,
       proj_center,
       proj_bounds,
@@ -563,8 +701,8 @@ pub fn to_png<V: Val, P: CanonicalProjection, W: Write>(
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn to_png_file<V: Val, P: CanonicalProjection>(
-  skymap_implicit: &[V],
+pub fn to_png_file<'a, S, P>(
+  skymap_implicit: &'a S,
   img_size: (u16, u16),
   proj: Option<P>,
   proj_center: Option<(f64, f64)>,
@@ -574,7 +712,12 @@ pub fn to_png_file<V: Val, P: CanonicalProjection>(
   color_map_func_type: Option<ColorMapFunctionType>,
   path: &Path,
   view: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  S: SkyMap<'a>,
+  S::ValueType: Val,
+{
   // Brackets are important to be sure the file is closed before trying to open it.
   {
     let file = File::create(path)?;

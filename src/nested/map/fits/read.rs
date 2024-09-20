@@ -10,7 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use log::{debug, warn};
 
 use super::{
-  super::skymap::{SkyMap, SkyMapArray},
+  super::skymap::{ImplicitSkyMapArray, SkyMapEnum},
   error::FitsError,
   gz::{is_gz, uncompress},
   keywords::{
@@ -62,7 +62,7 @@ use crate::{depth, is_nside, n_hash};
 /// # Info
 ///   Supports gz input stream
 ///
-pub fn from_fits_skymap<R: Read + Seek>(mut reader: BufReader<R>) -> Result<SkyMap, FitsError> {
+pub fn from_fits_skymap<R: Read + Seek>(mut reader: BufReader<R>) -> Result<SkyMapEnum, FitsError> {
   if is_gz(&mut reader)? {
     // Probably need to build an explicit map:
     //   highly compressed skymaps are IMPLICIT with a lot of zeros.
@@ -72,7 +72,7 @@ pub fn from_fits_skymap<R: Read + Seek>(mut reader: BufReader<R>) -> Result<SkyM
   }
 }
 
-pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMap, FitsError> {
+pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum, FitsError> {
   let mut header_block = [b' '; 2880];
   consume_primary_hdu(&mut reader, &mut header_block)?;
   // Read the extension HDU
@@ -184,45 +184,27 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMap, Fi
     TForm1::B(_) => (0..n_hash)
       .map(|_| reader.read_u8())
       .collect::<Result<Vec<u8>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::U8(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64U8(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
     TForm1::I(_) => (0..n_hash)
       .map(|_| reader.read_i16::<BigEndian>())
       .collect::<Result<Vec<i16>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::I16(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64I16(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
     TForm1::J(_) => (0..n_hash)
       .map(|_| reader.read_i32::<BigEndian>())
       .collect::<Result<Vec<i32>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::I32(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64I32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
     TForm1::K(_) => (0..n_hash)
       .map(|_| reader.read_i64::<BigEndian>())
       .collect::<Result<Vec<i64>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::I64(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64I64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
     TForm1::E(_) => (0..n_hash)
       .map(|_| reader.read_f32::<BigEndian>())
       .collect::<Result<Vec<f32>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::F32(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64F32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
     TForm1::D(_) => (0..n_hash)
       .map(|_| reader.read_f64::<BigEndian>())
       .collect::<Result<Vec<f64>, io::Error>>()
-      .map(|v| SkyMap {
-        depth,
-        values: SkyMapArray::F64(v.into_boxed_slice()),
-      }),
+      .map(|v| SkyMapEnum::ImplicitU64F64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
   }
   .map_err(FitsError::Io)
 }
