@@ -7,16 +7,21 @@ use std::{
   path::Path,
 };
 
-use colorous::Gradient;
+pub use colorous::Gradient;
+pub use mapproj::pseudocyl::mol::Mol;
 use mapproj::{
-  img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, pseudocyl::mol::Mol,
-  CanonicalProjection, CenteredProjection, ImgXY, LonLat,
+  img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, CanonicalProjection,
+  CenteredProjection, ImgXY, LonLat,
 };
 
-use crate::nested::map::astrometry::math::Coo;
-use crate::nested::map::skymap::SkyMap;
-use crate::nested::map::HHash;
-use crate::nested::{self, map::astrometry::gal::Galactic};
+use crate::nested::{
+  self,
+  map::{
+    astrometry::{gal::Galactic, math::Coo},
+    skymap::SkyMap,
+    HHash,
+  },
+};
 
 /// Wanted image coordinate frame.
 pub enum ImgCooFrame {
