@@ -5,6 +5,7 @@ use num_traits::{AsPrimitive, PrimInt};
 pub mod astrometry;
 pub mod fits;
 pub mod img;
+pub mod mom;
 pub mod skymap;
 
 /// `HHash` stands for HEALPix Hash.
@@ -63,7 +64,7 @@ mod tests {
         None,
         Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
         "test/resources/skymap/skymap.png",
-        true,
+        false,
       )
       .unwrap();
   }

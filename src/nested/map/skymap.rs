@@ -9,12 +9,11 @@ use std::{
   slice::Iter,
 };
 
-use crate::n_hash;
 use colorous::Gradient;
 use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
 
-use crate::nested::map::HHash;
+use crate::{n_hash, nested::map::HHash};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::show_with_default_app;
@@ -97,14 +96,23 @@ impl SkyMapValue for f64 {
 }
 
 pub trait SkyMap<'a> {
+  /// Type of the HEALPix hash value (mainly `u32` or `u64`).
   type HashType: HHash;
+  /// Type of the value associated to each HEALPix cell.
   type ValueType: 'a + SkyMapValue;
+  /// Type of the iterator iterating on the skymap values.
   type ValuesIt: Iterator<Item = &'a Self::ValueType>;
+  /// Type of the iterator iterating on the skymap entries.
+  /// WARNING: we are so far stucked with iterator on ranges,
+  /// e.g `(0..n_cell).iter().zip(...)`, since it relies on the `Step` trait
+  /// which requires `nightly builds`.
+  /// In the case of `implicit` skymaps, a solution is to use `enumerate`.
   type EntriesIt: Iterator<Item = (Self::HashType, &'a Self::ValueType)>;
 
+  /// Depth (<=> HEALPix order) of the skymap.
   fn depth(&self) -> u8;
 
-  /// Tells wether the map is implicit or not.
+  /// Tells whether the map is implicit or not.
   /// If implicit, method `values` and `entries` will return as many items as the number
   /// of HEALPix cell at the map HEALPix depth.
   fn is_implicit(&self) -> bool;
