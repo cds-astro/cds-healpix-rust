@@ -161,7 +161,7 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
     _ => unreachable!(),
   }?;
   let n_hash = n_hash(depth);
-  skymap_kws.check_lastpix(n_hash)?;
+  skymap_kws.check_lastpix(n_hash - 1)?;
   // Check whether TForm compatible with N bytes per row
   let n_hash_2 = coltype_1.n_pack() as u64 * n_rows;
   if n_hash != n_hash_2 {

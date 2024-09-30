@@ -158,7 +158,7 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NSIDE   ", nside as u64);
   it.next().unwrap()[0..30].copy_from_slice(b"FIRSTPIX=                    0");
-  write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells);
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells - 1);
   it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
   it.next().unwrap()[0..20].copy_from_slice(b"OBJECT  = 'FULLSKY '");
   it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");

@@ -149,6 +149,9 @@ pub trait Mom<'a> {
     }
   }
 
+  /// # Warning
+  /// * assumes that the order of the elements returned by `zuniqs()` is the same as the one returned
+  ///   by `entries()`.
   fn check_is_mom(&'a self) -> Result<(), String> {
     let mut it = self.zuniqs();
     if let Some(mut l) = it.next() {

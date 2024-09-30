@@ -67,5 +67,21 @@ mod tests {
         false,
       )
       .unwrap();
+
+    let path = "test/resources/skymap/hats_test.fits";
+    let skymap = SkyMapEnum::from_fits_file(path).unwrap();
+    skymap
+      .to_png_file::<Mol, _>(
+        (1600, 800),
+        None,
+        None,
+        None,
+        Some(PosConversion::EqMap2GalImg),
+        None,
+        Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+        "test/resources/skymap/hats_tets.png",
+        false,
+      )
+      .unwrap();
   }
 }
