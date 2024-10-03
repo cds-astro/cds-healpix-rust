@@ -19,11 +19,11 @@ use crate::{n_hash, nested::map::HHash};
 use super::img::show_with_default_app;
 use super::{
   fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits},
-  img::{to_png, ColorMapFunctionType, PosConversion},
+  img::{to_skymap_png, ColorMapFunctionType, PosConversion},
 };
 
 /// Trait marking the type of the values writable in a FITS skymap.
-pub trait SkyMapValue: ToBytes {
+pub trait SkyMapValue: ToBytes + Clone {
   /// FITS size, in bytes, of a value.
   fn fits_naxis1() -> u8;
   /// FITS type of the value
@@ -102,12 +102,14 @@ pub trait SkyMap<'a> {
   type ValueType: 'a + SkyMapValue;
   /// Type of the iterator iterating on the skymap values.
   type ValuesIt: Iterator<Item = &'a Self::ValueType>;
-  /// Type of the iterator iterating on the skymap entries.
+  /// Type of the iterator iterating on the skymap borrowed entries.
   /// WARNING: we are so far stucked with iterator on ranges,
   /// e.g `(0..n_cell).iter().zip(...)`, since it relies on the `Step` trait
   /// which requires `nightly builds`.
   /// In the case of `implicit` skymaps, a solution is to use `enumerate`.
   type EntriesIt: Iterator<Item = (Self::HashType, &'a Self::ValueType)>;
+  // Type of the iterator iterating over the skymap owned entries.
+  // type DrainEntriesIt: Iterator<Item = (Self::HashType, Self::ValueType)>;
 
   /// Depth (<=> HEALPix order) of the skymap.
   fn depth(&self) -> u8;
@@ -117,6 +119,11 @@ pub trait SkyMap<'a> {
   /// of HEALPix cell at the map HEALPix depth.
   fn is_implicit(&self) -> bool;
 
+  /// Returns the number of elements in the skymap.
+  /// For implicit skymaps, the number of elements equals the number of HEALPix cells at the
+  /// skymap depth/order.
+  fn len(&self) -> usize;
+
   /// Returns the value associated with the HEALPix cell of given hash number.
   fn get(&self, hash: Self::HashType) -> &Self::ValueType;
 
@@ -125,6 +132,9 @@ pub trait SkyMap<'a> {
 
   /// Returns all entries, i.e. HEALPix cell hash / value tuples, ordered by increasing cell hash number.
   fn entries(&'a self) -> Self::EntriesIt;
+
+  // In case we want to build mom from complex type that are costly to clone.
+  // fn drain_entries(self) -> Self::DrainEntriesIt;
 }
 
 pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
@@ -158,6 +168,10 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
 
   fn depth(&self) -> u8 {
     self.depth
+  }
+
+  fn len(&self) -> usize {
+    self.values.len()
   }
 
   fn is_implicit(&self) -> bool {
@@ -216,7 +230,7 @@ impl SkyMapEnum {
   }
 
   #[cfg(not(target_arch = "wasm32"))]
-  pub fn to_png_file<P: CanonicalProjection, W: AsRef<Path>>(
+  pub fn to_skymap_png_file<P: CanonicalProjection, W: AsRef<Path>>(
     &self,
     img_size: (u16, u16),
     proj: Option<P>,
@@ -232,7 +246,7 @@ impl SkyMapEnum {
       .map_err(|e| e.into())
       .map(BufWriter::new)
       .and_then(|mut writer| {
-        self.to_png(
+        self.to_skymap_png(
           img_size,
           proj,
           proj_center,
@@ -252,7 +266,7 @@ impl SkyMapEnum {
       })
   }
 
-  pub fn to_png<P: CanonicalProjection, W: Write>(
+  pub fn to_skymap_png<P: CanonicalProjection, W: Write>(
     &self,
     img_size: (u16, u16),
     proj: Option<P>,
@@ -264,7 +278,7 @@ impl SkyMapEnum {
     writer: W,
   ) -> Result<(), Box<dyn Error>> {
     match &self {
-      Self::ImplicitU64U8(s) => to_png(
+      Self::ImplicitU64U8(s) => to_skymap_png(
         s,
         img_size,
         proj,
@@ -275,7 +289,7 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
-      Self::ImplicitU64I16(s) => to_png(
+      Self::ImplicitU64I16(s) => to_skymap_png(
         s,
         img_size,
         proj,
@@ -286,7 +300,7 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
-      Self::ImplicitU64I32(s) => to_png(
+      Self::ImplicitU64I32(s) => to_skymap_png(
         s,
         img_size,
         proj,
@@ -297,7 +311,7 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
-      Self::ImplicitU64I64(s) => to_png(
+      Self::ImplicitU64I64(s) => to_skymap_png(
         s,
         img_size,
         proj,
@@ -308,7 +322,7 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
-      Self::ImplicitU64F32(s) => to_png(
+      Self::ImplicitU64F32(s) => to_skymap_png(
         s,
         img_size,
         proj,
@@ -319,7 +333,7 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
-      Self::ImplicitU64F64(s) => to_png(
+      Self::ImplicitU64F64(s) => to_skymap_png(
         s,
         img_size,
         proj,

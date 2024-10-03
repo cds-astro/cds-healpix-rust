@@ -8,16 +8,17 @@ use std::{
 };
 
 pub use colorous::Gradient;
-pub use mapproj::pseudocyl::mol::Mol;
+
 use mapproj::{
-  img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, CanonicalProjection,
-  CenteredProjection, ImgXY, LonLat,
+  img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, pseudocyl::mol::Mol,
+  CanonicalProjection, CenteredProjection, ImgXY, LonLat,
 };
 
 use crate::nested::{
   self,
   map::{
     astrometry::{gal::Galactic, math::Coo},
+    mom::{Mom, ZUniqHashT},
     skymap::SkyMap,
     HHash,
   },
@@ -338,14 +339,14 @@ impl ColorMapFunction {
 /// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA) using the Mollweide projection.
 ///
 /// # Params
-/// * `smoc`: the Spatial MOC to be print;
+/// * `skymap`: the skymap to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
 ///                      if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
 ///                  which depends on the projection. For unbounded projections, de default value
 ///                  is `(-PI..PI, -PI..PI)`.
-pub fn to_img_default<'a, S>(
+pub fn to_skymap_img_default<'a, S>(
   skymap: &'a S,
   img_size: (u16, u16),
   proj_center: Option<(f64, f64)>,
@@ -361,7 +362,7 @@ where
   let proj = Mol::new();
   let color_map = color_map.unwrap_or(colorous::TURBO);
   let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
-  to_img(
+  to_skymap_img(
     skymap,
     img_size,
     proj,
@@ -376,7 +377,7 @@ where
 /// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA).
 ///
 /// # Params
-/// * `smoc`: the Spatial MOC to be print;
+/// * `skymap`: the skymap to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
@@ -387,7 +388,7 @@ where
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
-pub fn to_img<'a, P, S>(
+pub fn to_skymap_img<'a, P, S>(
   skymap: &'a S,
   img_size: (u16, u16),
   proj: P,
@@ -497,11 +498,48 @@ where
   Ok(v)
 }
 
-/*
+/// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA) using the Mollweide projection.
+///
+/// # Params
+/// * `mom`: the MOM to be print;
+/// * `size`: the `(X, Y)` number of pixels in the image;
+/// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
+///                      if different from `(0, 0)`;
+/// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
+///                  which depends on the projection. For unbounded projections, de default value
+///                  is `(-PI..PI, -PI..PI)`.
+pub fn to_mom_img_default<'a, M>(
+  mom: &'a M,
+  img_size: (u16, u16),
+  proj_center: Option<(f64, f64)>,
+  proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+  pos_convert: Option<PosConversion>,
+  color_map: Option<Gradient>,
+  color_map_func_type: Option<ColorMapFunctionType>,
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+  M: Mom<'a>,
+  M::ValueType: Val,
+{
+  let proj = Mol::new();
+  let color_map = color_map.unwrap_or(colorous::TURBO);
+  let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
+  to_mom_img(
+    mom,
+    img_size,
+    proj,
+    proj_center,
+    proj_bounds,
+    pos_convert,
+    color_map,
+    color_map_func_type,
+  )
+}
+
 /// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA).
 ///
 /// # Params
-/// * `smoc`: the Spatial MOC to be print;
+/// * `mom`: the MOM to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
@@ -512,8 +550,8 @@ where
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
-pub fn to_img<V: Val, P: CanonicalProjection>(
-  skymap_implicit: &[V],
+pub fn to_mom_img<'a, P, M>(
+  mom: &'a M,
   img_size: (u16, u16),
   proj: P,
   proj_center: Option<(f64, f64)>,
@@ -521,25 +559,16 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
   pos_convert: Option<PosConversion>,
   color_map: Gradient,
   color_map_func_type: ColorMapFunctionType,
-) -> Result<Vec<u8>, Box<dyn Error>> {
-  // Make the map a trait SkyMap: Iterable<Item=(u64, V)> { depth(), get(hash) }
-
-  let n_cells = skymap_implicit.len() as u64;
-  let depth = (skymap_implicit.len() / 12).trailing_zeros() as u8 >> 1;
-  if n_cells != n_hash(depth) {
-    return Err(
-      format!(
-        "Number of cell {} not compatible with an HEALPix depth of {}. Expected: {}.",
-        n_cells,
-        depth,
-        n_hash(depth)
-      )
-      .into(),
-    );
-  }
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  M: Mom<'a>,
+  M::ValueType: Val,
+{
+  let depth = mom.depth_max();
 
   // Unwrap is ok here since we already tested 'n_cell' which must be > 0.
-  let mut iter = skymap_implicit.iter();
+  let mut iter = mom.values();
   let first_value = iter.next().unwrap();
   let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
     (
@@ -548,11 +577,6 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
     )
   });
   let (min, max) = (min.to_f64(), max.to_f64());
-  /*let max = skymap_implicit
-  .iter()
-  .max_by(|a, b| )
-  .map(|v| v.to_f64())
-  .unwrap_or(0_f64);*/
   let color_map_func = ColorMapFunction::new_from(color_map_func_type, min, max);
 
   let (size_x, size_y) = img_size;
@@ -590,10 +614,14 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
     for x in 0..size_x {
       if let Some(lonlat) = img2cel.img2lonlat(&ImgXY::new(x as f64, y as f64)) {
         let (lon, lat) = imgpos2mappos(lonlat.lon(), lonlat.lat());
-        let idx = hpx.hash(lon, lat) as usize;
-        let val = &skymap_implicit[idx];
-        // num_traits::cast::ToPrimitive contains to_f64
-        let color = color_map.eval_continuous(color_map_func.value(val.to_f64()));
+        let idx = hpx.hash(lon, lat);
+        let color = if let Some((z_, val)) = mom
+          .get_cell_containing_unsafe(M::ZUniqHType::to_zuniq(depth, M::ZUniqHType::from_u64(idx)))
+        {
+          color_map.eval_continuous(color_map_func.value(val.to_f64()))
+        } else {
+          color_map.eval_continuous(color_map_func.value(0.0))
+        };
         v.push(color.r);
         v.push(color.g);
         v.push(color.b);
@@ -608,12 +636,16 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
     }
   }
   // But, in case of sparse map with cells smaller than img pixels
-  for (idx, val) in skymap_implicit
-    .iter()
-    .enumerate()
-    .filter(|(_, val)| val.to_f64() > 0.0)
-  {
-    let (lon_rad, lat_rad) = nested::center(depth, idx as u64);
+  for (depth, idx, val) in mom.entries().filter_map(|(zuniq, val)| {
+    let val = val.to_f64();
+    if val > 0.0 {
+      let (depth, idx) = M::ZUniqHType::from_zuniq(zuniq);
+      Some((depth, idx.to_u64(), val))
+    } else {
+      None
+    }
+  }) {
+    let (lon_rad, lat_rad) = nested::center(depth, idx);
     let (lon_rad, lat_rad) = mappos2imgpos(lon_rad, lat_rad);
     if let Some(xy) = img2cel.lonlat2img(&LonLat::new(lon_rad, lat_rad)) {
       let ix = xy.x() as u16;
@@ -621,7 +653,7 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
       if ix < img_size.0 && iy < img_size.1 {
         let from = (xy.y() as usize * size_x as usize + ix as usize) << 2; // <<2 <=> *4
         if v[from] == 0 {
-          let color = color_map.eval_continuous(color_map_func.value(val.to_f64()));
+          let color = color_map.eval_continuous(color_map_func.value(val));
           v[from] = color.r;
           v[from + 1] = color.g;
           v[from + 2] = color.b;
@@ -632,10 +664,9 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
   }
   Ok(v)
 }
-*/
 
 /// # Params
-/// * `smoc`: the Spatial MOC to be print;
+/// * `skymap`: the skymap to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
@@ -644,7 +675,7 @@ pub fn to_img<V: Val, P: CanonicalProjection>(
 ///                  which depends on the projection. For unbounded projections, de default value
 ///                  is `(-PI..PI, -PI..PI)`.
 /// * `writer`: the writer in which the image is going to be written
-pub fn to_png<'a, P, S, W>(
+pub fn to_skymap_png<'a, P, S, W>(
   skymap: &'a S,
   img_size: (u16, u16),
   proj: Option<P>,
@@ -665,7 +696,7 @@ where
   let data = if let Some(proj) = proj {
     let color_map = color_map.unwrap_or(colorous::TURBO);
     let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
-    to_img(
+    to_skymap_img(
       skymap,
       img_size,
       proj,
@@ -676,7 +707,7 @@ where
       color_map_func_type,
     )
   } else {
-    to_img_default(
+    to_skymap_img_default(
       skymap,
       img_size,
       proj_center,
@@ -695,7 +726,7 @@ where
 }
 
 /// # Params
-/// * `smoc`: the Spatial MOC to be print;
+/// * `skymap`: the skymap to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
@@ -706,7 +737,7 @@ where
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn to_png_file<'a, S, P>(
+pub fn to_skymap_png_file<'a, S, P>(
   skymap_implicit: &'a S,
   img_size: (u16, u16),
   proj: Option<P>,
@@ -727,8 +758,119 @@ where
   {
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
-    to_png(
+    to_skymap_png(
       skymap_implicit,
+      img_size,
+      proj,
+      proj_center,
+      proj_bounds,
+      pos_convert,
+      color_map,
+      color_map_func_type,
+      &mut writer,
+    )?;
+  }
+  if view {
+    show_with_default_app(path.to_string_lossy().as_ref())?;
+  }
+  Ok(())
+}
+
+/// # Params
+/// * `mom`: the MOM to be print;
+/// * `size`: the `(X, Y)` number of pixels in the image;
+/// * `proj`: a projection, if different from Mollweide;
+/// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
+///                      if different from `(0, 0)`;
+/// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
+///                  which depends on the projection. For unbounded projections, de default value
+///                  is `(-PI..PI, -PI..PI)`.
+/// * `writer`: the writer in which the image is going to be written
+pub fn to_mom_png<'a, P, M, W>(
+  mom: &'a M,
+  img_size: (u16, u16),
+  proj: Option<P>,
+  proj_center: Option<(f64, f64)>,
+  proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+  pos_convert: Option<PosConversion>,
+  color_map: Option<Gradient>,
+  color_map_func_type: Option<ColorMapFunctionType>,
+  writer: W,
+) -> Result<(), Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  M: Mom<'a>,
+  M::ValueType: Val,
+  W: Write,
+{
+  let (xsize, ysize) = img_size;
+  let data = if let Some(proj) = proj {
+    let color_map = color_map.unwrap_or(colorous::TURBO);
+    let color_map_func_type = color_map_func_type.unwrap_or(ColorMapFunctionType::Linear);
+    to_mom_img(
+      mom,
+      img_size,
+      proj,
+      proj_center,
+      proj_bounds,
+      pos_convert,
+      color_map,
+      color_map_func_type,
+    )
+  } else {
+    to_mom_img_default(
+      mom,
+      img_size,
+      proj_center,
+      proj_bounds,
+      pos_convert,
+      color_map,
+      color_map_func_type,
+    )
+  }?;
+  let mut encoder = png::Encoder::new(writer, xsize as u32, ysize as u32); // Width is 2 pixels and height is 1.
+  encoder.set_color(png::ColorType::Rgba);
+  encoder.set_depth(png::BitDepth::Eight);
+  let mut writer = encoder.write_header()?;
+  writer.write_image_data(&data).expect("Wrong encoding");
+  Ok(())
+}
+
+/// # Params
+/// * `mom`: the MOM to be print;
+/// * `size`: the `(X, Y)` number of pixels in the image;
+/// * `proj`: a projection, if different from Mollweide;
+/// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
+///                      if different from `(0, 0)`;
+/// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
+///                  which depends on the projection. For unbounded projections, de default value
+///                  is `(-PI..PI, -PI..PI)`.
+/// * `path`: the path of th PNG file to be written.
+/// * `view`: set to true to visualize the saved image.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn to_mom_png_file<'a, M, P>(
+  mom: &'a M,
+  img_size: (u16, u16),
+  proj: Option<P>,
+  proj_center: Option<(f64, f64)>,
+  proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+  pos_convert: Option<PosConversion>,
+  color_map: Option<Gradient>,
+  color_map_func_type: Option<ColorMapFunctionType>,
+  path: &Path,
+  view: bool,
+) -> Result<(), Box<dyn Error>>
+where
+  P: CanonicalProjection,
+  M: Mom<'a>,
+  M::ValueType: Val,
+{
+  // Brackets are important to be sure the file is closed before trying to open it.
+  {
+    let file = File::create(path)?;
+    let mut writer = BufWriter::new(file);
+    to_mom_png(
+      mom,
       img_size,
       proj,
       proj_center,

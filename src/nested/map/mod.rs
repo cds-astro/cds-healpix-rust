@@ -55,7 +55,7 @@ mod tests {
     let path = "test/resources/skymap/skymap.fits";
     let skymap = SkyMapEnum::from_fits_file(path).unwrap();
     skymap
-      .to_png_file::<Mol, _>(
+      .to_skymap_png_file::<Mol, _>(
         (1600, 800),
         None,
         None,
@@ -71,7 +71,7 @@ mod tests {
     let path = "test/resources/skymap/hats_test.fits";
     let skymap = SkyMapEnum::from_fits_file(path).unwrap();
     skymap
-      .to_png_file::<Mol, _>(
+      .to_skymap_png_file::<Mol, _>(
         (1600, 800),
         None,
         None,

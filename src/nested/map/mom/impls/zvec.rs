@@ -1,6 +1,10 @@
+use std::os::linux::raw::stat;
 use std::{iter::Map, slice::Iter};
 
-use super::super::{super::skymap::SkyMapValue, Mom, ZUniqHashT};
+use super::super::{
+  super::skymap::{SkyMap, SkyMapValue},
+  Mom, ZUniqHashT,
+};
 
 /// Implementation of a MOM in an ordered vector of `(zuniq, values)` tuples.
 pub struct MomVecImpl<Z, V>
@@ -19,10 +23,15 @@ where
   type ZUniqHType = Z;
   type ValueType = V;
   type ZuniqIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> Z>;
+  type ValuesIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> &'a V>;
   type EntriesIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> (Z, &'a V)>;
 
   fn depth_max(&self) -> u8 {
     self.depth
+  }
+
+  fn len(&self) -> usize {
+    self.entries.len()
   }
 
   fn get_cell_containing_unsafe(
@@ -83,7 +92,170 @@ where
     self.entries.iter().map(|&(zuniq, _)| zuniq)
   }
 
+  fn values(&'a self) -> Self::ValuesIt {
+    self.entries.iter().map(|(_, value)| value)
+  }
+
   fn entries(&'a self) -> Self::EntriesIt {
     self.entries.iter().map(|(z, v)| (*z, v))
+  }
+}
+
+impl<Z, V> MomVecImpl<Z, V>
+where
+  Z: ZUniqHashT,
+  V: SkyMapValue,
+{
+  /// # Params
+  /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
+  /// (i.e. the 4 cells belonging to a same direct parent cell).
+  /// The function decide whether value are merge (and how they are merged) or not returning
+  ///either `Some` or `None`.
+  pub fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
+  where
+    S: SkyMap<'s, HashType = Z, ValueType = V>,
+    M: Fn(&V, &V, &V, &V) -> Option<V>,
+    V: 's,
+  {
+    let depth = skymap.depth();
+    let mut entries: Vec<(Z, V)> = Vec::with_capacity(skymap.len());
+    let mut expected_next_hash = Z::zero();
+    for (h, v) in skymap.entries() {
+      // To avoid the clone() here, we must accept an owned skymap
+      // with an iterator (like Drain) iterating over the owned values.
+      entries.push((Z::to_zuniq(depth, h), v.clone()));
+      // Check that the value of the cell was the expected one and that
+      // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
+      // (among the 4 possible values 0, 1, 2 and 3).
+      if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+        // Appel recursion qui prends les 3 dernière valeurs!!
+        // Tente des les combiner avant de mes retirer de la stack!!
+        let n = entries.len();
+        if let Some(combined_value) = merger(
+          &entries[n - 4].1, // sibling 0
+          &entries[n - 3].1, // sibling 1
+          &entries[n - 2].1, // sibling 2
+          &entries[n - 1].1, // sibling 3
+        ) {
+          let _ = entries.pop();
+          let _ = entries.pop();
+          let _ = entries.pop();
+          // Unwrap ok here since we are sure that the array contained at least 4 entries
+          // (we access them just above).
+          let _ = entries.pop().unwrap();
+          let new_zuniq = Z::to_zuniq(depth - 1, h >> 2);
+          entries.push((new_zuniq, combined_value));
+          Self::from_skymap_recursive(&mut entries, &merger);
+        }
+      } else if h & Z::LAST_LAYER_MASK == Z::zero() {
+        expected_next_hash = h;
+      }
+      expected_next_hash += Z::one();
+    }
+    Self { depth, entries }
+  }
+
+  fn from_skymap_recursive<'s, M>(stack: &mut Vec<(Z, V)>, merger: &M)
+  where
+    M: Fn(&V, &V, &V, &V) -> Option<V>,
+    V: 's,
+  {
+    let n = stack.len();
+    if n >= 4 {
+      let e0 = &stack[n - 4];
+      let (d0, h0) = Z::from_zuniq(e0.0);
+      if d0 > 0 && h0 & Z::LAST_LAYER_MASK == Z::zero() {
+        let e1 = &stack[n - 3];
+        let e2 = &stack[n - 2];
+        let e3 = &stack[n - 1];
+        if e1.0 == Z::to_zuniq(d0, h0 + Z::one())
+          && e2.0 == Z::to_zuniq(d0, h0 + Z::two())
+          && e3.0 == Z::to_zuniq(d0, h0 + Z::three())
+        {
+          if let Some(combined_value) = merger(
+            &e0.1, // sibling 0
+            &e1.1, // sibling 1
+            &e2.1, // sibling 2
+            &e3.1, // sibling 3
+          ) {
+            let _ = stack.pop();
+            let _ = stack.pop();
+            let _ = stack.pop();
+            let _ = stack.pop();
+            let new_zuniq = Z::to_zuniq(d0 - 1, h0 >> 2);
+            stack.push((new_zuniq, combined_value));
+            Self::from_skymap_recursive(stack, merger);
+          }
+        }
+      }
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::n_hash;
+  use crate::nested::map::{
+    img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
+    mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
+    skymap::SkyMapEnum,
+  };
+  use mapproj::pseudocyl::mol::Mol;
+  use std::f64::consts::PI;
+  use std::path::Path;
+
+  #[test]
+  #[cfg(not(target_arch = "wasm32"))]
+  fn test_skymap_to_mom() {
+    let path = "test/resources/skymap/skymap.fits";
+    let skymap = SkyMapEnum::from_fits_file(path).unwrap();
+    match skymap {
+      SkyMapEnum::ImplicitU64I32(skymap) => {
+        let merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+          let sum = *n0 + *n1 + *n2 + *n3;
+          if sum < 1_000_000 {
+            Some(sum)
+          } else {
+            None
+          }
+        };
+        let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
+        /*println!("Mom len: {}", mom.entries.len());
+        for (z, v) in mom.entries {
+          let (d, h) = u64::from_zuniq(z);
+          println!("{},{},{}", d, h, v)
+        }*/
+        assert_eq!(mom.len(), 1107);
+        // Create a new MOM transforming number of sources into densities.
+        let mom = MomVecImpl {
+          depth: mom.depth,
+          entries: mom
+            .entries
+            .drain(..)
+            .map(|(z, v)| {
+              (
+                z,
+                v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64),
+              )
+            })
+            .collect::<Vec<(u64, f64)>>(),
+        };
+
+        to_mom_png_file::<'_, _, Mol>(
+          &mom,
+          (1600, 800),
+          None,
+          None,
+          None,
+          Some(PosConversion::EqMap2GalImg),
+          None,
+          Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+          Path::new("test/resources/skymap/mom.png"),
+          false,
+        )
+        .unwrap();
+      }
+      _ => assert!(false),
+    }
   }
 }

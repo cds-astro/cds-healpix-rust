@@ -9,17 +9,21 @@ use std::{
   fmt::{Debug, Display},
   mem,
 };
+use std::ops::AddAssign;
 
 use num::PrimInt;
 
-use super::skymap::SkyMapValue;
+use super::{
+  HHash,
+  skymap::SkyMapValue
+};
 
 pub mod impls;
 
 /// `ZUniqHHashT` stands for `Z-curve ordered Uniq Healpix Hash Type`.
 pub trait ZUniqHashT:
 // 'static mean that Idx does not contains any reference
-'static + PrimInt + Send + Sync + Debug + Display + Clone
+'static + HHash + PrimInt + Send + Sync + Debug + AddAssign + Display + Clone
 {
   /// Number of unused bits (without including the sentinel bit).
   const N_RESERVED_BITS: u8 = 2;
@@ -35,7 +39,14 @@ pub trait ZUniqHashT:
   const N_BITS: u8 = Self::N_BYTES << 3;
   /// Maximum depth that can be coded on this 'ZUniqHHashT'.
   const MAX_DEPTH: u8 = (Self::N_BITS - (Self::N_RESERVED_BITS + Self::N_D0_BITS)) / Self::DIM;
+  /// MASK to retrieve the bits corresponding to the deepest layer.
+  /// Must equals 3.
+  const LAST_LAYER_MASK: Self; // = Self:: Self::one().unsigned_shl(Self::DIM as u32) - Self::one();
 
+  /// Must return 2.
+  fn two() -> Self;
+  /// Must return 3.
+  fn three() -> Self;
   fn mult_by_dim<T: PrimInt>(v: T) -> T {
     v.unsigned_shl(1)
   }
@@ -90,8 +101,24 @@ pub trait ZUniqHashT:
 
 }
 
-impl ZUniqHashT for u32 {}
-impl ZUniqHashT for u64 {}
+impl ZUniqHashT for u32 {
+  const LAST_LAYER_MASK: Self = 3;
+  fn two() -> Self {
+    2
+  }
+  fn three() -> Self {
+    Self::LAST_LAYER_MASK
+  }
+}
+impl ZUniqHashT for u64 {
+  const LAST_LAYER_MASK: Self = 3;
+  fn two() -> Self {
+    2
+  }
+  fn three() -> Self {
+    Self::LAST_LAYER_MASK
+  }
+}
 
 /// `MOM` stands for **M**ulti **O**rder healpix **M**aps.
 /// Here, it consists in a list of HEALPix cells (hash) at various depth (HEALPixordes) 
@@ -110,6 +137,8 @@ pub trait Mom<'a> {
   type ValueType: SkyMapValue + 'a;
   /// Type of iterator iterating on all (sorted!) zuniq values.
   type ZuniqIt: Iterator<Item = Self::ZUniqHType>;
+  /// Type of the iterator iterating on the MOM values.
+  type ValuesIt: Iterator<Item = &'a Self::ValueType>;
   /// Type of iterator iterating on all (sorted!) entries.
   /// # Remark
   /// We could have defined `Iterator<Item = &'a (Self::ZUniqHType, Self::ValueType)>;`
@@ -119,6 +148,9 @@ pub trait Mom<'a> {
   /// Largest depth the MOM may contain.
   fn depth_max(&self) -> u8;
 
+  /// Returns the number of elements in the `mom`.
+  fn len(&self) -> usize;
+  
   /// Returns the entry, if any, containing the given HEALPix cell hash computed at the `Mom`
   /// maximum depth.
   fn get_cell_containing(&'a self, zuniq_at_depth_max: Self::ZUniqHType) -> Result<Option<(Self::ZUniqHType, &'a Self::ValueType)>, String> {
@@ -136,6 +168,9 @@ pub trait Mom<'a> {
   /// Returns all HEALPix zuniq hash, ordered following the z-order curve.
   fn zuniqs(&'a self) -> Self::ZuniqIt;
 
+  /// Returns all values associated with HEALPix cells, ordered by increasing cell hash number.
+  fn values(&'a self) -> Self::ValuesIt;
+  
   /// Returns all entries, i.e. HEALPix zuniq hash / value tuples, ordered following the z-order curve.
   fn entries(&'a self) -> Self::EntriesIt;
 
