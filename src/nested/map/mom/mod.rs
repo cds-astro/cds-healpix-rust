@@ -75,8 +75,7 @@ pub trait ZUniqHashT:
   fn depth_from_zuniq(zuniq: Self) -> u8 {
     let n_trailing_zero = zuniq.trailing_zeros() as u8;
     let delta_depth = Self::div_by_dim(n_trailing_zero);
-    let depth = Self::MAX_DEPTH - delta_depth;
-    depth
+    Self::MAX_DEPTH - delta_depth
   }
 
   /// Transforms a `depth` and `hash value` tuple into a `zuniq`.

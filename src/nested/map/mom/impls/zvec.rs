@@ -1,4 +1,3 @@
-use std::os::linux::raw::stat;
 use std::{iter::Map, slice::Iter};
 
 use super::super::{
@@ -194,17 +193,16 @@ where
 
 #[cfg(test)]
 mod tests {
-  use std::{f64::consts::PI, path::Path};
+  use std::f64::consts::PI;
 
   use mapproj::pseudocyl::mol::Mol;
-  use num::integer::Roots;
 
   use crate::{
     n_hash,
     nested::map::{
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-      mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
-      skymap::{SkyMap, SkyMapEnum},
+      mom::{impls::zvec::MomVecImpl, ZUniqHashT},
+      skymap::SkyMapEnum,
     },
   };
 
@@ -246,7 +244,7 @@ mod tests {
             .collect::<Vec<(u64, f64)>>(),
         };
 
-        to_mom_png_file::<'_, _, Mol>(
+        to_mom_png_file::<'_, _, Mol, _>(
           &mom,
           (1600, 800),
           None,
@@ -255,7 +253,7 @@ mod tests {
           Some(PosConversion::EqMap2GalImg),
           None,
           Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
-          Path::new("test/resources/skymap/mom.png"),
+          "test/resources/skymap/mom.png",
           false,
         )
         .unwrap();
@@ -325,7 +323,7 @@ mod tests {
             .collect::<Vec<(u64, f64)>>(),
         };
 
-        to_mom_png_file::<'_, _, Mol>(
+        to_mom_png_file::<'_, _, Mol, _>(
           &mom,
           (1600, 800),
           None,
@@ -334,7 +332,7 @@ mod tests {
           Some(PosConversion::EqMap2GalImg),
           None,
           Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
-          Path::new("test/resources/skymap/mom.png"),
+          "test/resources/skymap/mom.png",
           false,
         )
         .unwrap();

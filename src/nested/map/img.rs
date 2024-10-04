@@ -615,7 +615,7 @@ where
       if let Some(lonlat) = img2cel.img2lonlat(&ImgXY::new(x as f64, y as f64)) {
         let (lon, lat) = imgpos2mappos(lonlat.lon(), lonlat.lat());
         let idx = hpx.hash(lon, lat);
-        let color = if let Some((z_, val)) = mom
+        let color = if let Some((_, val)) = mom
           .get_cell_containing_unsafe(M::ZUniqHType::to_zuniq(depth, M::ZUniqHType::from_u64(idx)))
         {
           color_map.eval_continuous(color_map_func.value(val.to_f64()))
@@ -848,7 +848,7 @@ where
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn to_mom_png_file<'a, M, P>(
+pub fn to_mom_png_file<'a, M, P, A>(
   mom: &'a M,
   img_size: (u16, u16),
   proj: Option<P>,
@@ -857,17 +857,18 @@ pub fn to_mom_png_file<'a, M, P>(
   pos_convert: Option<PosConversion>,
   color_map: Option<Gradient>,
   color_map_func_type: Option<ColorMapFunctionType>,
-  path: &Path,
+  path: A,
   view: bool,
 ) -> Result<(), Box<dyn Error>>
 where
   P: CanonicalProjection,
   M: Mom<'a>,
   M::ValueType: Val,
+  A: AsRef<Path>,
 {
   // Brackets are important to be sure the file is closed before trying to open it.
   {
-    let file = File::create(path)?;
+    let file = File::create(path.as_ref())?;
     let mut writer = BufWriter::new(file);
     to_mom_png(
       mom,
@@ -882,7 +883,7 @@ where
     )?;
   }
   if view {
-    show_with_default_app(path.to_string_lossy().as_ref())?;
+    show_with_default_app(path.as_ref().to_string_lossy().as_ref())?;
   }
   Ok(())
 }
