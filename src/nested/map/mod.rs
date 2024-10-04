@@ -51,8 +51,9 @@ mod tests {
 
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
-  fn test_skymap() {
+  fn test_skymap_spec() {
     let path = "test/resources/skymap/skymap.fits";
+    // let path = "test/resources/skymap/gaiadr2.skymap.order10.fits";
     let skymap = SkyMapEnum::from_fits_file(path).unwrap();
     skymap
       .to_skymap_png_file::<Mol, _>(

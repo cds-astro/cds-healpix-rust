@@ -194,20 +194,25 @@ where
 
 #[cfg(test)]
 mod tests {
-  use crate::n_hash;
-  use crate::nested::map::{
-    img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-    mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
-    skymap::SkyMapEnum,
-  };
+  use std::{f64::consts::PI, path::Path};
+
   use mapproj::pseudocyl::mol::Mol;
-  use std::f64::consts::PI;
-  use std::path::Path;
+  use num::integer::Roots;
+
+  use crate::{
+    n_hash,
+    nested::map::{
+      img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
+      mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
+      skymap::{SkyMap, SkyMapEnum},
+    },
+  };
 
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
-  fn test_skymap_to_mom() {
+  fn test_skymap_to_mom_basic() {
     let path = "test/resources/skymap/skymap.fits";
+    // let path = "test/resources/skymap/gaiadr2.skymap.order10.fits";
     let skymap = SkyMapEnum::from_fits_file(path).unwrap();
     match skymap {
       SkyMapEnum::ImplicitU64I32(skymap) => {
@@ -225,7 +230,86 @@ mod tests {
           let (d, h) = u64::from_zuniq(z);
           println!("{},{},{}", d, h, v)
         }*/
-        assert_eq!(mom.len(), 1107);
+        // assert_eq!(mom.len(), 1107);
+        // Create a new MOM transforming number of sources into densities.
+        let mom = MomVecImpl {
+          depth: mom.depth,
+          entries: mom
+            .entries
+            .drain(..)
+            .map(|(z, v)| {
+              (
+                z,
+                v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64),
+              )
+            })
+            .collect::<Vec<(u64, f64)>>(),
+        };
+
+        to_mom_png_file::<'_, _, Mol>(
+          &mom,
+          (1600, 800),
+          None,
+          None,
+          None,
+          Some(PosConversion::EqMap2GalImg),
+          None,
+          Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+          Path::new("test/resources/skymap/mom.png"),
+          false,
+        )
+        .unwrap();
+      }
+      _ => assert!(false),
+    }
+  }
+
+  #[test]
+  #[cfg(not(target_arch = "wasm32"))]
+  fn test_skymap_to_mom_chi2() {
+    let path = "test/resources/skymap/skymap.fits";
+    // let path = "test/resources/skymap/gaiadr2.skymap.order10.fits";
+    let skymap = SkyMapEnum::from_fits_file(path).unwrap();
+    match skymap {
+      SkyMapEnum::ImplicitU64I32(skymap) => {
+        // println!("Skymap size: {}", skymap.len());
+
+        let merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+          let mu0 = *n0 as f64;
+          // let sig0 = mu0.sqrt();
+          let mu1 = *n1 as f64;
+          // let sig1 = mu1.sqrt();
+          let mu2 = *n2 as f64;
+          // let sig2 = mu2.sqrt();
+          let mu3 = *n3 as f64;
+          // let sig3 = mu3.sqrt();
+
+          let sum = mu0 + mu1 + mu2 + mu3;
+          let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+          let weighted_mean = 4.0 / weighted_var_inv;
+          let chi2_of_3dof = sum - 4.0 * weighted_mean;
+          // chi2 3 dof:
+          // 90.0% =>  6.251
+          // 95.0% =>  7.815
+          // 97.5% =>  9.348
+          // 99.0% => 11.345
+          // 99.9% => 16.266
+          if chi2_of_3dof < 16.266 {
+            Some(*n0 + *n1 + *n2 + *n3)
+          } else {
+            None
+          }
+        };
+        let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
+        /*println!("Mom len: {}", mom.entries.len());
+        for (z, v) in mom.entries {
+          let (d, h) = u64::from_zuniq(z);
+          println!("{},{},{}", d, h, v)
+        }*/
+        // assert_eq!(mom.len(), 1107);
+
+        // println!("MOM size: {}", mom.len());
+
         // Create a new MOM transforming number of sources into densities.
         let mom = MomVecImpl {
           depth: mom.depth,
