@@ -117,7 +117,7 @@ fn write_str_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], s: &st
   debug_assert_eq!(dest.len(), 80);
   dest[0..8].copy_from_slice(&keyword[..]);
   dest[8..10].copy_from_slice(VALUE_INDICATOR);
-  let val = format!("'{:>8}'", s);
+  let val = format!("'{:<8}'", s);
   let val_bytes = val.as_bytes();
   dest[10..10 + val_bytes.len()].copy_from_slice(val_bytes);
 }
@@ -155,6 +155,7 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::fits_tform());
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
   it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
+  it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
   it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NSIDE   ", nside as u64);
   it.next().unwrap()[0..30].copy_from_slice(b"FIRSTPIX=                    0");

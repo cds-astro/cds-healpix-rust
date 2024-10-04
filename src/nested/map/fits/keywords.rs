@@ -432,7 +432,11 @@ impl SkymapKeywordsMap {
     }
   }
 
-  pub(super) fn check_coordsys(&self, expected: CoordSys) -> Result<(), FitsError> {
+  pub(super) fn check_coordsys(
+    &self,
+    expected: CoordSys,
+    accept_not_found: bool,
+  ) -> Result<(), FitsError> {
     match self.get::<CoordSys>() {
       Some(SkymapKeywords::CoordSys(actual)) => {
         if *actual == expected {
@@ -445,9 +449,15 @@ impl SkymapKeywordsMap {
           })
         }
       }
-      None => Err(FitsError::MissingKeyword {
-        keyword: CoordSys::keyword_string(),
-      }),
+      None => {
+        if accept_not_found {
+          Ok(())
+        } else {
+          Err(FitsError::MissingKeyword {
+            keyword: CoordSys::keyword_string(),
+          })
+        }
+      }
       _ => unreachable!(), // since there is only one elem in CoorSys enum
     }
   }

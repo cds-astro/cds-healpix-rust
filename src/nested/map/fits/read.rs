@@ -126,7 +126,7 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
   // Check constant header params
   skymap_kws.check_pixtype()?; // = HEALPIX
   skymap_kws.check_ordering(Ordering::Nested)?; // So far we support only 'NESTED'
-  skymap_kws.check_coordsys(CoordSys::Cel)?; // So far we support only Celestial coordinates (not Galactic)
+  skymap_kws.check_coordsys(CoordSys::Cel, true)?; // So far we support only Celestial coordinates (not Galactic)
   skymap_kws.check_index_schema(IndexSchema::Implicit)?; // So far we support only 'IMLPLICIT'
   skymap_kws.check_firstpix(0)?;
   // Check number of columns
@@ -356,7 +356,7 @@ pub(super) fn get_str_val_no_quote(keyword_record: &[u8]) -> Result<&[u8], FitsE
   let mut it = get_left_trimmed_value(keyword_record).split_inclusive(|c| *c == b'\'');
   if let Some([b'\'']) = it.next() {
     if let Some([subslice @ .., b'\'']) = it.next() {
-      return Ok(subslice.trim_ascii_end());
+      return Ok(subslice.trim_ascii());
     }
   }
   let keyword_record = String::from_utf8_lossy(keyword_record)
