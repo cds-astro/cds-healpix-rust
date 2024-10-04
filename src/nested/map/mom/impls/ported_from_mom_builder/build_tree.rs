@@ -34,11 +34,11 @@
 //! 4. The recursion interrupts when we cannot merge (children group is incomplete or merge is
 //!    invalid) or we are at the root nodes.
 
-use crate::nested::mom::exclusive_option::ExclusiveOption;
-use crate::nested::mom::norder_leaves::NorderLeaves;
-use crate::nested::mom::state::merge_states::MergeStates;
-use crate::nested::mom::tree::{Tree, TreeMutRef};
-use crate::nested::mom::tree_config::TreeConfig;
+use super::exclusive_option::ExclusiveOption;
+use super::norder_leaves::NorderLeaves;
+use super::state::merge_states::MergeStates;
+use super::tree::{Tree, TreeMutRef};
+use super::tree_config::TreeConfig;
 use itertools::Itertools;
 
 /// A structure to build a tree from a fallible iterator over the leaf states.

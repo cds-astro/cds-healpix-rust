@@ -1,6 +1,6 @@
-use crate::nested::mom::state::merge_is_valid::MergeIsValid;
-use crate::nested::mom::state::merge_states::MergeStates;
-use crate::nested::mom::state::value::ValueState;
+use crate::nested::map::mom::impls::ported_from_mom_builder::state::merge_is_valid::MergeIsValid;
+use crate::nested::map::mom::impls::ported_from_mom_builder::state::merge_states::MergeStates;
+use super::ValueState;
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 

@@ -1,6 +1,6 @@
 //! Tree and related types.
 
-use crate::nested::mom::norder_leaves::NorderLeaves;
+use super::norder_leaves::NorderLeaves;
 
 /// Tree is a vector of [NorderLeaves] representing leaves at a given depth. Index denotes the norder
 /// (depth) of the tree.

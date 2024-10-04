@@ -1,6 +1,6 @@
 //! A data structure for storing the leaves of a tree of a given depth.
 
-use crate::nested::mom::error::Error;
+use super::error::Error;
 use std::ops::Range;
 
 /// A data structure for storing the leaves of a tree of a given depth. The leaves are stored as a

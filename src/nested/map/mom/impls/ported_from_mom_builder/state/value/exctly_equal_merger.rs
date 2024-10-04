@@ -1,5 +1,5 @@
-use crate::nested::mom::state::merge_states::MergeStates;
-use crate::nested::mom::state::value::value_state::ValueState;
+use crate::nested::map::mom::impls::ported_from_mom_builder::state::merge_states::MergeStates;
+use super::value_state::ValueState;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 

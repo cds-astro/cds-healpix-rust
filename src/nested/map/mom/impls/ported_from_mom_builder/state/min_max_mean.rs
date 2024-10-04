@@ -1,5 +1,5 @@
-use crate::nested::mom::state::merge_is_valid::MergeIsValid;
-use crate::nested::mom::state::merge_states::MergeStates;
+use super::merge_is_valid::MergeIsValid;
+use super::merge_states::MergeStates;
 use serde::{Deserialize, Serialize};
 use num_traits::Float;
 
