@@ -42,6 +42,8 @@ colorous = "1.0"
 mapproj = "0.3"
 png = "0.17"
 flate2 = "1.0" # Compression/decompression
+itertools = "0.13" # Added for MOM
+serde = "1" # MOM serialization/deserialization
 
 [dev-dependencies]
 criterion = "0.4"
