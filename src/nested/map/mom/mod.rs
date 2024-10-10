@@ -15,7 +15,7 @@ use num::PrimInt;
 
 use super::{
   HHash,
-  skymap::SkyMapValue
+  skymap::{SkyMap, SkyMapValue}
 };
 
 pub mod impls;
@@ -208,6 +208,32 @@ pub trait Mom<'a> {
     Ok(())
   }
 
+  /// # Params
+  /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
+  /// (i.e. the 4 cells belonging to a same direct parent cell).
+  /// The function decide whether value are merge (and how they are merged) or not returning
+  ///either `Some` or `None`.
+  fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
+    where
+      S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
+      M: Fn(&Self::ValueType, &Self::ValueType, &Self::ValueType, &Self::ValueType) -> Option<Self::ValueType>,
+      Self::ValueType: 's;
+  
+
+  /*
+  fn merge(self, rhs: Self, split: S, op: O) -> Self
+    where
+      // Split a parent cell into for siblings
+      S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
+      // Merge the values of a same cell from both MOMs
+      O: Fn(Self::ValueType, Self::ValueType) -> Self::ValuesIt,
+      // Performs a post-merge operation?
+      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Self::ValueType,
+  {
+    // get both owned iterators
+  }
+  */
+  
 }
 
 

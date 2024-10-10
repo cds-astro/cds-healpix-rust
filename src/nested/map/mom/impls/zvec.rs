@@ -98,6 +98,55 @@ where
   fn entries(&'a self) -> Self::EntriesIt {
     self.entries.iter().map(|(z, v)| (*z, v))
   }
+
+  /// # Params
+  /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
+  /// (i.e. the 4 cells belonging to a same direct parent cell).
+  /// The function decide whether value are merge (and how they are merged) or not returning
+  ///either `Some` or `None`.
+  fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
+  where
+    S: SkyMap<'s, HashType = Z, ValueType = V>,
+    M: Fn(&V, &V, &V, &V) -> Option<V>,
+    V: 's,
+  {
+    let depth = skymap.depth();
+    let mut entries: Vec<(Z, V)> = Vec::with_capacity(skymap.len());
+    let mut expected_next_hash = Z::zero();
+    for (h, v) in skymap.entries() {
+      // To avoid the clone() here, we must accept an owned skymap
+      // with an iterator (like Drain) iterating over the owned values.
+      entries.push((Z::to_zuniq(depth, h), v.clone()));
+      // Check that the value of the cell was the expected one and that
+      // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
+      // (among the 4 possible values 0, 1, 2 and 3).
+      if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+        // Appel recursion qui prends les 3 dernière valeurs!!
+        // Tente des les combiner avant de mes retirer de la stack!!
+        let n = entries.len();
+        if let Some(combined_value) = merger(
+          &entries[n - 4].1, // sibling 0
+          &entries[n - 3].1, // sibling 1
+          &entries[n - 2].1, // sibling 2
+          &entries[n - 1].1, // sibling 3
+        ) {
+          let _ = entries.pop();
+          let _ = entries.pop();
+          let _ = entries.pop();
+          // Unwrap ok here since we are sure that the array contained at least 4 entries
+          // (we access them just above).
+          let _ = entries.pop().unwrap();
+          let new_zuniq = Z::to_zuniq(depth - 1, h >> 2);
+          entries.push((new_zuniq, combined_value));
+          Self::from_skymap_recursive(&mut entries, &merger);
+        }
+      } else if h & Z::LAST_LAYER_MASK == Z::zero() {
+        expected_next_hash = h;
+      }
+      expected_next_hash += Z::one();
+    }
+    Self { depth, entries }
+  }
 }
 
 impl<Z, V> MomVecImpl<Z, V>
@@ -105,6 +154,7 @@ where
   Z: ZUniqHashT,
   V: SkyMapValue,
 {
+  /*
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
   /// (i.e. the 4 cells belonging to a same direct parent cell).
@@ -152,7 +202,7 @@ where
       expected_next_hash += Z::one();
     }
     Self { depth, entries }
-  }
+  }*/
 
   fn from_skymap_recursive<'s, M>(stack: &mut Vec<(Z, V)>, merger: &M)
   where
@@ -201,7 +251,7 @@ mod tests {
     n_hash,
     nested::map::{
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-      mom::{impls::zvec::MomVecImpl, ZUniqHashT},
+      mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
       skymap::SkyMapEnum,
     },
   };
