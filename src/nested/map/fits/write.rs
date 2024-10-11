@@ -2,7 +2,7 @@ use std::io::Write;
 
 use num_traits::ToBytes;
 
-use crate::{n_hash, nested::map::skymap::SkyMapValue, nside};
+use crate::{depth_from_n_hash_unsafe, n_hash, nested::map::skymap::SkyMapValue, nside};
 
 use super::error::FitsError;
 
@@ -22,7 +22,7 @@ pub fn write_implicit_skymap_fits<R: Write, T: SkyMapValue>(
   // since we already know it.
   // In the end, using monomorphisation, the binary code is duplicated so...
   let n_cells = values.len() as u64;
-  let depth = (values.len() / 12).trailing_zeros() as u8 >> 1;
+  let depth = depth_from_n_hash_unsafe(values.len());
   if n_cells != n_hash(depth) {
     return Err(FitsError::new_custom(format!(
       "Number of cell {} not compatible with an HEALPix depth of {}. Expected: {}.",

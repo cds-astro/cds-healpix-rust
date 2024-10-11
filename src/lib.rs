@@ -737,7 +737,7 @@ pub const fn depth_unsafe(nside: u32) -> u8 {
 /// - `depth`
 ///
 /// # Unsafe
-/// * Because we do not check that `n_hash` is a valid number of cells.  
+/// - Because we do not check that `n_hash` is a valid number of cells.  
 ///
 /// # Examples
 ///

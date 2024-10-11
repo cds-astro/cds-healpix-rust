@@ -231,7 +231,7 @@ pub trait Mom<'a>: Sized {
       M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>,
       Self::ValueType: 's;
   
-  fn merge<S,O,M>(self, rhs: Self, split: S, op: O, merge: M) -> Self
+  fn merge<L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
     where
       // Split a parent cell into for siblings
       S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
