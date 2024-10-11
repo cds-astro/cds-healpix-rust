@@ -202,7 +202,7 @@ impl FitsCard for TForm1 {
         )),
       }
     } else {
-      let (n, k) = val.split_at(1);
+      let (n, k) = val.split_at(val.len() - 1);
       let n_str = unsafe { str::from_utf8_unchecked(n) };
       let n = n_str
         .parse::<u32>()
