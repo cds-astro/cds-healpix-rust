@@ -129,7 +129,7 @@ impl ZUniqHashT for u64 {
 /// This last property allow for streaming processing and operations.
 /// In practice, we use the `zuniq` index: it encodes both the depth and the cell hash value
 /// and is built in such a way that the natural order follow the z-order curve order.  
-pub trait Mom<'a> {
+pub trait Mom<'a>: Sized {
   /// Type of the HEALPix zuniq hash value (mainly `u32` or `u64`).
   type ZUniqHType: ZUniqHashT;
   /// Type of the iterator iterating on the skymap values.
@@ -143,6 +143,8 @@ pub trait Mom<'a> {
   /// We could have defined `Iterator<Item = &'a (Self::ZUniqHType, Self::ValueType)>;`
   /// but it would have limited the possible implementations (e.g. using 2 vectors and the `zip` operation.
   type EntriesIt: Iterator<Item = (Self::ZUniqHType, &'a Self::ValueType)>;
+  /// Type of iterator iterating on all (sorted!) owned entries.
+  type OwnedEntriesIt: Iterator<Item = (Self::ZUniqHType, Self::ValueType)>;
 
   /// Largest depth the MOM may contain.
   fn depth_max(&self) -> u8;
@@ -172,6 +174,8 @@ pub trait Mom<'a> {
   
   /// Returns all entries, i.e. HEALPix zuniq hash / value tuples, ordered following the z-order curve.
   fn entries(&'a self) -> Self::EntriesIt;
+  
+  fn owned_entries(self) -> Self::OwnedEntriesIt;
 
   /// Check if the gieven `zuniq` depth is the MOM maximum depth.
   fn check_zuniq_depth_is_depth_max(&self, zuniq_at_depth_max: Self::ZUniqHType) -> Result<(), String> {
@@ -212,16 +216,22 @@ pub trait Mom<'a> {
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
   /// (i.e. the 4 cells belonging to a same direct parent cell).
   /// The function decide whether value are merge (and how they are merged) or not returning
-  ///either `Some` or `None`.
+  /// either `Some` or `None`.
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
     where
       S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
       M: Fn(&Self::ValueType, &Self::ValueType, &Self::ValueType, &Self::ValueType) -> Option<Self::ValueType>,
       Self::ValueType: 's;
-  
 
-  /*
-  fn merge(self, rhs: Self, split: S, op: O) -> Self
+  /// # Params
+  /// * `M`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
+  fn from_skymap<'s, S, M>(skymap: S, merger: M) -> Self
+    where
+      S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
+      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>,
+      Self::ValueType: 's;
+  
+  fn merge<S,O,M>(self, rhs: Self, split: S, op: O, merge: M) -> Self
     where
       // Split a parent cell into for siblings
       S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
@@ -231,8 +241,9 @@ pub trait Mom<'a> {
       M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Self::ValueType,
   {
     // get both owned iterators
+    todo!()
   }
-  */
+
   
 }
 

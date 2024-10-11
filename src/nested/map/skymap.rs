@@ -7,6 +7,7 @@ use std::{
   ops::{Deref, RangeInclusive},
   path::Path,
   slice::Iter,
+  vec::IntoIter,
 };
 
 use colorous::Gradient;
@@ -108,8 +109,8 @@ pub trait SkyMap<'a> {
   /// which requires `nightly builds`.
   /// In the case of `implicit` skymaps, a solution is to use `enumerate`.
   type EntriesIt: Iterator<Item = (Self::HashType, &'a Self::ValueType)>;
-  // Type of the iterator iterating over the skymap owned entries.
-  // type DrainEntriesIt: Iterator<Item = (Self::HashType, Self::ValueType)>;
+  /// Type of iterator iterating on owned entries.
+  type OwnedEntriesIt: Iterator<Item = (Self::HashType, Self::ValueType)>;
 
   /// Depth (<=> HEALPix order) of the skymap.
   fn depth(&self) -> u8;
@@ -133,8 +134,8 @@ pub trait SkyMap<'a> {
   /// Returns all entries, i.e. HEALPix cell hash / value tuples, ordered by increasing cell hash number.
   fn entries(&'a self) -> Self::EntriesIt;
 
-  // In case we want to build mom from complex type that are costly to clone.
-  // fn drain_entries(self) -> Self::DrainEntriesIt;
+  /// In case we want to build mom from complex type that are costly to clone.
+  fn owned_entries(self) -> Self::OwnedEntriesIt;
 }
 
 pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
@@ -165,6 +166,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
   type ValueType = V;
   type ValuesIt = Iter<'a, Self::ValueType>;
   type EntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &V)) -> (H, &V)>;
+  type OwnedEntriesIt = Map<Enumerate<IntoIter<Self::ValueType>>, fn((usize, V)) -> (H, V)>;
 
   fn depth(&self) -> u8 {
     self.depth
@@ -191,6 +193,15 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
       .values
       .deref()
       .iter()
+      .enumerate()
+      .map(move |(h, v)| (H::from_usize(h), v))
+  }
+
+  fn owned_entries(self) -> Self::OwnedEntriesIt {
+    self
+      .values
+      .to_vec()
+      .into_iter()
       .enumerate()
       .map(move |(h, v)| (H::from_usize(h), v))
   }
