@@ -231,18 +231,19 @@ pub trait Mom<'a>: Sized {
       M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>,
       Self::ValueType: 's;
   
-  fn merge<L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
+  fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
     where
+      L: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
+      R: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
       // Split a parent cell into for siblings
       S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
       // Merge the values of a same cell from both MOMs
-      O: Fn(Self::ValueType, Self::ValueType) -> Self::ValuesIt,
-      // Performs a post-merge operation?
-      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Self::ValueType,
-  {
-    // get both owned iterators
-    todo!()
-  }
+      // or decide what to do is one of the MOM has a value and the other does not
+      // (the (None, None) must never be called).
+      // This allow for various types of JOIN (inner, left, right, full).
+      O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValuesIt>,
+      // Possibly performs a post-merge operation.
+      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>;
 
   
 }

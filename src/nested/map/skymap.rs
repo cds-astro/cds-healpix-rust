@@ -172,12 +172,12 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
     self.depth
   }
 
-  fn len(&self) -> usize {
-    self.values.len()
-  }
-
   fn is_implicit(&self) -> bool {
     true
+  }
+
+  fn len(&self) -> usize {
+    self.values.len()
   }
 
   fn get(&self, hash: Self::HashType) -> &Self::ValueType {
@@ -204,6 +204,73 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
       .into_iter()
       .enumerate()
       .map(move |(h, v)| (H::from_usize(h), v))
+  }
+}
+
+pub struct ImplicitSkyMapArrayRef<'a, H: HHash, V: SkyMapValue> {
+  depth: u8,
+  values: &'a [V],
+  _htype: PhantomData<H>,
+}
+impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArrayRef<'a, H, V> {
+  /// WARNING: we assume that the coherency between the depth and the number of elements in the
+  ///array has already been tested.
+  pub fn new(depth: u8, values: &'a [V]) -> Self {
+    assert_eq!(
+      n_hash(depth) as usize,
+      values.deref().len(),
+      "Wrong implicit skymap size. Epecgted: {}. Actual: {}.",
+      n_hash(depth),
+      values.len()
+    );
+    Self {
+      depth,
+      values,
+      _htype: PhantomData,
+    }
+  }
+}
+impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArrayRef<'a, H, V> {
+  type HashType = H;
+  type ValueType = V;
+  type ValuesIt = Iter<'a, Self::ValueType>;
+  type EntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &V)) -> (H, &V)>;
+  type OwnedEntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &V)) -> (H, V)>;
+
+  fn depth(&self) -> u8 {
+    self.depth
+  }
+
+  fn is_implicit(&self) -> bool {
+    true
+  }
+
+  fn len(&self) -> usize {
+    self.values.len()
+  }
+
+  fn get(&self, hash: Self::HashType) -> &Self::ValueType {
+    &self.values.deref()[hash.as_()]
+  }
+
+  fn values(&'a self) -> Self::ValuesIt {
+    self.values.deref().iter()
+  }
+
+  fn entries(&'a self) -> Self::EntriesIt {
+    self
+      .values
+      .iter()
+      .enumerate()
+      .map(move |(h, v)| (H::from_usize(h), v))
+  }
+
+  fn owned_entries(self) -> Self::OwnedEntriesIt {
+    self
+      .values
+      .iter()
+      .enumerate()
+      .map(move |(h, v)| (H::from_usize(h), v.clone()))
   }
 }
 

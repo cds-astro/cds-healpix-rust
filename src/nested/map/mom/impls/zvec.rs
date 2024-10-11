@@ -204,6 +204,52 @@ where
     }
     Self { depth, entries }
   }
+
+  fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
+  where
+    L: Mom<'s, ZUniqHType = Z, ValueType = V>,
+    R: Mom<'s, ZUniqHType = Z, ValueType = V>,
+    S: Fn(
+      Self::ValueType,
+    ) -> (
+      Self::ValueType,
+      Self::ValueType,
+      Self::ValueType,
+      Self::ValueType,
+    ),
+    O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValuesIt>,
+    M: Fn(
+      Self::ValueType,
+      Self::ValueType,
+      Self::ValueType,
+      Self::ValueType,
+    ) -> Result<
+      Self::ValueType,
+      (
+        Self::ValueType,
+        Self::ValueType,
+        Self::ValueType,
+        Self::ValueType,
+      ),
+    >,
+  {
+    struct DHZV<ZZ, VV> {
+      d: u8,
+      h: ZZ,
+      z: ZZ,
+      v: VV,
+    }
+    let zv_to_dhzv = |(z, v)| {
+      let (d, h) = Self::ZUniqHType::from_zuniq(z);
+      DHZV { d, h, z, v }
+    };
+    let mut stack: Vec<(Z, V)> = Vec::with_capacity(lhs.len() + rhs.len());
+    let mut it_left = lhs.owned_entries();
+    let mut it_right = rhs.owned_entries();
+    let mut left = it_left.next().map(zv_to_dhzv);
+    let mut right = it_right.next().map(zv_to_dhzv);
+    todo!()
+  }
 }
 
 impl<Z, V> MomVecImpl<Z, V>
