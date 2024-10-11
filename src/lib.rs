@@ -709,7 +709,7 @@ pub const fn is_depth(depth: u8) -> bool {
 /// ```rust
 /// use cdshealpix::{nside, depth};
 ///
-/// for d in 0..29 {
+/// for d in 0..=29 {
 ///     assert_eq!(d, depth(nside(d as u8)));
 /// }
 /// ```
@@ -724,6 +724,34 @@ pub fn depth(nside: u32) -> u8 {
 #[inline]
 pub const fn depth_unsafe(nside: u32) -> u8 {
   nside.trailing_zeros() as u8
+}
+
+/// Returns, for the given `n_hash` i.e. number of cells, the number of
+/// subdivision of a base-resolution cell (i.e. the depth).
+/// For the NESTED scheme only.
+///
+/// # Input
+/// - `n_hash` must be a power of 2 in `[12, 12*4^29]`
+///
+/// # Output
+/// - `depth`
+///
+/// # Unsafe
+/// * Because we do not check that `n_hash` is a valid number of cells.  
+///
+/// # Examples
+///
+/// ```rust
+/// use cdshealpix::{n_hash, depth_from_n_hash_unsafe};
+///
+/// for d in 0..=29_u8 {
+///     assert_eq!(d, depth_from_n_hash_unsafe(n_hash(d)));
+/// }
+/// ```
+#[inline]
+pub fn depth_from_n_hash_unsafe(n_hash: u64) -> u8 {
+  // 12 = 0b1100 so we have to remove the 2 unset bits
+  ((n_hash.trailing_zeros() - 2) >> 1) as u8
 }
 
 #[inline]
