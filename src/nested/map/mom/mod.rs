@@ -8,8 +8,8 @@ use std::{
   cmp::Ordering,
   fmt::{Debug, Display},
   mem,
+  ops::AddAssign,
 };
-use std::ops::AddAssign;
 
 use num::PrimInt;
 

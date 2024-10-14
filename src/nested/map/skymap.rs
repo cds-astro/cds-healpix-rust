@@ -218,7 +218,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArrayRef<'a, H, V> {
   pub fn new(depth: u8, values: &'a [V]) -> Self {
     assert_eq!(
       n_hash(depth) as usize,
-      values.deref().len(),
+      values.len(),
       "Wrong implicit skymap size. Epecgted: {}. Actual: {}.",
       n_hash(depth),
       values.len()
@@ -250,11 +250,11 @@ impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArr
   }
 
   fn get(&self, hash: Self::HashType) -> &Self::ValueType {
-    &self.values.deref()[hash.as_()]
+    &self.values[hash.as_()]
   }
 
   fn values(&'a self) -> Self::ValuesIt {
-    self.values.deref().iter()
+    self.values.iter()
   }
 
   fn entries(&'a self) -> Self::EntriesIt {

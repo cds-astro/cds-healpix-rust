@@ -1,4 +1,3 @@
-use std::os::linux::raw::stat;
 use std::{iter::Map, slice::Iter, vec::IntoIter};
 
 use super::super::{
@@ -205,7 +204,8 @@ where
     Self { depth, entries }
   }
 
-  fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
+  ///! WARNING: No yet implemented!
+  fn merge<'s, L, R, S, O, M>(_lhs: L, _rhs: R, _split: S, _op: O, _merge: M) -> Self
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
     R: Mom<'s, ZUniqHType = Z, ValueType = V>,
@@ -233,7 +233,7 @@ where
       ),
     >,
   {
-    struct DHZV<ZZ, VV> {
+    /*struct DHZV<ZZ, VV> {
       d: u8,
       h: ZZ,
       z: ZZ,
@@ -247,7 +247,7 @@ where
     let mut it_left = lhs.owned_entries();
     let mut it_right = rhs.owned_entries();
     let mut left = it_left.next().map(zv_to_dhzv);
-    let mut right = it_right.next().map(zv_to_dhzv);
+    let mut right = it_right.next().map(zv_to_dhzv);*/
     todo!()
   }
 }
