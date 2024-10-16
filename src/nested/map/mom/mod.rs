@@ -231,17 +231,20 @@ pub trait Mom<'a>: Sized {
       M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>,
       Self::ValueType: 's;
   
+  // This is a first version, but:
+  // * the pixel depth and hash value should probably be passed to the 'split' method
+  //   (in case the splitting strategy depends on the sub-cell, i.e. splitting a list of positions
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
     where
       L: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
       R: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      // Split a parent cell into for siblings
+      // Split a parent cell into four siblings
       S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
       // Merge the values of a same cell from both MOMs
       // or decide what to do is one of the MOM has a value and the other does not
       // (the (None, None) must never be called).
       // This allow for various types of JOIN (inner, left, right, full).
-      O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValuesIt>,
+      O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValueType>,
       // Possibly performs a post-merge operation.
       M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>;
 
@@ -249,21 +252,144 @@ pub trait Mom<'a>: Sized {
 }
 
 
+#[cfg(test)]
+mod tests {
+  use mapproj::pseudocyl::mol::Mol;
+  use crate::nested::map::img::to_mom_png_file;
 
-/*
+  use super::{
+    Mom,
+    impls::zvec::MomVecImpl,
+    super::{
+      img::{ColorMapFunctionType, PosConversion},
+      skymap::SkyMapEnum,
+    }
+  };
 
-pub struct Mom {
-  pub depth_max: u8,
-  pub elems: MomElems,
+  #[test]
+  #[cfg(not(target_arch = "wasm32"))]
+  fn test_mom_diff_spec() {
+    let path = "test/resources/skymap/skymap.2mass.depth6.fits";
+    let skymap_2mass = SkyMapEnum::from_fits_file(path).unwrap();
+    let path = "test/resources/skymap/skymap.gaiadr3.depth6.fits";
+    let skymap_gaia = SkyMapEnum::from_fits_file(path).unwrap();
+
+    let chi2_merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+      let mu0 = *n0 as f64;
+      // let sig0 = mu0.sqrt();
+      let mu1 = *n1 as f64;
+      // let sig1 = mu1.sqrt();
+      let mu2 = *n2 as f64;
+      // let sig2 = mu2.sqrt();
+      let mu3 = *n3 as f64;
+      // let sig3 = mu3.sqrt();
+
+      let sum = mu0 + mu1 + mu2 + mu3;
+      let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+      let weighted_mean = 4.0 / weighted_var_inv;
+      let chi2_of_3dof = sum - 4.0 * weighted_mean;
+      // chi2 3 dof:
+      // 90.0% =>  6.251
+      // 95.0% =>  7.815
+      // 97.5% =>  9.348
+      // 99.0% => 11.345
+      // 99.9% => 16.266
+      if chi2_of_3dof < 16.266 {
+        Some(*n0 + *n1 + *n2 + *n3)
+      } else {
+        None
+      }
+    };
+
+    match (skymap_2mass, skymap_gaia) {
+      (SkyMapEnum::ImplicitU64I32(iskymap_2mass), SkyMapEnum::ImplicitU64I32(iskymap_gaia_dr3)) => {
+        let mom_2mass = MomVecImpl::from_skymap_ref(&iskymap_2mass, chi2_merger);
+        let mom_gaia = MomVecImpl::from_skymap_ref(&iskymap_gaia_dr3, chi2_merger);
+        // Transform count MOMs into PDF MOMs.
+        let n_tot_2mass = mom_2mass.values().sum::<i32>() as f64;
+        let n_tot_gaia = mom_gaia.values().sum::<i32>() as f64;
+        let mom_2mass = MomVecImpl::from(mom_2mass, |n| n as f64 / n_tot_2mass);
+        let mom_gaia = MomVecImpl::from(mom_gaia, |n| n as f64 / n_tot_gaia);
+
+        to_mom_png_file::<'_, _, Mol, _>(
+          &mom_2mass,
+          (1600, 800),
+          None,
+          None,
+          None,
+          Some(PosConversion::EqMap2GalImg),
+          None,
+          Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+          "test/resources/skymap/mom_2mass.png",
+          false,
+        )
+          .unwrap();
+        to_mom_png_file::<'_, _, Mol, _>(
+          &mom_gaia,
+          (1600, 800),
+          None,
+          None,
+          None,
+          Some(PosConversion::EqMap2GalImg),
+          None,
+          Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+          "test/resources/skymap/mom_gaia.png",
+          false,
+        )
+          .unwrap();
+        
+        
+        /*let split= |n: i32| {
+          let n_div_4 = n >> 2;
+          // Preserve the total value by possibly adding 1 to the 3 last cells
+          let mut a = (n_div_4 & 1 == 1);
+          let b = (n_div_4 & 2 == 2);
+          let c = (n_div_4 & 3 == 3);
+          a |= b;
+          let a = a as i32;
+          let b = b as i32;
+          let c = c as i32;
+          assert!(a == 0 || a == 1);
+          assert!(b == 0 || b == 1);
+          assert!(c == 0 || c == 1);
+          (n_div_4, n_div_4 + a, n_div_4 + b, n_div_4 + c)
+        };
+        */
+        let split = |pdf: f64| {
+          let pdf_div_4 = pdf / 4.0;
+          (pdf_div_4, pdf_div_4, pdf_div_4, pdf_div_4)
+        };
+        let op = |l: Option<f64>, r: Option<f64>| {
+          let l = l.unwrap_or(0.0);
+          let r = r.unwrap_or(0.0);
+          Some(l - r)
+          // Some(l)
+        };
+        let merge = |v1: f64, v2: f64, v3: f64, v4: f64| {
+          let sum = v1 + v2 + v3 + v4;
+          if sum.abs() < 1e-4 {
+            Ok(sum)
+          } else {
+            Err((v1, v2, v3, v4))
+          }
+          // Err((v1, v2, v3, v4))
+        };
+        let mom = MomVecImpl::merge(mom_2mass, mom_gaia, split, op, merge);
+        to_mom_png_file::<'_, _, Mol, _>(
+          &mom,
+          (1600, 800),
+          None,
+          None,
+          None,
+          Some(PosConversion::EqMap2GalImg),
+          None,
+          Some(ColorMapFunctionType::Linear), //Some(ColorMapFunctionType::LinearSqrt)
+          "test/resources/skymap/mreged_mom.png",
+          false,
+        )
+          .unwrap();
+      }
+      _ => assert!(false)
+    }
+  }
 }
-
-pub enum FitsMomElems {
-  U64U8(Vec<(u64, u8)>),
-  U64I16(Vec<(u64, i16)>),
-  U64I32(Vec<(u64, i32)>),
-  U64I64(Vec<(u64, i64)>),
-  U64F32(Vec<(u64, f32)>),
-  U64F64(Vec<(u64, f64)>),
-}
-
-*/

@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::{iter::Map, slice::Iter, vec::IntoIter};
 
 use super::super::{
@@ -205,7 +206,7 @@ where
   }
 
   ///! WARNING: No yet implemented!
-  fn merge<'s, L, R, S, O, M>(_lhs: L, _rhs: R, _split: S, _op: O, _merge: M) -> Self
+  fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
     R: Mom<'s, ZUniqHType = Z, ValueType = V>,
@@ -217,7 +218,7 @@ where
       Self::ValueType,
       Self::ValueType,
     ),
-    O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValuesIt>,
+    O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValueType>,
     M: Fn(
       Self::ValueType,
       Self::ValueType,
@@ -233,22 +234,267 @@ where
       ),
     >,
   {
-    /*struct DHZV<ZZ, VV> {
+    #[derive(Clone)]
+    struct DHZ<ZZ: ZUniqHashT> {
+      d: u8,
+      h: ZZ,
+      z: ZZ,
+    }
+    impl<ZZ: ZUniqHashT> DHZ<ZZ> {
+      fn new(d: u8, h: ZZ, z: ZZ) -> Self {
+        Self { d, h, z }
+      }
+      fn next(&self) -> Self {
+        Self::new(
+          self.d,
+          self.h + ZZ::one(),
+          ZZ::to_zuniq(self.d, self.h + ZZ::one()),
+        )
+      }
+    }
+    struct DHZV<ZZ: ZUniqHashT, VV> {
       d: u8,
       h: ZZ,
       z: ZZ,
       v: VV,
     }
+    impl<ZZ: ZUniqHashT, VV> DHZV<ZZ, VV> {
+      fn new(d: u8, h: ZZ, z: ZZ, v: VV) -> Self {
+        Self { d, h, z, v }
+      }
+    }
     let zv_to_dhzv = |(z, v)| {
       let (d, h) = Self::ZUniqHType::from_zuniq(z);
       DHZV { d, h, z, v }
     };
+    let depth = lhs.depth_max().max(rhs.depth_max());
     let mut stack: Vec<(Z, V)> = Vec::with_capacity(lhs.len() + rhs.len());
-    let mut it_left = lhs.owned_entries();
-    let mut it_right = rhs.owned_entries();
-    let mut left = it_left.next().map(zv_to_dhzv);
-    let mut right = it_right.next().map(zv_to_dhzv);*/
-    todo!()
+    let mut it_left = lhs.owned_entries().map(zv_to_dhzv);
+    let mut it_right = rhs.owned_entries().map(zv_to_dhzv);
+    let mut lstack: Vec<DHZV<Z, V>> = Vec::with_capacity(128);
+    let mut rstack: Vec<DHZV<Z, V>> = Vec::with_capacity(128);
+    let mut left: Option<DHZV<Z, V>> = it_left.next();
+    let mut right: Option<DHZV<Z, V>> = it_right.next();
+    let mut expected_next_dhz = DHZ::new(depth, Z::zero(), Z::to_zuniq(depth, Z::zero()));
+    let mut last_dhz_added = expected_next_dhz.clone();
+    loop {
+      match (left, right) {
+        (Some(l), Some(r)) => match l.d.cmp(&r.d) {
+          Ordering::Equal => match l.h.cmp(&r.h) {
+            Ordering::Equal => {
+              if let Some(v) = op(Some(l.v), Some(r.v)) {
+                last_dhz_added = DHZ::new(l.d, l.h, l.z);
+                stack.push((l.z, v));
+              }
+              left = if !lstack.is_empty() {
+                lstack.pop()
+              } else {
+                it_left.next()
+              };
+              right = if !rstack.is_empty() {
+                rstack.pop()
+              } else {
+                it_right.next()
+              };
+            }
+            Ordering::Less => {
+              if let Some(v) = op(Some(l.v), None) {
+                last_dhz_added = DHZ::new(l.d, l.h, l.z);
+                stack.push((l.z, v));
+              }
+              left = if !lstack.is_empty() {
+                lstack.pop()
+              } else {
+                it_left.next()
+              };
+              right = Some(r);
+            }
+            Ordering::Greater => {
+              if let Some(v) = op(None, Some(r.v)) {
+                last_dhz_added = DHZ::new(r.d, r.h, r.z);
+                stack.push((r.z, v));
+              }
+              right = if !rstack.is_empty() {
+                rstack.pop()
+              } else {
+                it_right.next()
+              };
+              left = Some(l);
+            }
+          },
+          Ordering::Less => {
+            // degrade r_hash to l_depth
+            // if equals, then split l (put in the stack)
+            let r_hash_at_l_depth = r.h >> (((r.d - l.d) << 1) as usize);
+            match l.h.cmp(&r_hash_at_l_depth) {
+              Ordering::Equal => {
+                let (v0, v1, v2, v3) = split(l.v);
+                let new_d = l.d + 1;
+                let new_h = l.h << 2;
+                lstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::three(),
+                  Z::to_zuniq(new_d, new_h + Z::three()),
+                  v3,
+                ));
+                lstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::two(),
+                  Z::to_zuniq(new_d, new_h + Z::two()),
+                  v2,
+                ));
+                lstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::one(),
+                  Z::to_zuniq(new_d, new_h + Z::one()),
+                  v1,
+                ));
+                left = Some(DHZV::new(new_d, new_h, Z::to_zuniq(new_d, new_h), v0));
+                right = Some(r);
+              }
+              Ordering::Less => {
+                if let Some(v) = op(Some(l.v), None) {
+                  last_dhz_added = DHZ::new(l.d, l.h, l.z);
+                  stack.push((l.z, v));
+                }
+                left = if !lstack.is_empty() {
+                  lstack.pop()
+                } else {
+                  it_left.next()
+                };
+                right = Some(r);
+              }
+              Ordering::Greater => {
+                if let Some(v) = op(None, Some(r.v)) {
+                  last_dhz_added = DHZ::new(r.d, r.h, r.z);
+                  stack.push((r.z, v));
+                }
+                right = if !rstack.is_empty() {
+                  rstack.pop()
+                } else {
+                  it_right.next()
+                };
+                left = Some(l);
+              }
+            }
+          }
+          Ordering::Greater => {
+            let l_has_at_r_depth = l.h >> (((l.d - r.d) << 1) as usize);
+            match l_has_at_r_depth.cmp(&r.h) {
+              Ordering::Equal => {
+                let (v0, v1, v2, v3) = split(r.v);
+                let new_d = r.d + 1;
+                let new_h = r.h << 2;
+                rstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::three(),
+                  Z::to_zuniq(new_d, new_h + Z::three()),
+                  v3,
+                ));
+                rstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::two(),
+                  Z::to_zuniq(new_d, new_h + Z::two()),
+                  v2,
+                ));
+                rstack.push(DHZV::new(
+                  new_d,
+                  new_h + Z::one(),
+                  Z::to_zuniq(new_d, new_h + Z::one()),
+                  v1,
+                ));
+                left = Some(l);
+                right = Some(DHZV::new(new_d, new_h, Z::to_zuniq(new_d, new_h), v0));
+              }
+              Ordering::Less => {
+                if let Some(v) = op(Some(l.v), None) {
+                  last_dhz_added = DHZ::new(l.d, l.h, l.z);
+                  stack.push((l.z, v));
+                }
+                left = if !lstack.is_empty() {
+                  lstack.pop()
+                } else {
+                  it_left.next()
+                };
+                right = Some(r);
+              }
+              Ordering::Greater => {
+                if let Some(v) = op(None, Some(r.v)) {
+                  last_dhz_added = DHZ::new(r.d, r.h, r.z);
+                  stack.push((r.z, v));
+                }
+                right = if !rstack.is_empty() {
+                  rstack.pop()
+                } else {
+                  it_right.next()
+                };
+                left = Some(l);
+              }
+            }
+          }
+        },
+        (None, None) => break, // Important to let this test here!!!
+        (mut left, None) => {
+          while let Some(l) = left {
+            if let Some(v) = op(Some(l.v), None) {
+              last_dhz_added = DHZ::new(l.d, l.h, l.z);
+              stack.push((l.z, v));
+            }
+            left = if !lstack.is_empty() {
+              lstack.pop()
+            } else {
+              it_left.next()
+            };
+            if last_dhz_added.z == expected_next_dhz.z {
+              if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+                Self::from_skymap_recursive(&mut stack, &merge);
+              } else {
+                expected_next_dhz = last_dhz_added.next();
+              }
+            } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
+              expected_next_dhz = last_dhz_added.next();
+            }
+          }
+          break;
+        }
+        (None, mut right) => {
+          while let Some(r) = right {
+            if let Some(v) = op(None, Some(r.v)) {
+              last_dhz_added = DHZ::new(r.d, r.h, r.z);
+              stack.push((r.z, v));
+            }
+            right = if !rstack.is_empty() {
+              rstack.pop()
+            } else {
+              it_right.next()
+            };
+            if last_dhz_added.z == expected_next_dhz.z {
+              if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+                Self::from_skymap_recursive(&mut stack, &merge);
+              } else {
+                expected_next_dhz = last_dhz_added.next();
+              }
+            } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
+              expected_next_dhz = last_dhz_added.next();
+            }
+          }
+          break;
+        }
+      }
+      if last_dhz_added.z == expected_next_dhz.z {
+        if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+          Self::from_skymap_recursive(&mut stack, &merge);
+        } else {
+          expected_next_dhz = last_dhz_added.next();
+        }
+      } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
+        expected_next_dhz = last_dhz_added.next();
+      }
+    }
+    Self {
+      depth,
+      entries: stack,
+    }
   }
 }
 
@@ -257,6 +503,16 @@ where
   Z: ZUniqHashT,
   V: SkyMapValue,
 {
+  pub fn from<M, F>(mom: M, map: F) -> Self
+  where
+    M: for<'a> Mom<'a, ZUniqHType = Z>,
+    F: Fn(<M as Mom>::ValueType) -> V,
+  {
+    let depth = mom.depth_max();
+    let entries: Vec<(Z, V)> = mom.owned_entries().map(|(z, v)| (z, map(v))).collect();
+    Self { depth, entries }
+  }
+
   fn from_skymap_ref_recursive<'s, M>(stack: &mut Vec<(Z, V)>, merger: &M)
   where
     M: Fn(&V, &V, &V, &V) -> Option<V>,
