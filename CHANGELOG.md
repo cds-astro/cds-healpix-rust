@@ -1,10 +1,25 @@
 # `cdshealpix` Change Log
 
+## 0.7.0
+
+Released 2024-10-16
+
+### Add
+
+* First support for Skymaps
+    + read from/write to FITS
+    + display in PNG
+* First support for zuniq based MOMs
+    + build from Skymap
+    + merge operation
+    + display in PNG 
+
+
 ## 0.6.10
 
 Released 2024-07-19
 
-## Bug correction
+### Bug correction
 
 * Values in `SMALLER_EDGE2OPEDGE_DIST` (used in `best_starting_depth`) were
   slightly overestimated due to a "moving" reference point for depth >= 2,
