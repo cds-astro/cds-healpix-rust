@@ -1858,4 +1858,14 @@ mod tests {
     assert!((d5_mas - 620.3647193082197).abs() < 1e-12);
     assert!((d6_mas - 591.2475292479544).abs() < 1e-12);
   }
+
+  #[test]
+  fn testok_pos_at_depth29() {
+    let ra_deg = 45.00432028915398_f64;
+    let de_deg = 0.021047763781174733_f64;
+    assert_eq!(
+      29_640_498_453,
+      nested::hash(29, ra_deg.to_radians(), de_deg.to_radians())
+    );
+  }
 }

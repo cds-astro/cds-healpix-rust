@@ -119,6 +119,16 @@ impl ZUniqHashT for u64 {
   }
 }
 
+/// Enum defining the 3 possibilities whe merging two nullable inputs:
+/// * Left: non-null LHS, null RHS 
+/// * Right: null LHS, non-null RHS
+/// * Both: non-null LHS, non-null RHS
+pub enum LhsRhsBoth<V> {
+  Left(V),
+  Right(V),
+  Both(V, V),
+}
+
 /// `MOM` stands for **M**ulti **O**rder healpix **M**aps.
 /// Here, it consists in a list of HEALPix cells (hash) at various depth (HEALPixordes) 
 /// with a value attached to each cell.
@@ -220,7 +230,7 @@ pub trait Mom<'a>: Sized {
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
     where
       S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      M: Fn(&Self::ValueType, &Self::ValueType, &Self::ValueType, &Self::ValueType) -> Option<Self::ValueType>,
+      M: Fn(u8, Self::ZUniqHType, [&Self::ValueType; 4]) -> Option<Self::ValueType>,
       Self::ValueType: 's;
 
   /// # Params
@@ -228,25 +238,33 @@ pub trait Mom<'a>: Sized {
   fn from_skymap<'s, S, M>(skymap: S, merger: M) -> Self
     where
       S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>,
+      M: Fn(u8, Self::ZUniqHType, [Self::ValueType; 4]) -> Result<Self::ValueType, [Self::ValueType; 4]>,
       Self::ValueType: 's;
   
-  // This is a first version, but:
-  // * the pixel depth and hash value should probably be passed to the 'split' method
-  //   (in case the splitting strategy depends on the sub-cell, i.e. splitting a list of positions
+  /// Merge two input MOMs to produce an output MOM.
+  /// # Params
+  /// * `lhs`: the Left Hand Side MOM
+  /// * `rhs`: the right Hand side MOM
+  /// * `split`: the operator splitting a lhs or rhs cell into its four direct siblings
+  ///     + the depth and hash value of the parent cell are provided in input.
+  ///     + together with the value of the cell to be split
+  /// * `op`: merge/mixe/join the values of a same cell from both input MOMs (or decide what to do
+  ///         when one of the MOM cell has a value and the other does not).
+  ///     + it allows for various types of JOIN (inner, left, right, full).
+  /// * `merge`: possibly performs a post-merge operation, considering the (four) siblings of the join operation.
+  ///     + the depth and hash value of the parent cell (if cells are merged) are provided in input,
+  ///     + together with the 4 values to be possibly merged in the parent cell.
+  ///     + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if 
+  ///       the merge does not occurs.
+  /// * `L`: type of the left MOM
+  /// * `R`: type of the right MOM
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
     where
       L: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
       R: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      // Split a parent cell into four siblings
-      S: Fn(Self::ValueType) -> (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType),
-      // Merge the values of a same cell from both MOMs
-      // or decide what to do is one of the MOM has a value and the other does not
-      // (the (None, None) must never be called).
-      // This allow for various types of JOIN (inner, left, right, full).
-      O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValueType>,
-      // Possibly performs a post-merge operation.
-      M: Fn(Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType) -> Result<Self::ValueType, (Self::ValueType, Self::ValueType, Self::ValueType, Self::ValueType)>;
+      S: Fn(u8, Self::ZUniqHType, Self::ValueType) -> [Self::ValueType; 4],
+      O: Fn(LhsRhsBoth<Self::ValueType>) -> Option<Self::ValueType>,
+      M: Fn(u8, Self::ZUniqHType, [Self::ValueType; 4]) -> Result<Self::ValueType, [Self::ValueType; 4]>;
 
   
 }
@@ -256,6 +274,7 @@ pub trait Mom<'a>: Sized {
 mod tests {
   use mapproj::pseudocyl::mol::Mol;
   use crate::nested::map::img::to_mom_png_file;
+  use crate::nested::map::mom::LhsRhsBoth;
 
   use super::{
     Mom,
@@ -274,7 +293,7 @@ mod tests {
     let path = "test/resources/skymap/skymap.gaiadr3.depth6.fits";
     let skymap_gaia = SkyMapEnum::from_fits_file(path).unwrap();
 
-    let chi2_merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+    let chi2_merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
       let mu0 = *n0 as f64;
       // let sig0 = mu0.sqrt();
       let mu1 = *n1 as f64;
@@ -355,24 +374,24 @@ mod tests {
           (n_div_4, n_div_4 + a, n_div_4 + b, n_div_4 + c)
         };
         */
-        let split = |pdf: f64| {
+        let split = |_depth: u8, _hash: u64, pdf: f64| {
           let pdf_div_4 = pdf / 4.0;
-          (pdf_div_4, pdf_div_4, pdf_div_4, pdf_div_4)
+          [pdf_div_4, pdf_div_4, pdf_div_4, pdf_div_4]
         };
-        let op = |l: Option<f64>, r: Option<f64>| {
-          let l = l.unwrap_or(0.0);
-          let r = r.unwrap_or(0.0);
-          Some(l - r)
-          // Some(l)
+        let op = |lrb: LhsRhsBoth<f64>| {
+          match lrb {
+            LhsRhsBoth::Left(l) => Some(l),
+            LhsRhsBoth::Right(r) => Some(r),
+            LhsRhsBoth::Both(l, r) => Some(l - r),
+          }
         };
-        let merge = |v1: f64, v2: f64, v3: f64, v4: f64| {
+        let merge = |_depth: u8, _hash: u64, [v1, v2, v3, v4]: [f64; 4]| {
           let sum = v1 + v2 + v3 + v4;
           if sum.abs() < 1e-4 {
             Ok(sum)
           } else {
-            Err((v1, v2, v3, v4))
+            Err([v1, v2, v3, v4])
           }
-          // Err((v1, v2, v3, v4))
         };
         let mom = MomVecImpl::merge(mom_2mass, mom_gaia, split, op, merge);
         to_mom_png_file::<'_, _, Mol, _>(

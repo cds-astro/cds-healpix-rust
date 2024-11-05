@@ -1,9 +1,8 @@
-use std::cmp::Ordering;
-use std::{iter::Map, slice::Iter, vec::IntoIter};
+use std::{cmp::Ordering, iter::Map, slice::Iter, vec::IntoIter};
 
 use super::super::{
   super::skymap::{SkyMap, SkyMapValue},
-  Mom, ZUniqHashT,
+  LhsRhsBoth, Mom, ZUniqHashT,
 };
 
 /// Implementation of a MOM in an ordered vector of `(zuniq, values)` tuples.
@@ -113,7 +112,7 @@ where
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
   where
     S: SkyMap<'s, HashType = Z, ValueType = V>,
-    M: Fn(&V, &V, &V, &V) -> Option<V>,
+    M: Fn(u8, Z, [&V; 4]) -> Option<V>,
     V: 's,
   {
     let depth = skymap.depth();
@@ -128,19 +127,21 @@ where
       // (among the 4 possible values 0, 1, 2 and 3).
       if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
         let n = entries.len();
+        let parent_depth = depth - 1;
+        let parent_h = h >> 2;
         if let Some(combined_value) = merger(
-          &entries[n - 4].1, // sibling 0
-          &entries[n - 3].1, // sibling 1
-          &entries[n - 2].1, // sibling 2
-          &entries[n - 1].1, // sibling 3
+          parent_depth,
+          parent_h,
+          [
+            &entries[n - 4].1, // sibling 0
+            &entries[n - 3].1, // sibling 1
+            &entries[n - 2].1, // sibling 2
+            &entries[n - 1].1, // sibling 3
+          ],
         ) {
-          let _ = entries.pop();
-          let _ = entries.pop();
-          let _ = entries.pop();
-          // Unwrap ok here since we are sure that the array contained at least 4 entries
-          // (we access them just above).
-          let _ = entries.pop().unwrap();
-          let new_zuniq = Z::to_zuniq(depth - 1, h >> 2);
+          // We are sure that the array contained at least 4 entries (we access them just above).
+          entries.truncate(4);
+          let new_zuniq = Z::to_zuniq(parent_depth, parent_h);
           entries.push((new_zuniq, combined_value));
           Self::from_skymap_ref_recursive(&mut entries, &merger);
         }
@@ -155,20 +156,7 @@ where
   fn from_skymap<'s, S, M>(skymap: S, merger: M) -> Self
   where
     S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
-    M: Fn(
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-    ) -> Result<
-      Self::ValueType,
-      (
-        Self::ValueType,
-        Self::ValueType,
-        Self::ValueType,
-        Self::ValueType,
-      ),
-    >,
+    M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
     Self::ValueType: 's,
   {
     let depth = skymap.depth();
@@ -184,13 +172,15 @@ where
         let (z2, v2) = entries.pop().unwrap();
         let (z1, v1) = entries.pop().unwrap();
         let (z0, v0) = entries.pop().unwrap();
-        match merger(v0, v1, v2, v3) {
+        let parent_depth = depth - 1;
+        let parent_h = h >> 2;
+        match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
           Ok(v_merged) => {
-            let z_merged = Z::to_zuniq(depth - 1, h >> 2);
+            let z_merged = Z::to_zuniq(parent_depth, parent_h);
             entries.push((z_merged, v_merged));
             Self::from_skymap_recursive(&mut entries, &merger);
           }
-          Err((v0, v1, v2, v3)) => {
+          Err([v0, v1, v2, v3]) => {
             entries.push((z0, v0));
             entries.push((z1, v1));
             entries.push((z2, v2));
@@ -210,29 +200,9 @@ where
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
     R: Mom<'s, ZUniqHType = Z, ValueType = V>,
-    S: Fn(
-      Self::ValueType,
-    ) -> (
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-    ),
-    O: Fn(Option<Self::ValueType>, Option<Self::ValueType>) -> Option<Self::ValueType>,
-    M: Fn(
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-      Self::ValueType,
-    ) -> Result<
-      Self::ValueType,
-      (
-        Self::ValueType,
-        Self::ValueType,
-        Self::ValueType,
-        Self::ValueType,
-      ),
-    >,
+    S: Fn(u8, Z, V) -> [V; 4],
+    O: Fn(LhsRhsBoth<V>) -> Option<V>,
+    M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
   {
     #[derive(Clone)]
     struct DHZ<ZZ: ZUniqHashT> {
@@ -282,7 +252,7 @@ where
         (Some(l), Some(r)) => match l.d.cmp(&r.d) {
           Ordering::Equal => match l.h.cmp(&r.h) {
             Ordering::Equal => {
-              if let Some(v) = op(Some(l.v), Some(r.v)) {
+              if let Some(v) = op(LhsRhsBoth::Both(l.v, r.v)) {
                 last_dhz_added = DHZ::new(l.d, l.h, l.z);
                 stack.push((l.z, v));
               }
@@ -298,7 +268,7 @@ where
               };
             }
             Ordering::Less => {
-              if let Some(v) = op(Some(l.v), None) {
+              if let Some(v) = op(LhsRhsBoth::Left(l.v)) {
                 last_dhz_added = DHZ::new(l.d, l.h, l.z);
                 stack.push((l.z, v));
               }
@@ -310,7 +280,7 @@ where
               right = Some(r);
             }
             Ordering::Greater => {
-              if let Some(v) = op(None, Some(r.v)) {
+              if let Some(v) = op(LhsRhsBoth::Right(r.v)) {
                 last_dhz_added = DHZ::new(r.d, r.h, r.z);
                 stack.push((r.z, v));
               }
@@ -328,7 +298,7 @@ where
             let r_hash_at_l_depth = r.h >> (((r.d - l.d) << 1) as usize);
             match l.h.cmp(&r_hash_at_l_depth) {
               Ordering::Equal => {
-                let (v0, v1, v2, v3) = split(l.v);
+                let [v0, v1, v2, v3] = split(l.d, l.h, l.v);
                 let new_d = l.d + 1;
                 let new_h = l.h << 2;
                 lstack.push(DHZV::new(
@@ -353,7 +323,7 @@ where
                 right = Some(r);
               }
               Ordering::Less => {
-                if let Some(v) = op(Some(l.v), None) {
+                if let Some(v) = op(LhsRhsBoth::Left(l.v)) {
                   last_dhz_added = DHZ::new(l.d, l.h, l.z);
                   stack.push((l.z, v));
                 }
@@ -365,7 +335,7 @@ where
                 right = Some(r);
               }
               Ordering::Greater => {
-                if let Some(v) = op(None, Some(r.v)) {
+                if let Some(v) = op(LhsRhsBoth::Right(r.v)) {
                   last_dhz_added = DHZ::new(r.d, r.h, r.z);
                   stack.push((r.z, v));
                 }
@@ -382,7 +352,7 @@ where
             let l_has_at_r_depth = l.h >> (((l.d - r.d) << 1) as usize);
             match l_has_at_r_depth.cmp(&r.h) {
               Ordering::Equal => {
-                let (v0, v1, v2, v3) = split(r.v);
+                let [v0, v1, v2, v3] = split(r.d, r.h, r.v);
                 let new_d = r.d + 1;
                 let new_h = r.h << 2;
                 rstack.push(DHZV::new(
@@ -407,7 +377,7 @@ where
                 right = Some(DHZV::new(new_d, new_h, Z::to_zuniq(new_d, new_h), v0));
               }
               Ordering::Less => {
-                if let Some(v) = op(Some(l.v), None) {
+                if let Some(v) = op(LhsRhsBoth::Left(l.v)) {
                   last_dhz_added = DHZ::new(l.d, l.h, l.z);
                   stack.push((l.z, v));
                 }
@@ -419,7 +389,7 @@ where
                 right = Some(r);
               }
               Ordering::Greater => {
-                if let Some(v) = op(None, Some(r.v)) {
+                if let Some(v) = op(LhsRhsBoth::Right(r.v)) {
                   last_dhz_added = DHZ::new(r.d, r.h, r.z);
                   stack.push((r.z, v));
                 }
@@ -436,7 +406,7 @@ where
         (None, None) => break, // Important to let this test here!!!
         (mut left, None) => {
           while let Some(l) = left {
-            if let Some(v) = op(Some(l.v), None) {
+            if let Some(v) = op(LhsRhsBoth::Left(l.v)) {
               last_dhz_added = DHZ::new(l.d, l.h, l.z);
               stack.push((l.z, v));
             }
@@ -459,7 +429,7 @@ where
         }
         (None, mut right) => {
           while let Some(r) = right {
-            if let Some(v) = op(None, Some(r.v)) {
+            if let Some(v) = op(LhsRhsBoth::Right(r.v)) {
               last_dhz_added = DHZ::new(r.d, r.h, r.z);
               stack.push((r.z, v));
             }
@@ -515,7 +485,7 @@ where
 
   fn from_skymap_ref_recursive<'s, M>(stack: &mut Vec<(Z, V)>, merger: &M)
   where
-    M: Fn(&V, &V, &V, &V) -> Option<V>,
+    M: Fn(u8, Z, [&V; 4]) -> Option<V>,
     V: 's,
   {
     let n = stack.len();
@@ -530,17 +500,23 @@ where
           && e2.0 == Z::to_zuniq(d0, h0 + Z::two())
           && e3.0 == Z::to_zuniq(d0, h0 + Z::three())
         {
+          let parent_depth = d0 - 1;
+          let parent_h = h0 >> 2;
           if let Some(combined_value) = merger(
-            &e0.1, // sibling 0
-            &e1.1, // sibling 1
-            &e2.1, // sibling 2
-            &e3.1, // sibling 3
+            parent_depth,
+            parent_h,
+            [
+              &e0.1, // sibling 0
+              &e1.1, // sibling 1
+              &e2.1, // sibling 2
+              &e3.1, // sibling 3
+            ],
           ) {
             let _ = stack.pop().unwrap();
             let _ = stack.pop().unwrap();
             let _ = stack.pop().unwrap();
             let _ = stack.pop().unwrap();
-            let new_zuniq = Z::to_zuniq(d0 - 1, h0 >> 2);
+            let new_zuniq = Z::to_zuniq(parent_depth, parent_h);
             stack.push((new_zuniq, combined_value));
             Self::from_skymap_ref_recursive(stack, merger);
           }
@@ -551,7 +527,7 @@ where
 
   fn from_skymap_recursive<'s, M>(stack: &mut Vec<(Z, V)>, merger: &M)
   where
-    M: Fn(V, V, V, V) -> Result<V, (V, V, V, V)>,
+    M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
     V: 's,
   {
     let n = stack.len();
@@ -570,13 +546,15 @@ where
           let (_, v2) = stack.pop().unwrap();
           let (_, v1) = stack.pop().unwrap();
           let (_, v0) = stack.pop().unwrap();
-          match merger(v0, v1, v2, v3) {
+          let parent_depth = d0 - 1;
+          let parent_h = h0 >> 2;
+          match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
             Ok(v_merged) => {
               let z_merged = Z::to_zuniq(d0 - 1, h0 >> 2);
               stack.push((z_merged, v_merged));
               Self::from_skymap_recursive(stack, merger);
             }
-            Err((v0, v1, v2, v3)) => {
+            Err([v0, v1, v2, v3]) => {
               stack.push((z0, v0));
               stack.push((z1, v1));
               stack.push((z2, v2));
@@ -612,7 +590,7 @@ mod tests {
     let skymap = SkyMapEnum::from_fits_file(path).unwrap();
     match skymap {
       SkyMapEnum::ImplicitU64I32(skymap) => {
-        let merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+        let merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
           let sum = *n0 + *n1 + *n2 + *n3;
           if sum < 1_000_000 {
             Some(sum)
@@ -670,7 +648,7 @@ mod tests {
       SkyMapEnum::ImplicitU64I32(skymap) => {
         // println!("Skymap size: {}", skymap.len());
 
-        let merger = |n0: &i32, n1: &i32, n2: &i32, n3: &i32| -> Option<i32> {
+        let merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
           let mu0 = *n0 as f64;
           // let sig0 = mu0.sqrt();
           let mu1 = *n1 as f64;

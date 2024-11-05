@@ -2,7 +2,8 @@
 name = "cdshealpix"
 version = "0.7.0"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.81"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 categories = ["algorithms", "science"] 

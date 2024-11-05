@@ -265,6 +265,8 @@ impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArr
       .map(move |(h, v)| (H::from_usize(h), v))
   }
 
+  // Make a owned_values method!!
+
   fn owned_entries(self) -> Self::OwnedEntriesIt {
     self
       .values
