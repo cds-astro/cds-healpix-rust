@@ -27,6 +27,7 @@ use self::{
 pub mod bmoc;
 pub mod gpu;
 pub mod map;
+// pub mod sort;
 pub mod zordercurve;
 
 // We use an array here since operations on f64 are not yet stable for `const fn` :o/
@@ -2447,7 +2448,7 @@ impl Layer {
     } else if n_in > 0
       || zone_vertices_hashs[0] >> shift == hash
       || zone_vertices_hashs[1] >> shift == hash
-      || zone_vertices_hashs[2] >> shift == hash
+      // || zone_vertices_hashs[2] >> shift == hash // Correspond to lon_max, lat_max, which should be excluded
       || zone_vertices_hashs[3] >> shift == hash
       || zone.crossed_vertically(l_n, b_n, b_s) // we may have false positive in the polar caps around n*PI/2
       || zone.crossed_vertically(l_s, b_n, b_s) // we may have false positive in the polar caps around n*PI/2
@@ -6708,6 +6709,32 @@ mod tests {
       10308, 10312, 10369, 10370, 10371, 10372, 10376, 11293, 11294, 11295, 11309, 11310, 11311,
       11313, 11314, 11315, 11316, 11320, 11329, 11330, 11331, 11332, 11336, 11393, 11394, 11395,
       11396, 11400,
+    ];
+    let actual_res_exact = zone_coverage(depth, lon_min, lat_min, lon_max, lat_max);
+    // to_aladin_moc(&actual_res_exact);
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_zone_5() {
+    let depth = 3;
+    let (lon_min, lat_min, lon_max, lat_max) = (
+      180_f64.to_radians(),
+      30_f64.to_radians(),
+      360.0_f64.to_radians(),
+      50_f64.to_radians(),
+    );
+    let expected_res_exact: [u64; 94] = [
+      85, 87, 135, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154,
+      155, 156, 157, 158, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173,
+      174, 176, 177, 178, 199, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215,
+      216, 217, 218, 219, 220, 221, 222, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
+      235, 236, 237, 238, 240, 241, 242, 315, 318, 319, 439, 444, 445, 446, 447, 503, 507, 508,
+      509, 510, 511,
     ];
     let actual_res_exact = zone_coverage(depth, lon_min, lat_min, lon_max, lat_max);
     // to_aladin_moc(&actual_res_exact);

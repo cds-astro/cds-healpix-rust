@@ -1,5 +1,18 @@
 # `cdshealpix` Change Log
 
+## 0.7.1
+
+Released 2024-11-08
+
+### Changed
+
+* Skymap/MOM modified to take into account @hombit feedbacks
+
+### Bug correction
+
+* Upper left corner of `zone_coverage` no more included in the output MOC
+
+
 ## 0.7.0
 
 Released 2024-10-16
