@@ -2507,7 +2507,7 @@ impl Layer {
     }
     // Common variable
     let cos_cone_lat = cone_lat.cos();
-    let shs_cone_radius = dbg!(to_squared_half_segment(cone_radius));
+    let shs_cone_radius = to_squared_half_segment(cone_radius);
     // Special case of very large radius: test the 12 base cells
     if !has_best_starting_depth(cone_radius) {
       let distances = largest_center_to_vertex_distances_with_radius(
@@ -2982,8 +2982,9 @@ impl Layer {
           ),
       );
       let root_layer = get(depth_start);
+      let center_hash_at_depth_start = root_layer.hash(cone_lon, cone_lat);
       let mut neigs: Vec<u64> = root_layer
-        .neighbours(root_layer.hash(cone_lon, cone_lat), true)
+        .neighbours(center_hash_at_depth_start, true)
         .values_vec()
         .iter()
         .filter(|neigh| {
@@ -3287,8 +3288,9 @@ impl Layer {
           ),
       );
       let root_layer = get(depth_start);
+      let center_hash_at_depth_start = root_layer.hash(cone_lon, cone_lat);
       let mut neigs: Vec<u64> = root_layer
-        .neighbours(root_layer.hash(cone_lon, cone_lat), true)
+        .neighbours(center_hash_at_depth_start, true)
         .values_vec()
         .iter()
         .map(h_to_h_and_shs(cone_lon, cone_lat, cos_cone_lat, root_layer))
@@ -4399,7 +4401,7 @@ fn h_to_h_and_shs(
     let (lon, lat) = layer.center(hash);
     (
       hash,
-      squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat),
+      squared_half_segment(lon - cone_lon, lat - cone_lat, lat.cos(), cos_cone_lat),
     )
   }
 }
@@ -4821,6 +4823,42 @@ mod tests {
       5.64323_f64.to_radians(),
     );
     let expected_res: [u64; 8] = [514, 515, 520, 521, 522, 705, 708, 709];
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_cone_approx_custom_bmoc_v2() {
+    let actual_res = cone_coverage_approx_custom(
+      6,
+      3,
+      8.401978_f64.to_radians(),
+      84.675171_f64.to_radians(),
+      0.0008_f64.to_radians(),
+    );
+    /*for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
+    let expected_res: [u64; 1] = [4075];
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    println!("----------");
+
+    let actual_res = cone_coverage_approx_custom(
+      6,
+      3,
+      8.401978_f64.to_radians(),
+      84.675171_f64.to_radians(),
+      0.0004_f64.to_radians(),
+    );
+    /*for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }*/
     assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);

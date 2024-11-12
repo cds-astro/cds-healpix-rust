@@ -1,5 +1,17 @@
 # `cdshealpix` Change Log
 
+## 0.7.2
+
+Released 2024-11-12
+
+### Bug correction
+
+* Wrong parameter (`cos(lon)` instead of `cos(lat)`) 
+  in `h_to_h_and_shs` method leading to possibly miss 
+  cells in cone/ring coverage in case of  cones/ring 
+  much smaller than requested HEALPix cells. 
+
+
 ## 0.7.1
 
 Released 2024-11-08
