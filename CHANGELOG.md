@@ -1,5 +1,20 @@
 # `cdshealpix` Change Log
 
+## 0.7.3
+
+Released 2024-11-19
+
+### Bug correction
+
+* Add more `zone_coverage` tests from feedbacks from @camposandro
+    + revert the modification introduced in v0.7.1
+      solving a problem but creating new ones
+    + improve the `zone_coverage` algorithm to 1- solve issues
+      on very wide zones and 2- remove spurious cells when a 
+      zone vertex is on the edge of an HEALPix cell
+
+
+
 ## 0.7.2
 
 Released 2024-11-12

@@ -15,6 +15,10 @@ impl Cone {
     Cone { center, radius }
   }
 
+  /*pub fn contains_radec(&self, (ra_rad, dec_rad): (f64, f64)) -> bool {
+    self.contains(&Coo3D::from_sph_coo(ra_rad, dec_rad))
+  }*/
+
   /// Returns the smallest cone enclosing the given input points.
   /// Retuns `None` if the radius is > to ~48.7 deg (since for a higher value we have to test the
   /// 12 base cells). We use this since the algorithm is not made to work with nonreflex cones (i.e.
