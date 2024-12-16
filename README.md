@@ -18,11 +18,12 @@ This library is an implementation in Rust of the HEALPix tesselation.
 This implementation has been made by the Strasbourg astronomical Data Centre (*Centre de Données astronomique de Strasbourg*, [CDS](http://cdsweb.u-strasbg.fr)).
 
 It is used in:
- * [Aladin Lite V3](https://github.com/cds-astro/aladin-lite/tree/webgl1)
+ * [Aladin Lite V3](https://github.com/cds-astro/aladin-lite)
  * [The CDS MOC library in Rust](https://github.com/cds-astro/cds-moc-rust) used in:
      + [MOCPy](https://github.com/cds-astro/mocpy), a Python wrapper to manipulate MOCs;
-     + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool for linux, MacOS and Windows;
-     + [MOCWasm](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/wasm), a WASM library to manipulate MOCs from web browsers.
+     + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool to manipulate MOCs on linux, MacOS and Windows;
+     + [MOCWasm](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/wasm), a WASM library to manipulate MOCs from web browsers;
+     + [MOCSet](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/set), a standalone command line tool to build, update and query a persistent set of MOCs.
  * CDS internal developments
  * *Please help me fill in this list*
 

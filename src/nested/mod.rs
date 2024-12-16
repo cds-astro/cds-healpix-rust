@@ -27,7 +27,7 @@ use self::{
 pub mod bmoc;
 pub mod gpu;
 pub mod map;
-// pub mod sort;
+pub mod sort;
 pub mod zordercurve;
 
 // We use an array here since operations on f64 are not yet stable for `const fn` :o/
