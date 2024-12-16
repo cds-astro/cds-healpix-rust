@@ -7,6 +7,8 @@ pub enum FitsError {
   /// IO error
   #[error("I/O error.")]
   Io(#[from] io::Error),
+  #[error("I/O error. Path: {path:}. Error: {err:?}.")]
+  IoWithPath { path: String, err: io::Error },
   #[error("Wrong FITS keyword. Expected: {expected:?}. Actual: {actual:?}).")]
   UnexpectedKeyword { expected: String, actual: String },
   #[error("Value indicator not found in keyword record '{keyword_record:?}'.")]

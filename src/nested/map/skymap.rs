@@ -1,20 +1,38 @@
 use std::{
   error::Error,
+  f64::consts::PI,
   fs::File,
   io::{BufReader, BufWriter, Read, Seek, Write},
   iter::{Enumerate, Map},
   marker::PhantomData,
-  ops::{Deref, RangeInclusive},
+  ops::{Add, AddAssign, Deref, RangeInclusive},
   path::Path,
   slice::Iter,
   vec::IntoIter,
 };
 
 use colorous::Gradient;
+use itertools::Itertools;
 use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
+use rayon::{
+  prelude::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+  },
+  ThreadPool,
+};
 
-use crate::{n_hash, nested::map::HHash};
+use crate::{
+  n_hash,
+  nested::{
+    get, hash,
+    map::{
+      fits::keywords::TForm1::I,
+      mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
+      HHash,
+    },
+  },
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::show_with_default_app;
@@ -24,7 +42,7 @@ use super::{
 };
 
 /// Trait marking the type of the values writable in a FITS skymap.
-pub trait SkyMapValue: ToBytes + Clone {
+pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone {
   /// FITS size, in bytes, of a value.
   fn fits_naxis1() -> u8;
   /// FITS type of the value
@@ -138,6 +156,7 @@ pub trait SkyMap<'a> {
   fn owned_entries(self) -> Self::OwnedEntriesIt;
 }
 
+#[derive(Debug)]
 pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
   depth: u8,
   values: Box<[V]>,
@@ -160,6 +179,17 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
       _htype: PhantomData,
     }
   }
+
+  /*pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
+    pool.install(|| {
+      self
+        .values
+        .par_iter_mut()
+        .zip_eq(rhs.values.into_par_iter())
+        .for_each(|(l, r)| *l += r)
+    });
+    self
+  }*/
 }
 impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V> {
   type HashType = H;
@@ -207,6 +237,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
   }
 }
 
+#[derive(Debug)]
 pub struct ImplicitSkyMapArrayRef<'a, H: HHash, V: SkyMapValue> {
   depth: u8,
   values: &'a [V],
@@ -229,6 +260,17 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArrayRef<'a, H, V> {
       _htype: PhantomData,
     }
   }
+
+  /*pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
+    pool.install(|| {
+      self
+        .values
+        .par_iter_mut()
+        .zip_eq(rhs.values.into_par_iter())
+        .for_each(|(l, r)| *l += r)
+    });
+    self
+  }*/
 }
 impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArrayRef<'a, H, V> {
   type HashType = H;
@@ -276,6 +318,7 @@ impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArr
   }
 }
 
+#[derive(Debug)]
 pub enum SkyMapEnum {
   ImplicitU64U8(ImplicitSkyMapArray<u64, u8>),
   ImplicitU64I16(ImplicitSkyMapArray<u64, i16>),
@@ -307,6 +350,12 @@ impl SkyMapEnum {
       Self::ImplicitU64F32(s) => write_implicit_skymap_fits(writer, s.values.deref()),
       Self::ImplicitU64F64(s) => write_implicit_skymap_fits(writer, s.values.deref()),
     }
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(|e| FitsError::Io(e))
+      .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
   #[cfg(not(target_arch = "wasm32"))]
@@ -425,5 +474,560 @@ impl SkyMapEnum {
         writer,
       ),
     }
+  }
+}
+
+/// SkyMap implementation use to store counts.
+#[derive(Debug)]
+pub struct CountMap(ImplicitSkyMapArray<u64, u32>);
+impl CountMap {
+  pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u64, u32> {
+    &self.0
+  }
+  pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u64, u32> {
+    self.0
+  }
+  /// Build a count skymap from an iterator over HEALPix cells at the given depth.
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_hash_values<I>(depth: u8, hash_values_it: I) -> Self
+  where
+    I: Iterator<Item = u32>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let mut counts = vec![0_u32; n_hash(depth) as usize].into_boxed_slice();
+    for h in hash_values_it {
+      counts[h as usize] += 1;
+    }
+    Self(ImplicitSkyMapArray::new(depth, counts))
+  }
+
+  /// Build a count skymap from an iterator over position ( (ra, dec), in radian).
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_positions<I>(depth: u8, pos_it_rad: I) -> Self
+  where
+    I: Iterator<Item = (f64, f64)>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let layer = get(depth);
+    let mut counts = vec![0_u32; layer.n_hash as usize].into_boxed_slice();
+    for (l, b) in pos_it_rad {
+      counts[layer.hash(l, b) as usize] += 1;
+    }
+    Self(ImplicitSkyMapArray::new(depth, counts))
+  }
+
+  pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
+    pool.install(|| {
+      self
+        .0
+        .values
+        .par_iter_mut()
+        .zip_eq(rhs.0.values.into_par_iter())
+        .for_each(|(l, r)| *l += r)
+    });
+    self
+  }
+
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    write_implicit_skymap_fits(writer, self.as_implicit_skymap_array().values.deref())
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(|e| FitsError::Io(e))
+      .and_then(|file| self.to_fits(BufWriter::new(file)))
+  }
+
+  pub fn to_chi2_mom(&self) -> MomVecImpl<u64, f64> {
+    let chi2_merger = |depth: u8, hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+      // With Poisson distribution:
+      // * mu_i = source density in cell i
+      // * sigma_i = sqrt(mu_i)
+      // weight_i = 1 / sigma_i^2
+      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
+      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
+      // V_e^{-1} = sum_{1=1}^4 1/mu_i
+      // Applying Pineau et al. 2017:
+      // => sum_{1=1}^4 (mu_i - mu_e)^2 / mu_i = ... = (sum_{1=1}^4 mu_i) - 4 * mu_e
+      // Normal law product of 4 1D normal laws and apply Pineau 2017 to find the above equation:
+      // 1/sqrt(2 * pi) * exp[ -1/2 * sum_{i=1}^4 ( (x - mu_i)/sqrt(sigma_i) )^2] / sqrt(prod_{i=1}^4 sigma_i)
+
+      let mu0 = *n0 as f64;
+      let mu1 = *n1 as f64;
+      let mu2 = *n2 as f64;
+      let mu3 = *n3 as f64;
+
+      let sum = mu0 + mu1 + mu2 + mu3;
+      let weighted_var_inv =
+        1.0 / mu0.max(1.0) + 1.0 / mu1.max(1.0) + 1.0 / mu2.max(1.0) + 1.0 / mu3.max(1.0);
+      let weighted_mean = 4.0 / weighted_var_inv;
+      let chi2_of_3dof = sum - 4.0 * weighted_mean;
+
+      // chi2 3 dof:
+      // 90.0% =>  6.251
+      // 95.0% =>  7.815
+      // 97.5% =>  9.348
+      // 99.0% => 11.345
+      // 99.9% => 16.266
+      if chi2_of_3dof < 16.266 {
+        Some(*n0 + *n1 + *n2 + *n3)
+      } else {
+        None
+      }
+    };
+    let mut mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    // Create a new MOM transforming number of sources into densities.
+    let mom = MomVecImpl::from(mom, |z, v| {
+      v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
+    });
+    mom
+  }
+
+  // to_png
+  // to_fits
+}
+impl Add for CountMap {
+  type Output = Self;
+
+  fn add(mut self, rhs: Self) -> Self::Output {
+    self
+      .0
+      .values
+      .iter_mut()
+      .zip_eq(rhs.0.values.into_iter())
+      .for_each(|(l, r)| *l += r);
+    self
+  }
+}
+impl<'a> SkyMap<'a> for CountMap {
+  type HashType = u64;
+  type ValueType = u32;
+  type ValuesIt = Iter<'a, Self::ValueType>;
+  type EntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &u32)) -> (u64, &u32)>;
+  type OwnedEntriesIt = Map<Enumerate<IntoIter<Self::ValueType>>, fn((usize, u32)) -> (u64, u32)>;
+
+  fn depth(&self) -> u8 {
+    self.as_implicit_skymap_array().depth
+  }
+
+  fn is_implicit(&self) -> bool {
+    true
+  }
+
+  fn len(&self) -> usize {
+    self.as_implicit_skymap_array().values.len()
+  }
+
+  fn get(&self, hash: Self::HashType) -> &Self::ValueType {
+    &self.as_implicit_skymap_array().values.deref()[hash as usize]
+  }
+
+  fn values(&'a self) -> Self::ValuesIt {
+    self.as_implicit_skymap_array().values.deref().iter()
+  }
+
+  fn entries(&'a self) -> Self::EntriesIt {
+    self
+      .as_implicit_skymap_array()
+      .values
+      .deref()
+      .iter()
+      .enumerate()
+      .map(move |(h, v)| (u64::from_usize(h), v))
+  }
+
+  fn owned_entries(self) -> Self::OwnedEntriesIt {
+    self
+      .into_implicit_skymap_array()
+      .values
+      .to_vec()
+      .into_iter()
+      .enumerate()
+      .map(move |(h, v)| (u64::from_usize(h), v))
+  }
+}
+
+/// SkyMap implementation use to store counts, rely on u32 HEALPix index instead of u64.
+#[derive(Debug)]
+pub struct CountMapU32(ImplicitSkyMapArray<u32, u32>);
+impl CountMapU32 {
+  pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, u32> {
+    &self.0
+  }
+  pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u32, u32> {
+    self.0
+  }
+  /// Build a count skymap from an iterator over HEALPix cells at the given depth.
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_hash_values<I>(depth: u8, hash_values_it: I) -> Self
+  where
+    I: Iterator<Item = u32>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let mut counts = vec![0_u32; n_hash(depth) as usize].into_boxed_slice();
+    for h in hash_values_it {
+      counts[h as usize] += 1;
+    }
+    Self(ImplicitSkyMapArray::new(depth, counts))
+  }
+
+  /// Build a count skymap from an iterator over position ( (ra, dec), in radian).
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_positions<I>(depth: u8, pos_it_rad: I) -> Self
+  where
+    I: Iterator<Item = (f64, f64)>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let layer = get(depth);
+    let mut counts = vec![0_u32; layer.n_hash as usize].into_boxed_slice();
+    for (l, b) in pos_it_rad {
+      counts[layer.hash(l, b) as usize] += 1;
+    }
+    Self(ImplicitSkyMapArray::new(depth, counts))
+  }
+
+  pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
+    pool.install(|| {
+      self
+        .0
+        .values
+        .par_iter_mut()
+        .zip_eq(rhs.0.values.into_par_iter())
+        .for_each(|(l, r)| *l += r)
+    });
+    self
+  }
+
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    write_implicit_skymap_fits(writer, self.as_implicit_skymap_array().values.deref())
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(&path)
+      .map_err(|err| FitsError::IoWithPath {
+        path: path.as_ref().to_string_lossy().into(),
+        err,
+      })
+      .and_then(|file| self.to_fits(BufWriter::new(file)))
+  }
+
+  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, f64> {
+    let chi2_merger = |depth: u8, hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+      // With Poisson distribution:
+      // * mu_i = source density in cell i
+      // * sigma_i = sqrt(mu_i)
+      // weight_i = 1 / sigma_i^2
+      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
+      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
+      // V_e^{-1} = sum_{1=1}^4 1/mu_i
+      // Applying Pineau et al. 2017:
+      // => sum_{1=1}^4 (mu_i - mu_e)^2 / mu_i = ... = (sum_{1=1}^4 mu_i) - 4 * mu_e
+      // Normal law product of 4 1D normal laws and apply Pineau 2017 to find the above equation:
+      // 1/sqrt(2 * pi) * exp[ -1/2 * sum_{i=1}^4 ( (x - mu_i)/sqrt(sigma_i) )^2] / sqrt(prod_{i=1}^4 sigma_i)
+
+      let mu0 = *n0 as f64;
+      let mu1 = *n1 as f64;
+      let mu2 = *n2 as f64;
+      let mu3 = *n3 as f64;
+
+      let sum = mu0 + mu1 + mu2 + mu3;
+      let weighted_var_inv =
+        1.0 / mu0.max(1.0) + 1.0 / mu1.max(1.0) + 1.0 / mu2.max(1.0) + 1.0 / mu3.max(1.0);
+      let weighted_mean = 4.0 / weighted_var_inv;
+      let chi2_of_3dof = sum - 4.0 * weighted_mean;
+
+      // chi2 3 dof:
+      // 90.0% =>  6.251
+      // 95.0% =>  7.815
+      // 97.5% =>  9.348
+      // 99.0% => 11.345
+      // 99.9% => 16.266
+      if chi2_of_3dof < 16.266 {
+        Some(*n0 + *n1 + *n2 + *n3)
+      } else {
+        None
+      }
+    };
+    let mut mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    // Create a new MOM transforming number of sources into densities.
+    let mom = MomVecImpl::from(mom, |z, v| {
+      v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
+    });
+    mom
+  }
+
+  // to_png
+  // to_fits
+}
+impl Add for CountMapU32 {
+  type Output = Self;
+
+  fn add(mut self, rhs: Self) -> Self::Output {
+    self
+      .0
+      .values
+      .iter_mut()
+      .zip_eq(rhs.0.values.into_iter())
+      .for_each(|(l, r)| *l += r);
+    self
+  }
+}
+impl<'a> SkyMap<'a> for CountMapU32 {
+  type HashType = u32;
+  type ValueType = u32;
+  type ValuesIt = Iter<'a, Self::ValueType>;
+  type EntriesIt = Map<Enumerate<Self::ValuesIt>, fn((usize, &u32)) -> (u32, &u32)>;
+  type OwnedEntriesIt = Map<Enumerate<IntoIter<Self::ValueType>>, fn((usize, u32)) -> (u32, u32)>;
+
+  fn depth(&self) -> u8 {
+    self.as_implicit_skymap_array().depth
+  }
+
+  fn is_implicit(&self) -> bool {
+    true
+  }
+
+  fn len(&self) -> usize {
+    self.as_implicit_skymap_array().values.len()
+  }
+
+  fn get(&self, hash: Self::HashType) -> &Self::ValueType {
+    &self.as_implicit_skymap_array().values.deref()[hash as usize]
+  }
+
+  fn values(&'a self) -> Self::ValuesIt {
+    self.as_implicit_skymap_array().values.deref().iter()
+  }
+
+  fn entries(&'a self) -> Self::EntriesIt {
+    self
+      .as_implicit_skymap_array()
+      .values
+      .deref()
+      .iter()
+      .enumerate()
+      .map(move |(h, v)| (u32::from_usize(h), v))
+  }
+
+  fn owned_entries(self) -> Self::OwnedEntriesIt {
+    self
+      .into_implicit_skymap_array()
+      .values
+      .to_vec()
+      .into_iter()
+      .enumerate()
+      .map(move |(h, v)| (u32::from_usize(h), v))
+  }
+}
+
+/// SkyMap implementation use to store densities.
+#[derive(Debug)]
+pub struct DensityMap(ImplicitSkyMapArray<u32, f64>);
+impl DensityMap {
+  pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, f64> {
+    &self.0
+  }
+  pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u32, f64> {
+    self.0
+  }
+  /// Build a count skymap from an iterator over position ( (ra, dec), in radian).
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_positions<I>(depth: u8, pos_it_rad: I) -> Self
+  where
+    I: Iterator<Item = (f64, f64)>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let layer = get(depth);
+    let mut densities = vec![0_f64; layer.n_hash as usize].into_boxed_slice();
+    let one_over_cell_area = layer.n_hash as f64 / (4.0 * PI);
+    for (l, b) in pos_it_rad {
+      densities[layer.hash(l, b) as usize] += one_over_cell_area;
+    }
+    Self(ImplicitSkyMapArray::new(depth, densities))
+  }
+
+  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, f64> {
+    let chi2_merger = |depth: u8, _hash: u32, [n0, n1, n2, n3]: [&f64; 4]| -> Option<f64> {
+      // With Poisson distribution:
+      // * s_i = Surface of cell i = s (all cell have the same surface at a given depth)
+      // * mu_i = Number of source in cell i / Surface of cell i = Density in cell i
+      // * sigma_i = sqrt(Number of source in cell i) / Surface cell i = sqrt(mu_i / s)
+      // weight_i = 1 / sigma_i^2 = s / mu_i
+      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
+      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
+      // V_e^{-1} = s * sum_{1=1}^4 1/mu_i
+      // Applying Pineau et al. 2017:
+      // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
+
+      let s = 4.0 * PI / n_hash(depth + 1) as f64;
+      let one_over_s = 1.0 / s;
+
+      let mu0 = *n0;
+      let mu1 = *n1;
+      let mu2 = *n2;
+      let mu3 = *n3;
+
+      let sum = mu0 + mu1 + mu2 + mu3;
+      let weighted_var_inv = 1.0 / mu0.max(one_over_s)
+        + 1.0 / mu1.max(one_over_s)
+        + 1.0 / mu2.max(one_over_s)
+        + 1.0 / mu3.max(one_over_s);
+      // let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+      let weighted_mean = 4.0 / weighted_var_inv;
+      let chi2_of_3dof = s * (sum - 4.0 * weighted_mean);
+      // chi2 3 dof:
+      // 90.0% =>  6.251
+      // 95.0% =>  7.815
+      // 97.5% =>  9.348
+      // 99.0% => 11.345
+      // 99.9% => 16.266
+      if chi2_of_3dof < 16.266 {
+        Some(0.25 * sum)
+      } else {
+        None
+      }
+    };
+    MomVecImpl::from_skymap_ref(&self.0, chi2_merger)
+  }
+
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    write_implicit_skymap_fits(writer, self.as_implicit_skymap_array().values.deref())
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(|e| FitsError::Io(e))
+      .and_then(|file| self.to_fits(BufWriter::new(file)))
+  }
+
+  // to_png
+}
+
+#[cfg(test)]
+mod tests {
+  use std::fs::read_to_string;
+
+  use crate::nested::map::img::{
+    to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion,
+  };
+  use crate::nested::map::skymap::{CountMap, DensityMap};
+  use mapproj::pseudocyl::mol::Mol;
+
+  #[test]
+  #[cfg(not(target_arch = "wasm32"))]
+  fn test_xmm_slew_dens() {
+    let path = "local_resources/xmmsl3_241122_posonly.csv";
+    let content = read_to_string(path).unwrap();
+    let img_size = (1366, 768);
+    let depth = 8;
+
+    let it = content.lines().skip(1).map(|row| {
+      let (l, b) = row.split_once(',').unwrap();
+      (
+        l.parse::<f64>().unwrap().to_radians(),
+        b.parse::<f64>().unwrap().to_radians(),
+      )
+    });
+    let dens_map = DensityMap::from_positions(depth, it);
+    to_skymap_png_file::<'_, _, Mol, _>(
+      &dens_map.0,
+      img_size,
+      None,
+      None,
+      None,
+      Some(PosConversion::EqMap2GalImg),
+      None,
+      Some(ColorMapFunctionType::LinearLog), // LinearLog
+      "local_resources/xmmsl3_241122.dens_map.png",
+      false,
+    )
+    .unwrap();
+    // println!("{:?}", dens_map);
+    let dens_mom = dens_map.to_chi2_mom();
+    to_mom_png_file::<'_, _, Mol, _>(
+      &dens_mom,
+      img_size,
+      None,
+      None,
+      None,
+      Some(PosConversion::EqMap2GalImg),
+      None,
+      Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+      "local_resources/xmmsl3_241122.dens_mom.png",
+      false,
+    )
+    .unwrap();
+  }
+
+  #[test]
+  #[cfg(not(target_arch = "wasm32"))]
+  fn test_xmm_slew_count() {
+    let path = "local_resources/xmmsl3_241122_posonly.csv";
+    let content = read_to_string(path).unwrap();
+    let img_size = (1366, 768);
+    let depth = 7;
+
+    let it = content.lines().skip(1).map(|row| {
+      let (l, b) = row.split_once(',').unwrap();
+      (
+        l.parse::<f64>().unwrap().to_radians(),
+        b.parse::<f64>().unwrap().to_radians(),
+      )
+    });
+    let dens_map = CountMap::from_positions(depth, it);
+    to_skymap_png_file::<'_, _, Mol, _>(
+      &dens_map.0,
+      img_size,
+      None,
+      None,
+      None,
+      Some(PosConversion::EqMap2GalImg),
+      None,
+      Some(ColorMapFunctionType::LinearLog), // LinearLog
+      "local_resources/xmmsl3_241122.dens_map_from_counts.png",
+      false,
+    )
+    .unwrap();
+
+    // println!("{:?}", dens_map);
+    let dens_mom = dens_map.to_chi2_mom();
+    to_mom_png_file::<'_, _, Mol, _>(
+      &dens_mom,
+      img_size,
+      None,
+      None,
+      None,
+      Some(PosConversion::EqMap2GalImg),
+      None,
+      Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
+      "local_resources/xmmsl3_241122.dens_mom_from_counts.png",
+      false,
+    )
+    .unwrap();
   }
 }

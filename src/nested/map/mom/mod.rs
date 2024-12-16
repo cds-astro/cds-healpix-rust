@@ -327,8 +327,8 @@ mod tests {
         // Transform count MOMs into PDF MOMs.
         let n_tot_2mass = mom_2mass.values().sum::<i32>() as f64;
         let n_tot_gaia = mom_gaia.values().sum::<i32>() as f64;
-        let mom_2mass = MomVecImpl::from(mom_2mass, |n| n as f64 / n_tot_2mass);
-        let mom_gaia = MomVecImpl::from(mom_gaia, |n| n as f64 / n_tot_gaia);
+        let mom_2mass = MomVecImpl::from(mom_2mass, |_, n| n as f64 / n_tot_2mass);
+        let mom_gaia = MomVecImpl::from(mom_gaia, |_, n| n as f64 / n_tot_gaia);
 
         to_mom_png_file::<'_, _, Mol, _>(
           &mom_2mass,

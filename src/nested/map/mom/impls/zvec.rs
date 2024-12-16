@@ -6,6 +6,7 @@ use super::super::{
 };
 
 /// Implementation of a MOM in an ordered vector of `(zuniq, values)` tuples.
+#[derive(Debug)]
 pub struct MomVecImpl<Z, V>
 where
   Z: ZUniqHashT,
@@ -116,6 +117,7 @@ where
     V: 's,
   {
     let depth = skymap.depth();
+    let parent_depth = depth - 1;
     let mut entries: Vec<(Z, V)> = Vec::with_capacity(skymap.len());
     let mut expected_next_hash = Z::zero();
     for (h, v) in skymap.entries() {
@@ -127,7 +129,6 @@ where
       // (among the 4 possible values 0, 1, 2 and 3).
       if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
         let n = entries.len();
-        let parent_depth = depth - 1;
         let parent_h = h >> 2;
         if let Some(combined_value) = merger(
           parent_depth,
@@ -140,7 +141,7 @@ where
           ],
         ) {
           // We are sure that the array contained at least 4 entries (we access them just above).
-          entries.truncate(4);
+          entries.truncate(n - 4);
           let new_zuniq = Z::to_zuniq(parent_depth, parent_h);
           entries.push((new_zuniq, combined_value));
           Self::from_skymap_ref_recursive(&mut entries, &merger);
@@ -160,6 +161,7 @@ where
     Self::ValueType: 's,
   {
     let depth = skymap.depth();
+    let parent_depth = depth - 1;
     let mut entries: Vec<(Z, V)> = Vec::with_capacity(skymap.len());
     let mut expected_next_hash = Z::zero();
     for (h, v) in skymap.owned_entries() {
@@ -167,13 +169,12 @@ where
       // Check that the value of the cell was the expected one and that
       // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
       // (among the 4 possible values 0, 1, 2 and 3).
+      let parent_h = h >> 2;
       if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
         let (z3, v3) = entries.pop().unwrap();
         let (z2, v2) = entries.pop().unwrap();
         let (z1, v1) = entries.pop().unwrap();
         let (z0, v0) = entries.pop().unwrap();
-        let parent_depth = depth - 1;
-        let parent_h = h >> 2;
         match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
           Ok(v_merged) => {
             let z_merged = Z::to_zuniq(parent_depth, parent_h);
@@ -476,10 +477,10 @@ where
   pub fn from<M, F>(mom: M, map: F) -> Self
   where
     M: for<'a> Mom<'a, ZUniqHType = Z>,
-    F: Fn(<M as Mom>::ValueType) -> V,
+    F: Fn(Z, <M as Mom>::ValueType) -> V,
   {
     let depth = mom.depth_max();
-    let entries: Vec<(Z, V)> = mom.owned_entries().map(|(z, v)| (z, map(v))).collect();
+    let entries: Vec<(Z, V)> = mom.owned_entries().map(|(z, v)| (z, map(z, v))).collect();
     Self { depth, entries }
   }
 
@@ -600,8 +601,8 @@ mod tests {
         };
         let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
         /*println!("Mom len: {}", mom.entries.len());
-        for (z, v) in mom.entries {
-          let (d, h) = u64::from_zuniq(z);
+        for (z, v) in &mom.entries {
+          let (d, h) = u64::from_zuniq(*z);
           println!("{},{},{}", d, h, v)
         }*/
         // assert_eq!(mom.len(), 1107);

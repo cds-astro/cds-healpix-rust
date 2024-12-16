@@ -737,7 +737,7 @@ where
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn to_skymap_png_file<'a, S, P>(
+pub fn to_skymap_png_file<'a, S, P, A>(
   skymap_implicit: &'a S,
   img_size: (u16, u16),
   proj: Option<P>,
@@ -746,17 +746,18 @@ pub fn to_skymap_png_file<'a, S, P>(
   pos_convert: Option<PosConversion>,
   color_map: Option<Gradient>,
   color_map_func_type: Option<ColorMapFunctionType>,
-  path: &Path,
+  path: A,
   view: bool,
 ) -> Result<(), Box<dyn Error>>
 where
   P: CanonicalProjection,
   S: SkyMap<'a>,
   S::ValueType: Val,
+  A: AsRef<Path>,
 {
   // Brackets are important to be sure the file is closed before trying to open it.
   {
-    let file = File::create(path)?;
+    let file = File::create(path.as_ref())?;
     let mut writer = BufWriter::new(file);
     to_skymap_png(
       skymap_implicit,
@@ -771,7 +772,7 @@ where
     )?;
   }
   if view {
-    show_with_default_app(path.to_string_lossy().as_ref())?;
+    show_with_default_app(path.as_ref().to_string_lossy().as_ref())?;
   }
   Ok(())
 }
