@@ -1242,7 +1242,7 @@ mod tests {
   }*/
 
   // Test only on personal computer
-  #[test]
+  /*#[test]
   #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
   fn testok_bigsort_ssd() {
     init_logger();
@@ -1253,13 +1253,13 @@ mod tests {
 
     let depth_file = 11;
     let depth_sort = 4;
-    /*fs::create_dir_all("./local_resources").unwrap();
+    fs::create_dir_all("./local_resources").unwrap();
     create_test_file(depth_file, "./local_resources/test.csv").unwrap();
     Command::new("bash")
       .arg("-c")
       .arg("shuf ./local_resources/test.csv -o ./local_resources/input.csv")
       .output()
-      .expect("failed to execute process");*/
+      .expect("failed to execute process");
     hpx_external_sort_csv_file(
       "./local_resources/input11.csv",
       "./local_resources/output11.csv",
@@ -1277,7 +1277,7 @@ mod tests {
       false,
     )
     .unwrap();
-    /*let out = Command::new("bash")
+    let out = Command::new("bash")
       .arg("-c")
       .arg("diff /data/pineau/sandbox/test.csv /data/pineau/sandbox/output.csv")
       .output()
@@ -1288,6 +1288,6 @@ mod tests {
     .arg("-c")
     .arg("rm -r /data/pineau/sandbox/test.csv /data/pineau/sandbox/output.csv")
     .output()
-    .expect("failed to execute process");*/
-  }
+    .expect("failed to execute process");
+  }*/
 }
