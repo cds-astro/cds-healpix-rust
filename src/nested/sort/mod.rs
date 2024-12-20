@@ -26,11 +26,12 @@ use std::{
 use bincode::{
   self,
   config::{FixintEncoding, WithOtherIntEncoding},
-  DefaultOptions, Options,
+  DefaultOptions, Error as BincodeError, Options,
 };
 use log::{debug, error, info, warn};
-use rayon::{prelude::ParallelSliceMut, ThreadPool};
+use rayon::{prelude::ParallelSliceMut, ThreadPool}; // iter::ZipEq
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::nested::{
   get,
@@ -50,7 +51,15 @@ pub trait ExtSortable: IntSortable + Serialize + DeserializeOwned {}
 /// All types that implement `IntSortable`, `Serialize` and `DeserializeOwned` are `ExtSortable`.
 impl<A: IntSortable + Serialize + DeserializeOwned> ExtSortable for A {}
 
-// Declare a SortError ?
+#[derive(Error, Debug)]
+pub enum SortError {
+  #[error("I/O error")]
+  IoError(#[from] IoError),
+  #[error("Serialization/deserialization (bincode) error")]
+  BincodeError(#[from] BincodeError),
+  #[error("Sort error: `{0}`.")]
+  Custom(String),
+}
 
 /// Sort internally (i.e. in memory) the given array of elements according to the order 29 HEALPix
 /// cell computed using the given `hpx29` function.
@@ -252,7 +261,7 @@ impl SimpleExtSortParams {
     );
     let mut path = self.tmp_dir.clone();
     path.push(filename);
-    debug!("Create or open to append file: {}", path.to_string_lossy());
+    debug!("Create or open to append file: {}.", path.to_string_lossy(),);
     OpenOptions::new().append(true).create(true).open(path)
   }
 
@@ -413,8 +422,8 @@ pub fn hpx_external_sort_with_knowledge<'a, T, E, I, S, F>(
 ) -> Result<impl Iterator<Item = Result<T, Box<dyn Error>>>, Box<dyn Error>>
 where
   T: ExtSortable,
-  E: Error + 'static,
-  I: Iterator<Item = Result<T, E>>,
+  E: Error + Send + 'static,
+  I: Iterator<Item = Result<T, E>> + Send,
   S: SkyMap<'a, HashType = u32, ValueType = u32>,
   F: Fn(&T) -> u64 + Sync,
 {
@@ -441,8 +450,8 @@ pub fn hpx_external_sort_with_knowledge_write_tmp<'a, T, E, I, S, F>(
 ) -> Result<(), Box<dyn Error>>
 where
   T: ExtSortable,
-  E: Error + 'static,
-  I: Iterator<Item = Result<T, E>>,
+  E: Error + Send + 'static,
+  I: Iterator<Item = Result<T, E>> + Send,
   S: SkyMap<'a, HashType = u32, ValueType = u32>,
   F: Fn(&T) -> u64 + Sync,
 {
@@ -464,58 +473,68 @@ where
   params.write_info(n_tot, depth, ranges_counts.clone())?;
 
   let n_max = n_max as usize;
-  let n_chunks = ranges_counts.len();
   // Now iterates on rows and sort them before writing into 'chunks' files.
-  let mut entries_buf: Vec<T> = Vec::with_capacity(n_max);
+  let tstart = SystemTime::now();
+  let mut entries = (&mut it).take(n_max).collect::<Result<Vec<T>, _>>()?;
+  debug!(
+    "Read {} elements in {} ms",
+    entries.len(),
+    SystemTime::now()
+      .duration_since(tstart)
+      .unwrap_or_default()
+      .as_millis()
+  );
+
+  let mut n = entries.len();
   let mut n_tot_it = 0_u64;
-  loop {
-    // Populate the row buffer from the iterator.
-    // I don't want ot map and collect to be able to reuse the same temporary Vec.
-    // Without `Result`, we could have used directly `entries_buf.extend((&mut it).take(n_max));`
+  while n > 0 {
     let tstart = SystemTime::now();
-    // Here, instead of adding into the existing vector, get  n new vector from a sender/receiver!!
-    // to continue loading data while the parllel sort occurs!!
-    for res in (&mut it).take(n_max) {
-      entries_buf.push(res?);
-    }
-    // MAKE AN ALGO WRITING/READING NEXT WHILE SORTING
-    let n = entries_buf.len();
+    let (next_entries, ()) = pool.join(
+      || (&mut it).take(n_max).collect::<Result<Vec<T>, _>>(),
+      || {
+        let tstart = SystemTime::now();
+        entries.par_sort_by_cached_key(&hpx29);
+        debug!(
+          "Sort {} elements in {} ms",
+          entries.len(),
+          SystemTime::now()
+            .duration_since(tstart)
+            .unwrap_or_default()
+            .as_millis()
+        );
+      },
+    );
     debug!(
-      "Row chunk of size {} populated to be sorted in {} ms",
-      n,
+      "Read {} elements (+ parallel sort of prev elems) in {} ms",
+      entries.len(),
       SystemTime::now()
         .duration_since(tstart)
         .unwrap_or_default()
         .as_millis()
     );
-    // In case n_tot % n_max == 0, quit the loop
-    if n == 0 {
-      break;
-    }
-    // Parallel sort
-    let tstart = SystemTime::now();
-    pool.install(|| entries_buf.par_sort_by_cached_key(&hpx29));
-    debug!(
-      "Parallel sort performed in {} ms",
-      SystemTime::now()
-        .duration_since(tstart)
-        .unwrap_or_default()
-        .as_millis()
-    );
+    let next_entries = next_entries?;
 
     // Write in files
-    let mut entries_view = entries_buf.as_mut_slice();
+    let tstart = SystemTime::now();
+    let mut entries_view = entries.as_mut_slice();
     // Find first and last range, then iter_mut and this sub_slice
     // * unwrap() is ok for first and last since we 'break' if the buffer is empty.
     // * unwrap() is ok on binary_search since ranges cover the full hash range.
     let first_h = (hpx29(&entries_view.first().unwrap()) >> twice_dd) as u32;
     let last_h = (hpx29(&entries_view.last().unwrap()) >> twice_dd) as u32;
+    //debug!("first_h: {}; last_h: {}", first_h, last_h);
     let rstart = ranges_counts
       .binary_search_by(get_range_binsearch(first_h))
       .unwrap();
     let rend = ranges_counts
       .binary_search_by(get_range_binsearch(last_h))
       .unwrap();
+    /*debug!(
+      "rstart: {}; rend: {}. Tot size: {}",
+      rstart,
+      rend,
+      ranges_counts.len()
+    );*/
 
     for (range, count) in &mut ranges_counts[rstart..=rend] {
       /*debug!(
@@ -524,8 +543,11 @@ where
       );*/
       let to = entries_view.partition_point(|row| {
         let h = (hpx29(row) >> twice_dd) as u32;
+        //debug!("h: {}, range: {:?}", h, &range);
+        //debug!("Before contains range: {:?}", h, &range);
         range.contains(&h)
       });
+      // debug!("to: {}; tot: {}", to, entries_view.len());
       if to > 0 {
         let (to_be_writen, remaining) = entries_view.split_at_mut(to);
         entries_view = remaining;
@@ -535,7 +557,7 @@ where
         for row in to_be_writen {
           bincode.serialize_into(&mut bufw, row)?;
         }
-        debug!(
+        /*debug!(
           "Range file [{}, {}), {} row written in {} ms.",
           range.start,
           range.end,
@@ -544,7 +566,7 @@ where
             .duration_since(tstart)
             .unwrap_or_default()
             .as_millis()
-        );
+        );*/
 
         let to = to as u32;
         if to > *count {
@@ -558,18 +580,20 @@ where
           );
         }
         *count -= to;
-        /*debug!(
-          "Range [{}, {}]; count after: {}",
-          range.start, range.end, count
-        );*/
       }
     }
+    debug!(
+      "{} eleemnts added to temp files in {} ms",
+      n,
+      SystemTime::now()
+        .duration_since(tstart)
+        .unwrap_or_default()
+        .as_millis()
+    );
+
     n_tot_it += n as u64;
-    entries_buf.clear();
-    // assert_eq!(entries_buf.len(), 0);
-    if n < n_max {
-      break;
-    }
+    entries = next_entries;
+    n = entries.len();
   }
   // Post write operation checks
   // * check ntot
@@ -613,38 +637,36 @@ where
 {
   // Get params
   let info = SimpleExtSortParams::read_info_gen(&tmp_dir)?;
-  // debug!("Loaded info file: {:?}", &info);
   let params = SimpleExtSortParams::from_dir_and_info(tmp_dir, &info);
   // Get list of written files, ordered according to the range.
   let ordered_files = params.get_ordered_files_in_tmp_dir()?;
-  // debug!("Ordered files: {:?}", &ordered_files);
   if ordered_files.is_empty() {
     return Err(format!("No tmp file found in {:?}", &params.tmp_dir).into());
   }
   // Init thread pool
   let thread_pool = get_thread_pool(params.n_threads);
 
-  fn load_file<TT: ExtSortable>(nrows: usize, path: PathBuf) -> Result<Vec<TT>, Box<dyn Error>> {
+  fn load_file<TT: ExtSortable>(nrows: usize, path: PathBuf) -> Result<Vec<TT>, SortError> {
     let path_str = path.to_string_lossy().to_string();
-    debug!("Start loading file {}", path_str);
     let tstart = SystemTime::now();
-    let file = File::open(path)?;
-    let file_len = file.metadata()?.len();
+    let file = File::open(path).map_err(SortError::IoError)?;
+    let file_len = file.metadata().map_err(SortError::IoError)?.len();
     let mut bufr = BufReader::new(file);
     let bincode = get_bincode();
     let mut rows = Vec::with_capacity(nrows);
     for _ in 0..nrows {
-      rows.push(bincode.deserialize_from(&mut bufr)?);
+      rows.push(
+        bincode
+          .deserialize_from(&mut bufr)
+          .map_err(SortError::BincodeError)?,
+      );
     }
-    let pos = bufr.stream_position()?;
+    let pos = bufr.stream_position().map_err(SortError::IoError)?;
     if pos != file_len {
-      Err(
-        format!(
-          "File position '{}' does not match file len '{}'.",
-          pos, file_len
-        )
-        .into(),
-      )
+      Err(SortError::Custom(format!(
+        "File position '{}' does not match file len '{}'.",
+        pos, file_len
+      )))
     } else {
       debug!(
         "Read file {} in {} ms",
@@ -657,13 +679,24 @@ where
       Ok(rows)
     }
   }
-  // load and sort and put in a MPSC ??
+  fn load_next_file<TT: ExtSortable>(
+    elem: Option<((PathBuf, u8, Range<u32>), (Range<u32>, u32))>,
+  ) -> Option<Result<Vec<TT>, SortError>> {
+    match elem {
+      Some(((path, _depth, lrange), (rrange, nrows))) => {
+        assert_eq!(
+          rrange, lrange,
+          "File range difference from counts range: {:?} != {:?}.",
+          &rrange, &lrange
+        );
+        Some(load_file(nrows as usize, path.clone()))
+      }
+      None => None,
+    }
+  }
 
   // Unwrap ok since we tested that `ordered_files` is not empty.
   let mut ordered_files_counts_it = ordered_files.into_iter().zip(info.ordered_ranges_counts);
-  /*let (file_path, depth, range) = ordered_files_it.next().unwrap();
-  let i_nrows = info.ordered_ranges_counts.binary_search_by_key(&range, |&(range, count)| range)
-    .map_err(|_| format!("Range {:?} not found in file list.", &range).into())?;*/
   let ((file_path, _depth, lrange), (rrange, nrows)) = ordered_files_counts_it.next().unwrap();
   assert_eq!(
     rrange, lrange,
@@ -671,8 +704,11 @@ where
     &rrange, &lrange
   );
 
-  let mut file_content = load_file(nrows as usize, file_path)?;
-  thread_pool.install(|| file_content.par_sort_by_cached_key(&hpx29));
+  let mut rows_to_be_sorted = load_file(nrows as usize, file_path)?;
+  let (next_file_content, ()) = thread_pool.join(
+    || load_next_file(ordered_files_counts_it.next()),
+    || rows_to_be_sorted.par_sort_by_cached_key(&hpx29),
+  );
 
   struct GlobalIt<TT: ExtSortable, FF: Fn(&TT) -> u64 + Sync> {
     /// Pool of thread used for in-memmory sort.
@@ -683,6 +719,8 @@ where
     ordered_files_counts_it: Zip<IntoIter<(PathBuf, u8, Range<u32>)>, IntoIter<(Range<u32>, u32)>>,
     /// Iterates on the sorted rows of a file.
     rows_it: IntoIter<TT>,
+    /// The next chunk of rows to be sorted before iterating over
+    next_rows: Option<Vec<TT>>,
   }
   impl<TT: ExtSortable, FF: Fn(&TT) -> u64 + Sync> Iterator for GlobalIt<TT, FF> {
     type Item = Result<TT, Box<dyn Error>>;
@@ -690,32 +728,33 @@ where
     fn next(&mut self) -> Option<Self::Item> {
       match self.rows_it.next() {
         Some(next_row) => Some(Ok(next_row)),
-        None => match self.ordered_files_counts_it.next() {
-          Some(((path, _depth, lrange), (rrange, nrows))) => {
-            assert_eq!(
-              rrange, lrange,
-              "File range difference from counts range: {:?} != {:?}.",
-              &rrange, &lrange
-            );
-            // Here, instead of loading the file, get it from a sender/receiver!!
-            match load_file(nrows as usize, path.clone()) {
-              Ok(mut file_content) => {
+        None => match self.next_rows.as_mut() {
+          Some(rows_to_be_sorted) => {
+            let (next_file_content, ()) = self.thread_pool.join(
+              || load_next_file(self.ordered_files_counts_it.next()),
+              || {
                 let tstart = SystemTime::now();
-                self
-                  .thread_pool
-                  .install(|| file_content.par_sort_by_cached_key(&self.hpx29));
+                rows_to_be_sorted.par_sort_by_cached_key(&self.hpx29);
                 debug!(
-                  "Loaded file {} sorted in {} ms",
-                  path.to_string_lossy(),
+                  "{} rows sorted in {} ms",
+                  rows_to_be_sorted.len(),
                   SystemTime::now()
                     .duration_since(tstart)
                     .unwrap_or_default()
                     .as_millis()
                 );
-                self.rows_it = file_content.into_iter();
+              },
+            );
+            match next_file_content.transpose() {
+              Ok(Some(next_row_chunk)) => {
+                self.rows_it = self.next_rows.replace(next_row_chunk).unwrap().into_iter();
                 self.next()
               }
-              Err(e) => Some(Err(e)),
+              Ok(None) => {
+                self.rows_it = self.next_rows.take().unwrap().into_iter();
+                self.next()
+              }
+              Err(e) => Some(Err(e.into())),
             }
           }
           None => None,
@@ -728,7 +767,8 @@ where
     thread_pool,
     hpx29,
     ordered_files_counts_it,
-    rows_it: file_content.into_iter(),
+    rows_it: rows_to_be_sorted.into_iter(),
+    next_rows: next_file_content.transpose()?,
   })
 }
 
@@ -808,10 +848,11 @@ pub fn hpx_external_sort<'a, T, E, I, J, F>(
 ) -> Result<impl Iterator<Item = Result<T, Box<dyn Error>>>, Box<dyn Error>>
 where
   T: ExtSortable,
-  E: Error + 'static,
-  I: Iterator<Item = Result<u64, E>>,
+  E: Error + Send + 'static,
+  I: Iterator<Item = Result<u64, E>> + Send,
   J: IntoIterator<Item = Result<T, E>>,
-  F: Fn(&T) -> u64 + Sync,
+  <J as IntoIterator>::IntoIter: Send,
+  F: Fn(&T) -> u64 + Send + Sync,
 {
   debug!("Starts computing the count map of depth {}...", depth);
   let tstart = SystemTime::now();
@@ -933,6 +974,7 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>>(
   sort_params: Option<SimpleExtSortParams>,
   clean: bool,
 ) -> Result<(), Box<dyn Error>> {
+  // Declare variables/functions
   let separator = separator.unwrap_or(',');
   let layer29 = get(29);
   let hpx29 = move |s: &String| {
@@ -945,6 +987,8 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>>(
       }
     }
   };
+
+  // Start reading file to create the coutn map
   let mut line_res_it = BufReader::new(File::open(&input_path)?).lines().peekable();
   let mut bufw = BufWriter::new(if output_overwrite {
     OpenOptions::new()
@@ -972,57 +1016,59 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>>(
       bufw.write_all(header.as_bytes())?;
     }
   }
-  // Create an iterable from the original input files (yes, we need to read it twice)
-  struct IntoIterStruct<P: AsRef<Path>> {
-    input_path: P,
-    has_header: bool,
-  }
-  impl<P: AsRef<Path>> IntoIterator for IntoIterStruct<P> {
-    type Item = Result<String, IoError>;
-    type IntoIter = Peekable<Lines<BufReader<File>>>;
+  let sort_params = sort_params.unwrap_or_default();
+  let thread_pool = get_thread_pool(sort_params.n_threads);
 
-    fn into_iter(self) -> Self::IntoIter {
-      let file = match File::open(self.input_path.as_ref()) {
-        Ok(file) => file,
-        Err(e) => panic!(
-          "Unable to re-open file {}: {:?}",
-          self.input_path.as_ref().to_string_lossy(),
-          e
-        ),
-      };
-      let mut line_res_it = BufReader::new(file).lines().peekable();
-      // Consume starting comments
-      while line_res_it
-        .next_if(|res| {
-          res
-            .as_ref()
-            .map(|line| line.starts_with('#'))
-            .unwrap_or(false)
-        })
-        .is_some()
-      {}
-      // Comsume the header line if any
-      if self.has_header {
-        line_res_it.next();
-      }
-      line_res_it
-    }
+  let tstart = SystemTime::now();
+  debug!("Start generating count map (first iteration on the full CSV file)...");
+  let count_map = CountMapU32::from_csv_it_par(
+    line_res_it,
+    ilon,
+    ilat,
+    Some(separator),
+    depth,
+    sort_params.n_elems_per_chunk as usize,
+    &thread_pool,
+  )?;
+  debug!(
+    "... count map computed in {} ms",
+    SystemTime::now()
+      .duration_since(tstart)
+      .unwrap_or_default()
+      .as_millis()
+  );
+  let tstart = SystemTime::now();
+  sort_params.create_tmp_dir()?;
+  count_map.to_fits_file(sort_params.create_countmap_file_path())?;
+  debug!(
+    "Count map of writen in {} ms.",
+    SystemTime::now()
+      .duration_since(tstart)
+      .unwrap_or_default()
+      .as_millis()
+  );
+
+  // Re read the file to sort it
+  let mut line_res_it = BufReader::new(File::open(&input_path)?).lines().peekable();
+  // Consume starting comments
+  while line_res_it
+    .next_if(|res| {
+      res
+        .as_ref()
+        .map(|line| line.starts_with('#'))
+        .unwrap_or(false)
+    })
+    .is_some()
+  {}
+  // Consume the header line if any
+  if has_header {
+    line_res_it.next();
   }
   // Get the sorted iterator
-  let tmp_path = sort_params
-    .as_ref()
-    .map(|p| p.tmp_dir.clone())
-    .unwrap_or(SimpleExtSortParams::default().tmp_dir);
-  let mut sorted_it = hpx_external_sort(
-    line_res_it.map(|row_res| row_res.map(|row| hpx29(&row))),
-    IntoIterStruct {
-      input_path,
-      has_header,
-    },
-    hpx29,
-    depth,
-    sort_params,
-  )?;
+  let tmp_path = sort_params.tmp_dir.clone();
+  let mut sorted_it =
+    hpx_external_sort_with_knowledge(line_res_it, &count_map, hpx29, Some(sort_params))?;
+
   debug!("Starts writing sorted rows in output file...");
   let tstart = SystemTime::now();
   // Write the results
@@ -1077,12 +1123,6 @@ pub fn create_test_file(depth: u8, path: &str) -> Result<(), IoError> {
   );
   Ok(())
 }
-
-// create_test_file("hpx_sort_result.csv")
-// Use the 'shuf' linux command to shuffle the file
-// Run the process
-// Compare the output file with the generated file
-// Compare with linux sort!!
 
 #[cfg(test)]
 mod tests {
@@ -1151,15 +1191,15 @@ mod tests {
       .expect("failed to execute process");
   }
 
-  /*
-  #[cfg(target_os = "linux")]
-  #[test]
-  fn testok_bigsort() {
+  // Test only on personal computer
+  /*#[test]
+  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+  fn testok_bigsort_hdd() {
     init_logger();
     // Run with:
     // > cargo test testok_sort --release -- --nocapture
     // Compare with:
-    //   time sort --buffer-size=70M --parallel 4 input.csv -T sort_tmp > toto.res
+    //   time sort --buffer-size=800M --parallel 4 input.csv -T sort_tmp > toto.res
 
     let depth_file = 11;
     let depth_sort = 4;
@@ -1181,7 +1221,7 @@ mod tests {
       depth_sort,
       Some(SimpleExtSortParams {
         tmp_dir: PathBuf::from("/data/pineau/sandbox/sort_tmp/"),
-        n_elems_per_chunk: 5_000_000,
+        n_elems_per_chunk: 10_000_000,
         n_threads: Some(4),
       }),
       false,
@@ -1200,4 +1240,54 @@ mod tests {
     .output()
     .expect("failed to execute process");
   }*/
+
+  // Test only on personal computer
+  #[test]
+  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+  fn testok_bigsort_ssd() {
+    init_logger();
+    // Run with:
+    // > cargo test testok_sort --release -- --nocapture
+    // Compare with:
+    //   time sort --buffer-size=800M --parallel 4 input.csv -T sort_tmp > toto.res
+
+    let depth_file = 11;
+    let depth_sort = 4;
+    /*fs::create_dir_all("./local_resources").unwrap();
+    create_test_file(depth_file, "./local_resources/test.csv").unwrap();
+    Command::new("bash")
+      .arg("-c")
+      .arg("shuf ./local_resources/test.csv -o ./local_resources/input.csv")
+      .output()
+      .expect("failed to execute process");*/
+    hpx_external_sort_csv_file(
+      "./local_resources/input11.csv",
+      "./local_resources/output11.csv",
+      true,
+      1,
+      2,
+      false,
+      Some(','),
+      depth_sort,
+      Some(SimpleExtSortParams {
+        tmp_dir: PathBuf::from("./local_resources/sort_tmp/"),
+        n_elems_per_chunk: 5_000_000,
+        n_threads: Some(4),
+      }),
+      false,
+    )
+    .unwrap();
+    /*let out = Command::new("bash")
+      .arg("-c")
+      .arg("diff /data/pineau/sandbox/test.csv /data/pineau/sandbox/output.csv")
+      .output()
+      .expect("failed to execute process");
+    assert!(out.status.success());
+    assert!(out.stdout.is_empty());
+    Command::new("bash")
+    .arg("-c")
+    .arg("rm -r /data/pineau/sandbox/test.csv /data/pineau/sandbox/output.csv")
+    .output()
+    .expect("failed to execute process");*/
+  }
 }

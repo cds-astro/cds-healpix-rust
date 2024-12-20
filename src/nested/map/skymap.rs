@@ -1,8 +1,9 @@
+use std::io::BufRead;
 use std::{
   error::Error,
   f64::consts::PI,
   fs::File,
-  io::{BufReader, BufWriter, Read, Seek, Write},
+  io::{BufReader, BufWriter, Error as IoError, Read, Seek, Write},
   iter::{Enumerate, Map},
   marker::PhantomData,
   ops::{Add, AddAssign, Deref, RangeInclusive},
@@ -13,11 +14,14 @@ use std::{
 
 use colorous::Gradient;
 use itertools::Itertools;
+use log::error;
 use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
+use rayon::prelude::{ParallelSlice, ParallelSliceMut};
 use rayon::{
   prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator,
   },
   ThreadPool,
 };
@@ -179,17 +183,17 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
       _htype: PhantomData,
     }
   }
-
-  /*pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
-    pool.install(|| {
-      self
-        .values
-        .par_iter_mut()
-        .zip_eq(rhs.values.into_par_iter())
-        .for_each(|(l, r)| *l += r)
-    });
+}
+impl<'a, H: HHash, V: SkyMapValue + Send + Sync + AddAssign + 'a> ImplicitSkyMapArray<H, V> {
+  pub fn par_add(mut self, rhs: Self) -> Self {
     self
-  }*/
+      .values
+      .as_parallel_slice_mut()
+      .par_iter_mut()
+      .zip_eq(rhs.values.into_vec().into_par_iter())
+      .for_each(|(l, r)| l.add_assign(r));
+    self
+  }
 }
 impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V> {
   type HashType = H;
@@ -526,15 +530,14 @@ impl CountMap {
     Self(ImplicitSkyMapArray::new(depth, counts))
   }
 
-  pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
-    pool.install(|| {
-      self
-        .0
-        .values
-        .par_iter_mut()
-        .zip_eq(rhs.0.values.into_par_iter())
-        .for_each(|(l, r)| *l += r)
-    });
+  pub fn par_add(mut self, rhs: Self) -> Self {
+    /*self
+    .0
+    .values
+    .par_iter_mut()
+    .zip_eq(rhs.0.values.into_par_iter())
+    .for_each(|(l, r)| *l += r)*/
+    self.0 = self.0.par_add(rhs.0);
     self
   }
 
@@ -706,15 +709,136 @@ impl CountMapU32 {
     Self(ImplicitSkyMapArray::new(depth, counts))
   }
 
-  pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
-    pool.install(|| {
-      self
-        .0
-        .values
-        .par_iter_mut()
-        .zip_eq(rhs.0.values.into_par_iter())
-        .for_each(|(l, r)| *l += r)
-    });
+  /*pub fn from_csv_par() -> Result<Self, Box<dyn Error>> {
+
+  }*/
+
+  pub fn from_csv_file_par<P: AsRef<Path>>(
+    path: P,
+    ilon: usize,
+    ilat: usize,
+    separator: Option<char>,
+    has_header: bool,
+    depth: u8,
+    chunk_size: usize,
+    thread_pool: &ThreadPool,
+  ) -> Result<Self, IoError> {
+    let mut it = BufReader::new(File::open(&path)?).lines().peekable();
+    // Handle starting comments
+    while let Some(Ok(line)) = it.next_if(|res| {
+      res
+        .as_ref()
+        .map(|line| line.starts_with('#'))
+        .unwrap_or(false)
+    }) {}
+    // Handle header line
+    if has_header {
+      it.next().transpose()?;
+    }
+    // Ok, go!
+    Self::from_csv_it_par(it, ilon, ilat, separator, depth, chunk_size, thread_pool)
+  }
+
+  /// Compute the count map from an iterator iterating on raw CSV rows.
+  /// # Params
+  /// * `it` the iterator an rows
+  /// * `ilon` index of the column containing the longitude
+  /// * `ilat` index of the column containing the latitude
+  /// * `separator` file separator (',' if None)
+  /// * `depth` HEALPix depth (or order) of the map
+  /// * `chunk_size` number of rows to be processed in parallel (the memory will hold twice this number
+  ///   since a chunk is read while another chunk is processed)
+  /// * `thread_pool` the thread pool in which the process will be executed
+  /// # Note
+  /// The parallel processing chosen resort on a single sequential read.
+  /// Although it is not the fastest option with SSDs, it should ensure reasonably good performances
+  /// with both SSDs and HDDs.
+  /// # Warning
+  /// Ensure that you have already removed the comment and the possible header line,
+  /// E.g. using:
+  /// ```rust
+  /// let mut it = it.peekable();
+  ///     // Handle starting comments
+  ///     while let Some(Ok(line)) = it.next_if(|res| {
+  ///       res
+  ///         .as_ref()
+  ///         .map(|line| line.starts_with('#'))
+  ///         .unwrap_or(false)
+  ///     }) { }
+  ///     // Handle header line
+  ///     if has_header {
+  ///       it.next().transpose()?;
+  ///     }
+  /// ```
+  pub fn from_csv_it_par<I>(
+    mut it: I,
+    ilon: usize,
+    ilat: usize,
+    separator: Option<char>,
+    depth: u8,
+    chunk_size: usize,
+    thread_pool: &ThreadPool,
+  ) -> Result<Self, IoError>
+  where
+    I: Iterator<Item = Result<String, IoError>> + Send,
+  {
+    let separator = separator.unwrap_or(',');
+    let layer = get(depth);
+    let n_hash = layer.n_hash as usize;
+    let n_thread = thread_pool.current_num_threads();
+    let hpx = move |s: &String| {
+      let cols = s.split(separator).collect::<Vec<&str>>();
+      match (cols[ilon].parse::<f64>(), cols[ilat].parse::<f64>()) {
+        (Ok(lon), Ok(lat)) => Some(layer.hash(lon.to_radians(), lat.to_radians()) as u32),
+        _ => {
+          error!("Error parsing coordinates at line: {}. Hash set to 0.", s);
+          None
+        }
+      }
+    };
+    let count_map_fn = |chunk: Vec<String>| {
+      chunk
+        .par_chunks((chunk.len() / (n_thread << 2)).max(10_000))
+        .map(|elems| CountMapU32::from_hash_values(depth, elems.iter().filter_map(hpx)))
+        .reduce_with(|mut mapl, mapr| mapl.par_add(mapr))
+    };
+    fn load_n<I: Iterator<Item = Result<String, IoError>>>(
+      chunk_size: usize,
+      it: &mut I,
+    ) -> Result<Vec<String>, IoError> {
+      it.take(chunk_size).collect()
+    }
+
+    let mut chunk = load_n(chunk_size, it.by_ref())?;
+    let mut count_map = Self(ImplicitSkyMapArray::new(
+      depth,
+      vec![0_u32; n_hash].into_boxed_slice(),
+    ));
+    while !chunk.is_empty() {
+      let (next_chunk, new_count_map) = thread_pool.join(
+        || load_n(chunk_size, it.by_ref()),
+        || {
+          if let Some(local_count_map) = count_map_fn(chunk) {
+            count_map.par_add(local_count_map)
+          } else {
+            count_map
+          }
+        },
+      );
+      chunk = next_chunk?;
+      count_map = new_count_map;
+    }
+    Ok(count_map)
+  }
+
+  pub fn par_add(mut self, rhs: Self) -> Self {
+    /* self
+    .0
+    .values
+    .par_iter_mut()
+    .zip_eq(rhs.0.values.into_par_iter())
+    .for_each(|(l, r)| *l += r)*/
+    self.0 = self.0.par_add(rhs.0);
     self
   }
 
@@ -930,13 +1054,28 @@ impl DensityMap {
 
 #[cfg(test)]
 mod tests {
+  use log::debug;
   use std::fs::read_to_string;
+  use std::time::SystemTime;
 
   use crate::nested::map::img::{
     to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion,
   };
-  use crate::nested::map::skymap::{CountMap, DensityMap};
+  use crate::nested::map::skymap::{CountMap, CountMapU32, DensityMap};
   use mapproj::pseudocyl::mol::Mol;
+
+  fn init_logger() {
+    let log_level = log::LevelFilter::max();
+    // let log_level = log::LevelFilter::Error;
+
+    let _ = env_logger::builder()
+      // Include all events in tests
+      .filter_level(log_level)
+      // Ensure events are captured by `cargo test`
+      .is_test(true)
+      // Ignore errors initializing the logger if tests race to configure it
+      .try_init();
+  }
 
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
@@ -985,7 +1124,7 @@ mod tests {
   }
 
   #[test]
-  #[cfg(not(target_arch = "wasm32"))]
+  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
   fn test_xmm_slew_count() {
     let path = "local_resources/xmmsl3_241122_posonly.csv";
     let content = read_to_string(path).unwrap();
@@ -1030,4 +1169,43 @@ mod tests {
     )
     .unwrap();
   }
+
+  /* Test only on personal computer
+  #[test]
+  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+  fn test_countmap_par() {
+    let n_threads = Some(4);
+    let path = "./local_resources/input11.csv"; // 3.5 GB file, depth=4 chunk_size=2M => total time = 8.57 s, i.e 400 MB/s
+    let depth = 6; // Test also with 10
+    let has_header = false;
+    let chunk_size = 2_000_000;
+    // Init logger
+    init_logger();
+    // Build thread pool
+    let mut pool_builder = rayon::ThreadPoolBuilder::new();
+    if let Some(n_threads) = n_threads {
+      pool_builder = pool_builder.num_threads(n_threads);
+    }
+    let thread_pool = pool_builder.build().unwrap();
+
+    let tstart = SystemTime::now();
+    let count_map = CountMapU32::from_csv_file_par(
+      path,
+      1,
+      2,
+      Some(','),
+      has_header,
+      depth,
+      chunk_size,
+      &thread_pool,
+    )
+    .unwrap();
+    debug!(
+      "Count map computed in {} ms",
+      SystemTime::now()
+        .duration_since(tstart)
+        .unwrap_or_default()
+        .as_millis()
+    );
+  }*/
 }
