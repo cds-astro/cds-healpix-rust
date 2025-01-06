@@ -39,6 +39,7 @@ const FK4B19502GAL: M3x3 = M3x3(
 /// * Eq. (2) of Liu (2011, A&A 536, 102).
 /// * Section 2 from Liu (2011, A&A536, A16)
 /// * Eq. (31) in Fox document
+///
 /// That is:
 /// * NGP longitude in FK5 J2000: 12h51m26.2755s = +192.85948 deg (1st rotation: z-axis of 192.85948 deg)
 /// * NGP latitude  in FK5 J2000: +27.12825 deg (2nd rotation: x'-axis by 90 - 27.12825 = 62.87175 deg)
@@ -47,6 +48,7 @@ const FK4B19502GAL: M3x3 = M3x3(
 ///   Noting NEP (North Equatorial Pole), NGP (North Galactic Pole) and GC (Galactic Center), it is
 ///   the angle NEP-NGP-GP. The rotation from NGP so set the origin of the frame at the GC is thus
 ///   (3rd rotation: z''-axis by 180 - 122.93192 = 57.06808 deg).
+///
 /// # Notes
 /// * follows the ESA convention defined for Hipparcos, Tycho and Gaia
 ///     + no difference made between FK5 and ICRS
@@ -82,19 +84,19 @@ const FK5J20002GAL_ESA: M3x3 = M3x3(
 /// * Eq. (30) in Fox document
 const ICRS2GAL: M3x3 = M3x3(
   XYZt(
-    -0.054_875_657_712_619_678_1,
-    -0.873_437_051_955_779_129_8,
-    -0.483_835_073_616_418_380_3,
+    -0.054_875_657_712_619_68,
+    -0.873_437_051_955_779_1,
+    -0.483_835_073_616_418_37,
   ),
   XYZt(
-    0.494_109_437_197_107_641_2,
-    -0.444_829_721_222_053_763_5,
-    0.746_982_183_839_845_094_133,
+    0.494_109_437_197_107_65,
+    -0.444_829_721_222_053_8,
+    0.746_982_183_839_845,
   ),
   XYZt(
-    -0.867_666_137_557_162_561_5,
-    -0.198_076_337_275_070_594_6,
-    0.455_983_813_691_152_347_6,
+    -0.867_666_137_557_162_6,
+    -0.198_076_337_275_070_6,
+    0.455_983_813_691_152_4,
   ),
 );
 

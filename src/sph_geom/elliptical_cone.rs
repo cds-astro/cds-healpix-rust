@@ -1,9 +1,7 @@
 use std::f64::consts::FRAC_PI_2;
-use std::f64::NAN;
 
-use super::super::xy_geom::ellipse::*;
-use super::super::Customf64;
 use super::proj::*;
+use crate::{xy_geom::ellipse::*, Customf64};
 
 /// TODO: Look at the Java code for a more robust approach!!
 #[derive(Debug)]
@@ -163,7 +161,7 @@ impl EllipticalCone {
     for coo in ar.iter_mut() {
       *coo = match center.unproj(coo.0, coo.1) {
         Some(lonlat) => lonlat,
-        None => (NAN, NAN),
+        None => (f64::NAN, f64::NAN),
       };
     }
     ar

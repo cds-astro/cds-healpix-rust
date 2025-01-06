@@ -26,6 +26,7 @@ use crate::{depth, is_nside, n_hash};
 /// We so far implemented a subset of the format only:
 /// * `INDXSCHM= 'IMPLICIT'`
 /// * `ORDERING= 'NESTED  '`
+///
 /// To be fast (in execution and development), we start by a non-flexible approach in which we
 /// expect the BINTABLE extension to contains:
 /// ```bash

@@ -283,6 +283,7 @@ impl Polygon {
   /// * N.I   = 0         (i)   (The intersection I lies on the great circle of normal N)
   /// * ||I|| = 1         (ii)  (I lies on the unit sphere)
   /// * I_z   = sin(lat)  (iii) (I lies on the given parallel)
+  ///
   /// Knowing Iz (cf the third equation), we end up finding Ix and Iy thanks to (i) and (ii)
   pub fn intersect_parallel(&self, lat: f64) -> Option<UnitVect3> {
     let (lat_sin, lat_cos) = lat.sin_cos();

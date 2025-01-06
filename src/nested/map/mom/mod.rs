@@ -136,6 +136,7 @@ pub enum LhsRhsBoth<V> {
 /// * must be non-overlapping, 
 /// * have the same type of value attached to them
 /// * are sorted following the z-order curve order.
+/// 
 /// This last property allow for streaming processing and operations.
 /// In practice, we use the `zuniq` index: it encodes both the depth and the cell hash value
 /// and is built in such a way that the natural order follow the z-order curve order.  
@@ -224,9 +225,9 @@ pub trait Mom<'a>: Sized {
 
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
-  /// (i.e. the 4 cells belonging to a same direct parent cell).
-  /// The function decide whether value are merge (and how they are merged) or not returning
-  /// either `Some` or `None`.
+  ///   (i.e. the 4 cells belonging to a same direct parent cell).
+  ///   The function decide whether value are merge (and how they are merged) or not returning
+  ///   either `Some` or `None`.
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
     where
       S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,

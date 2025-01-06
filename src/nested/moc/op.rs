@@ -9,7 +9,7 @@ use super::{CheckedIterator, HasMaxDepth, HpxCell, HpxHash, MOCIterator};
 ///
 /// # Panic
 /// * this method panics if at least one of the two input iterator is not ordered following
-/// the natural Z-order curve ordering.
+///   the natural Z-order curve ordering.
 pub fn not<H, T>(it: T) -> NotMocIter<H, CheckedIterator<H, T>>
 where
   H: HpxHash,
@@ -30,7 +30,7 @@ where
 ///
 /// # Panic
 /// * this method panics if at least one of the two input iterator is not ordered following
-/// the natural Z-order curve ordering.
+///   the natural Z-order curve ordering.
 pub fn and<H, T1, T2>(
   left_it: T1,
   right_it: T2,
@@ -57,7 +57,7 @@ where
 ///
 /// # Panic
 /// * this method panics if at least one of the two input iterator is not ordered following
-/// the natural Z-order curve ordering.
+///   the natural Z-order curve ordering.
 pub fn or<H, T1, T2>(
   left_it: T1,
   right_it: T2,
@@ -403,10 +403,10 @@ where
 /// Performs an `NOT` operation between two MOCs on-the-fly, while iterating.
 /// # Remark:
 /// * If you have an array in memory, the *NOT* operation is very fast and contains the number of
-/// ranges in the MOC plus 1.
+///   ranges in the MOC plus 1.
 /// * Operations on ranges is simpler and faster than operations on unique cells. But when the MOC
-/// is stored in (compressed) uniq cells instead of ranges, we may account for the time needed to
-/// convert from uniq cells to ranges.
+///   is stored in (compressed) uniq cells instead of ranges, we may account for the time needed to
+///   convert from uniq cells to ranges.
 pub struct NotMocIter<H, T>
 where
   H: HpxHash,
@@ -426,7 +426,7 @@ where
   ///
   /// # WARNING
   /// * Each input iterator **MUST** be ordered following the natural Z-order curve order.
-  /// If it is not the case, the result will be wrong, without errors!
+  ///   If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version.
   fn new_unchecked(mut it: T) -> NotMocIter<H, T> {
     let curr = it.next();
@@ -525,10 +525,10 @@ where
 /// Performs an `AND` operation between two MOCs on-the-fly, while iterating.
 /// # Remark:
 /// * If you have an array in memory the fastest *AND* operation consists in starting with 2 binary
-/// searches to isolate the smallest common segment. This is not possible when working with iterators.
+///   searches to isolate the smallest common segment. This is not possible when working with iterators.
 /// * Operations on ranges is simpler and faster than operations on unique cells. But when the MOC
-/// is stored in (compressed) unique cells instead of ranges, we may account for the time needed to
-/// convert from uniq cells to ranges.  
+///   is stored in (compressed) unique cells instead of ranges, we may account for the time needed to
+///   convert from uniq cells to ranges.  
 pub struct AndMocIter<H, T1, T2>
 where
   H: HpxHash,
@@ -551,7 +551,7 @@ where
   ///
   /// # WARNING
   /// * Each input iterator **MUST** be ordered following the natural Z-order curve order.
-  /// If it is not the case, the result will be wrong, without errors!
+  ///   If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version.
   fn new_unchecked(mut left_it: T1, mut right_it: T2) -> AndMocIter<H, T1, T2> {
     let depth_max = max(left_it.depth_max(), right_it.depth_max());
@@ -689,7 +689,7 @@ where
   ///
   /// # WARNING
   /// * Each input iterator **MUST** be ordered following the natural Z-order curve order.
-  /// If it is not the case, the result will be wrong, without errors!
+  ///   If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version.
   fn new_unchecked(mut left_it: T1, mut right_it: T2) -> OrMocIter<H, T1, T2> {
     let depth_max = max(left_it.depth_max(), right_it.depth_max());

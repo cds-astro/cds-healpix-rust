@@ -356,7 +356,7 @@ impl SkyMapEnum {
 
   pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
     File::create(path)
-      .map_err(|e| FitsError::Io(e))
+      .map_err(FitsError::Io)
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
@@ -545,7 +545,7 @@ impl CountMap {
 
   pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
     File::create(path)
-      .map_err(|e| FitsError::Io(e))
+      .map_err(FitsError::Io)
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
@@ -588,10 +588,9 @@ impl CountMap {
     };
     let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
-    let mom = MomVecImpl::from(mom, |z, v| {
+    MomVecImpl::from(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
-    });
-    mom
+    })
   }
 
   // to_png
@@ -892,10 +891,9 @@ impl CountMapU32 {
     };
     let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
-    let mom = MomVecImpl::from(mom, |z, v| {
+    MomVecImpl::from(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
-    });
-    mom
+    })
   }
 
   // to_png
@@ -1043,7 +1041,7 @@ impl DensityMap {
 
   pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
     File::create(path)
-      .map_err(|e| FitsError::Io(e))
+      .map_err(FitsError::Io)
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
@@ -1052,15 +1050,16 @@ impl DensityMap {
 
 #[cfg(test)]
 mod tests {
-  use log::debug;
-  use std::fs::read_to_string;
-  use std::time::SystemTime;
+  use std::{fs::read_to_string, time::SystemTime};
 
-  use crate::nested::map::img::{
-    to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion,
-  };
-  use crate::nested::map::skymap::{CountMap, CountMapU32, DensityMap};
+  use log::debug;
+
   use mapproj::pseudocyl::mol::Mol;
+
+  use crate::nested::map::{
+    img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
+    skymap::{CountMap, CountMapU32, DensityMap},
+  };
 
   fn init_logger() {
     let log_level = log::LevelFilter::max();

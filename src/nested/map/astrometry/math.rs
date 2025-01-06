@@ -109,11 +109,7 @@ where
   A: IntoIterator<Item = &'a f64>,
   B: IntoIterator<Item = &'a f64>,
 {
-  lhs
-    .into_iter()
-    .zip(rhs.into_iter())
-    .map(|(a, b)| a * b)
-    .sum()
+  lhs.into_iter().zip(rhs).map(|(a, b)| a * b).sum()
 }
 
 pub trait HasXYZ {
@@ -448,12 +444,12 @@ impl M3x3 {
 
   /// Transform the input matrix in the global frame to a matrix in the local frame.
   pub fn rotate_matrix(&self, m_global: &M3x3) -> M3x3 {
-    self.time(&m_global.time_transpose_of(&self))
+    self.time(&m_global.time_transpose_of(self))
   }
 
   /// Transform the input matrix in the local frame to a matrix in th global frame.
   pub fn unrotate_matrix(&self, m_local: &M3x3) -> M3x3 {
-    self.transpose_time(&m_local.time(&self))
+    self.transpose_time(&m_local.time(self))
   }
 
   /// From global to local
@@ -493,7 +489,7 @@ impl M3x3 {
   }
 
   pub fn to_global(&self, local_rot_matrix: &M3x3) -> M3x3 {
-    local_rot_matrix.unrotate_matrix(&self)
+    local_rot_matrix.unrotate_matrix(self)
   }
 }
 

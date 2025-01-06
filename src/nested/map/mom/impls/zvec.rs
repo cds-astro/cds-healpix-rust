@@ -81,7 +81,6 @@ where
       range.end += 1;
     }
     range
-      .into_iter()
       .map(|i| {
         let (z, v) = &self.entries[i];
         (*z, v)
@@ -107,9 +106,9 @@ where
 
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
-  /// (i.e. the 4 cells belonging to a same direct parent cell).
-  /// The function decide whether value are merge (and how they are merged) or not returning
-  ///either `Some` or `None`.
+  ///   (i.e. the 4 cells belonging to a same direct parent cell).
+  ///   The function decide whether value are merge (and how they are merged) or not returning
+  ///   either `Some` or `None`.
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
   where
     S: SkyMap<'s, HashType = Z, ValueType = V>,
@@ -196,7 +195,6 @@ where
     Self { depth, entries }
   }
 
-  ///! WARNING: No yet implemented!
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
@@ -533,12 +531,12 @@ where
   {
     let n = stack.len();
     if n >= 4 {
-      let z0 = *&stack[n - 4].0;
+      let z0 = stack[n - 4].0;
       let (d0, h0) = Z::from_zuniq(z0);
       if d0 > 0 && h0 & Z::LAST_LAYER_MASK == Z::zero() {
-        let z1 = *&stack[n - 3].0;
-        let z2 = *&stack[n - 2].0;
-        let z3 = *&stack[n - 1].0;
+        let z1 = stack[n - 3].0;
+        let z2 = stack[n - 2].0;
+        let z3 = stack[n - 1].0;
         if z1 == Z::to_zuniq(d0, h0 + Z::one())
           && z2 == Z::to_zuniq(d0, h0 + Z::two())
           && z3 == Z::to_zuniq(d0, h0 + Z::three())

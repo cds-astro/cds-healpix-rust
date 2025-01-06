@@ -172,7 +172,7 @@ impl SimpleExtSortParams {
         && file_path
           .file_name()
           .and_then(|os_str| os_str.to_str())
-          .and_then(|name| SimpleExtSortParams::parse_tmp_file_name(name))
+          .and_then(SimpleExtSortParams::parse_tmp_file_name)
           .is_some()
       {
         debug!("Remove file {:?} if exists.", &file_path);
@@ -237,6 +237,7 @@ impl SimpleExtSortParams {
       .append(false)
       .write(true)
       .create(true)
+      .truncate(true)
       .open(path)
   }
   fn open_file_all(&self) -> Result<File, IoError> {
@@ -269,8 +270,8 @@ impl SimpleExtSortParams {
     path
   }
 
-  fn create_info_file_path_gen(path: &PathBuf) -> PathBuf {
-    let mut path = path.clone();
+  fn create_info_file_path_gen(path: &Path) -> PathBuf {
+    let mut path = path.to_path_buf();
     path.push(Self::INFO_FILENAME);
     path
   }
@@ -283,7 +284,7 @@ impl SimpleExtSortParams {
   ) -> Result<(), Box<dyn Error>> {
     let info = SimpleExtSortInfo::new(
       self.n_elems_per_chunk,
-      self.n_threads.clone(),
+      self.n_threads,
       n_tot,
       depth,
       ordered_ranges_counts,
@@ -301,7 +302,7 @@ impl SimpleExtSortParams {
       .and_then(|content| toml::from_str(&content).map_err(|e| e.into()))
   }
 
-  fn read_info_gen(path: &PathBuf) -> Result<SimpleExtSortInfo, Box<dyn Error>> {
+  fn read_info_gen(path: &Path) -> Result<SimpleExtSortInfo, Box<dyn Error>> {
     let path = Self::create_info_file_path_gen(path);
     fs::read_to_string(&path)
       .map_err(|e| format!("Error reading file {}: {:?}.", path.to_string_lossy(), e).into())
@@ -367,7 +368,7 @@ impl SimpleExtSortParams {
               path
                 .file_name()
                 .and_then(|os_str| os_str.to_str())
-                .and_then(|name| SimpleExtSortParams::parse_tmp_file_name(name))
+                .and_then(SimpleExtSortParams::parse_tmp_file_name)
                 .map(|(depth, range)| (path, depth, range))
             } else {
               None
@@ -403,6 +404,7 @@ impl SimpleExtSortParams {
 /// When reading from a file, we have to read twice the input file:
 /// * first to compute the HEALPix cells distribution;
 /// * second to provide this method input iterator.
+///
 /// When reading from an iterator (distribution unknown), we additionally have to
 /// write the input (possibly pre-sorting it) before re-reading it.
 ///
@@ -516,8 +518,8 @@ where
     // Find first and last range, then iter_mut and this sub_slice
     // * unwrap() is ok for first and last since we 'break' if the buffer is empty.
     // * unwrap() is ok on binary_search since ranges cover the full hash range.
-    let first_h = (hpx29(&entries_view.first().unwrap()) >> twice_dd) as u32;
-    let last_h = (hpx29(&entries_view.last().unwrap()) >> twice_dd) as u32;
+    let first_h = (hpx29(entries_view.first().unwrap()) >> twice_dd) as u32;
+    let last_h = (hpx29(entries_view.last().unwrap()) >> twice_dd) as u32;
     //debug!("first_h: {}; last_h: {}", first_h, last_h);
     let rstart = ranges_counts
       .binary_search_by(get_range_binsearch(first_h))
@@ -617,7 +619,7 @@ where
     }
   }
   // write the count map??!
-  params.write_ok().map_err(|e| e.into())
+  params.write_ok()
 }
 
 /// See [hpx_external_sort_with_knowledge](#hpx_external_sort_with_knowledge).
@@ -834,9 +836,8 @@ where
 /// For simple case, hy not use a `Clonable IntoIter`?
 /// I just found [this post](https://orxfun.github.io/orxfun-notes/#/missing-iterable-traits-2024-12-13)
 /// that seems to tackle a similar problem here (iterating several time over a same Collection).
-pub fn hpx_external_sort<'a, T, E, I, J, F>(
-  iterator: I, // replace this by another iterator on a different type of rows + hpx29: then compute in parallel (parsing + ContMap + reduce/fold countmap)
-  // FARIE METHOD PARALLEL COUNT_MAP SEPAREE Et L'APPELER ICI!!
+pub fn hpx_external_sort<T, E, I, J, F>(
+  iterator: I,
   iterable: J,
   hpx29: F,
   depth: u8,
@@ -887,7 +888,7 @@ where
   hpx_external_sort_with_knowledge(iterable.into_iter(), &count_map, hpx29, Some(params))
 }
 
-pub fn hpx_external_sort_stream<'a, T, E, I, F>(
+pub fn hpx_external_sort_stream<T, E, I, F>(
   stream: I,
   hpx29: F,
   depth: u8,
@@ -984,12 +985,13 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>>(
     }
   };
 
-  // Start reading file to create the coutn map
+  // Start reading file to create the count map
   let mut line_res_it = BufReader::new(File::open(&input_path)?).lines().peekable();
   let mut bufw = BufWriter::new(if output_overwrite {
     OpenOptions::new()
       .write(true)
       .create(true)
+      .truncate(true)
       .open(output_path)
   } else {
     OpenOptions::new()
@@ -1100,7 +1102,7 @@ pub fn create_test_file(depth: u8, path: &str) -> Result<(), IoError> {
   let mut bufw = BufWriter::new(File::create(path)?);
 
   for h in 0..n_hash {
-    let (lon, lat) = layer.center(h as u64);
+    let (lon, lat) = layer.center(h);
     writeln!(
       bufw,
       "{:0width$},{:014.10},{:+014.10},{}",
@@ -1123,7 +1125,7 @@ pub fn create_test_file(depth: u8, path: &str) -> Result<(), IoError> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::process::{Command, ExitStatus};
+  use std::process::Command;
 
   fn init_logger() {
     let log_level = log::LevelFilter::max();

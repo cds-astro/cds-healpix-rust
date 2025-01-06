@@ -1,5 +1,4 @@
 use std::f64::consts::PI;
-use std::f64::EPSILON;
 
 use super::super::Customf64;
 
@@ -75,7 +74,7 @@ pub trait Vec3 {
 }
 
 // Apply to all references to a type that implements the Vec3 trait
-impl<'a, T> Vec3 for &'a T
+impl<T> Vec3 for &T
 where
   T: Vec3,
 {
@@ -191,7 +190,7 @@ pub fn is_unit(x: f64, y: f64, z: f64) -> bool {
 
 #[inline]
 pub fn is_unit_from_norm(norm: f64) -> bool {
-  (norm - 1.0_f64).abs() <= EPSILON
+  (norm - 1.0_f64).abs() <= f64::EPSILON
 }
 
 #[inline]
@@ -375,7 +374,7 @@ pub trait LonLatT {
 }
 
 // Apply to all references to a type that implements the Vec3 trait
-impl<'a, T> LonLatT for &'a T
+impl<T> LonLatT for &T
 where
   T: LonLatT,
 {

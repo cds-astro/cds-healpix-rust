@@ -1,13 +1,12 @@
 //! Contains the code for MOC compression/decompression one can made on streamed MOCs
 //! (i.e. based on uniq cells iterators ordered following the natural Z-order curve order).
 
-// use std::cmp::{min, max, Ordering};
 use super::{CheckedIterator, HasMaxDepth, HpxCell, HpxHash, MOCIterator};
 
 ///
 /// # Panic
 /// * this method panics if the input iterator is not ordered following the natural Z-order
-/// curve ordering.
+///   curve ordering.
 pub fn compress<H, T>(it: T) -> CompressMocIter<H, CheckedIterator<H, T>>
 where
   H: HpxHash,
@@ -54,7 +53,7 @@ where
   ///
   /// # WARNING
   /// * The input iterator **MUST** be ordered following the natural Z-order curve order.
-  /// If it is not the case, the result will be wrong, without errors!
+  ///   If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version.
   fn new_unchecked(mut it: T) -> CompressMocIter<H, T> {
     let depth_max = it.depth_max();
@@ -334,7 +333,7 @@ impl<'a, H: HpxHash> UncompressMocIter<'a, H> {
   ///
   /// # WARNING
   /// * The input iterator **MUST** be ordered following the natural Z-order curve order.
-  /// If it is not the case, the result will be wrong, without errors!
+  ///   If it is not the case, the result will be wrong, without errors!
   /// * If you are not sure, use the `new` version.
   fn new(cmoc: &'a [u8]) -> UncompressMocIter<'a, H> {
     let depth_max = cmoc[0];
@@ -396,7 +395,7 @@ impl<'a, H: HpxHash> UncompressMocIter<'a, H> {
   }
 }
 
-impl<'a, H> HasMaxDepth for UncompressMocIter<'a, H>
+impl<H> HasMaxDepth for UncompressMocIter<'_, H>
 where
   H: HpxHash,
 {
@@ -405,7 +404,7 @@ where
   }
 }
 
-impl<'a, H: HpxHash> Iterator for UncompressMocIter<'a, H> {
+impl<H: HpxHash> Iterator for UncompressMocIter<'_, H> {
   type Item = HpxCell<H>;
 
   fn next(&mut self) -> Option<Self::Item> {

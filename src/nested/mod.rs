@@ -1645,7 +1645,7 @@ impl Layer {
   ///
   /// # Output
   /// - the cell numbers (hash values) of the given hash inner edge ordered consecutively,
-  /// starting from the south (x=0, y=0) cell in the anti-clokwise direction.
+  ///   starting from the south (x=0, y=0) cell in the anti-clokwise direction.
   ///
   pub fn internal_edge(mut hash: u64, delta_depth: u8) -> Box<[u64]> {
     // Compute the x and y part masks for deltaDepth.
@@ -2445,7 +2445,7 @@ impl Layer {
         depth_start,
         h,
         &zone,
-        &mut zone_vertices_hashs_flags,
+        &zone_vertices_hashs_flags,
         &mut bmoc_builder,
       );
     }

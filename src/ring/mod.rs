@@ -18,8 +18,8 @@ pub const fn n_hash(nside: u32) -> u64 {
 /// - `nside`: the sub-division of a base cell along both the South-East and the South-West axis
 ///
 /// # Output
-/// -  $4 * nside - 1$: $2 * nside - 1$ ring for the NPC cell, $2 * nside - 1$ for the SPC cell
-/// $+1$ for the equator.
+/// - $4 * nside - 1$: $2 * nside - 1$ ring for the NPC cell, $2 * nside - 1$ for the SPC cell
+///   $+1$ for the equator.
 ///
 /// # Remark
 /// Contrary to the NESTED scheme, `nside` here is not necessarily a power of 2.

@@ -11,7 +11,7 @@
 //! - do not need all the MOC to be loaded in memory (logical operations could also be implemented
 //!   on streams of ordered ranges)
 //! - works with compressed MOCs decompressed on-the-fly, and compressing the result on-the-fly
-//! too (with a very few amount of memory needed).
+//!   too (with a very few amount of memory needed).
 
 use num::{PrimInt, ToPrimitive, Unsigned};
 use num_traits::NumAssign;
@@ -88,7 +88,8 @@ impl<H: HpxHash> HpxCell<H> {
 /// # Remark:
 /// I first wanted to declare:
 /// > pub type HpxRange<H: HpxHash> = Range<H>;
-/// , but it was not possible to define a new `Iterator` on it.
+///
+/// but it was not possible to define a new `Iterator` on it.
 pub struct HpxRange<H: HpxHash> {
   /// The lower bound of the range (inclusive).
   pub from: H,
@@ -259,7 +260,6 @@ where
   }
 }
 
-///
 pub struct FlatLazyMOCIter<H, T>
 where
   H: HpxHash,
@@ -464,7 +464,7 @@ where
   }
 }
 
-impl<'a, H> HasMaxDepth for LazyRangeMOCVecIter<'a, H>
+impl<H> HasMaxDepth for LazyRangeMOCVecIter<'_, H>
 where
   H: HpxHash,
 {
@@ -473,7 +473,7 @@ where
   }
 }
 
-impl<'a, H> Iterator for LazyRangeMOCVecIter<'a, H>
+impl<H> Iterator for LazyRangeMOCVecIter<'_, H>
 where
   H: HpxHash,
 {
@@ -685,7 +685,7 @@ where
   mask: H,
 }
 
-impl<'a, H, R> MOCIteratorFromRefRanges<'a, H, R>
+impl<H, R> MOCIteratorFromRefRanges<'_, H, R>
 where
   H: HpxHash,
   R: RangeMOCIterator<H>,
@@ -707,7 +707,7 @@ where
   }
 }
 
-impl<'a, H, R> HasMaxDepth for MOCIteratorFromRefRanges<'a, H, R>
+impl<H, R> HasMaxDepth for MOCIteratorFromRefRanges<'_, H, R>
 where
   H: HpxHash,
   R: RangeMOCIterator<H>,
@@ -717,7 +717,7 @@ where
   }
 }
 
-impl<'a, H, R> Iterator for MOCIteratorFromRefRanges<'a, H, R>
+impl<H, R> Iterator for MOCIteratorFromRefRanges<'_, H, R>
 where
   H: HpxHash,
   R: RangeMOCIterator<H>,

@@ -69,7 +69,7 @@ pub fn proj_gpu(x: f32, y: f32, z: f32) -> (f32, f32) {
 ///   - `Y /= PI / 4`
 pub fn unproj_gpu(x: f32, y: f32) -> (f32, f32, f32) {
   use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
-  const ONE_OVER_SQRT6: f32 = 0.408_248_290_463_863_f32;
+  const ONE_OVER_SQRT6: f32 = 0.408_248_3_f32;
   assert!((-2f32..=2f32).contains(&y)); // check y
   if y > 1.0 {
     // North Polar Cap
@@ -141,13 +141,7 @@ pub(crate) fn pm1_offset_decompose(x: f32) -> OffsetAndPM1 {
 }
 
 fn deal_with_numerical_approx_in_edges(x: f32) -> f32 {
-  if x > 1.0 {
-    1.0
-  } else if x < -1.0 {
-    -1.0
-  } else {
-    x
-  }
+  x.clamp(-1.0, 1.0)
 }
 
 /// Returns the cell number (hash value) associated with the given position on the unit sphere,

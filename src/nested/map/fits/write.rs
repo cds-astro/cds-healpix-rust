@@ -12,7 +12,7 @@ use super::error::FitsError;
 ///
 /// # Params
 /// * `values`: array of values, the index of the value correspond to the HEALPix cell the value is
-/// associated with.
+///   associated with.
 pub fn write_implicit_skymap_fits<R: Write, T: SkyMapValue>(
   mut writer: R,
   values: &[T],

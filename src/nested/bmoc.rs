@@ -271,8 +271,11 @@ pub struct BMOCBuilderFixedDepth {
 }
 
 impl BMOCBuilderFixedDepth {
+  /// # Inputs
+  ///  - `depth`: BMOC depth.
   ///  - `is_full`: the flag to be set for each cell number (I expect`true` to be used for example
   ///    when building catalogues MOC.
+  ///
   /// The results of logical operations between BMOC having the flag of each of their cells
   /// set to `true` must equal the results of regular MOC logical operations.
   pub fn new(depth: u8, is_full: bool) -> BMOCBuilderFixedDepth {
@@ -550,6 +553,7 @@ impl BMOC {
   /// - cells with flag set to 1 (fully covered) are removed
   /// - cells with flag set to 0 (partially covered) are kept
   /// - empty cells are added with flag set to 1
+  ///
   /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn not(&self) -> BMOC {
     // Worst case: only 1 sub-cell by cell in the MOC (+11 for depth 0)
@@ -590,6 +594,7 @@ impl BMOC {
     builder.to_bmoc()
   }
 
+  /*
   /// Go to the next hash value:
   /// - if the input hash is not the last one of the super-cell
   ///   (the cell of depth deph - 1 the hash belongs to), the result is simply
@@ -599,7 +604,7 @@ impl BMOC {
   ///   and the result is:
   ///   - output_depth < input_depth
   ///   - output_hash = input_hash_at_outpu_depth + 1
-  /*fn go_next(&self, start_depth: &mut u8, start_hash: &mut u64) {
+  fn go_next(&self, start_depth: &mut u8, start_hash: &mut u64) {
     while *start_depth > 0 && ((*start_hash & 3_u64) == 3_u64) {
       *start_depth -= 1;
       *start_hash >>= 2;
@@ -611,6 +616,7 @@ impl BMOC {
   /// - all non overlapping cells are removed
   /// - when two cells are overlapping, the overlapping part is kept
   ///   - the value of the flag is the result of a logical AND between the flags of the merged cells.
+  ///
   /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn and(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
@@ -683,8 +689,9 @@ impl BMOC {
   */
 
   /// Returns the union of this BMOC with the given BMOC:
-  /// - all non overlapping cells in both BMOCs are kept
-  /// - overlapping cells are merged, the value of the flag is the result of a logical OR between
+  /// - all non overlapping cells in both BMOCs are kept;
+  /// - overlapping cells are merged, the value of the flag is the result of a logical OR between.
+  ///
   /// the flags of the merged cells.
   /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn or(&self, other: &BMOC) -> BMOC {
@@ -831,6 +838,7 @@ impl BMOC {
   /// - when two cells are overlapping, the overlapping part is:
   ///   - removed if both flags = 1
   ///   - kept if one of the flags = 0 (since 0 meas partially covered but O don't know which part)
+  ///
   /// The method as been tested when all flags are `is_full` (i.e. regular MOC case).
   pub fn xor(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
@@ -970,7 +978,8 @@ impl BMOC {
   /// - when two cells are overlapping, the overlapping part is:
   ///   - removed if both flags = 1
   ///   - kept if one of the flags = 0 (since 0 meas partially covered but O don't know which part)
-  /// Poor's man implementation: A MINUS B = A AND NOT(B)
+  ///
+  /// Poor's man implementation: A MINUS B = A AND NOT(B).
   pub fn minus(&self, other: &BMOC) -> BMOC {
     let mut builder = BMOCBuilderUnsafe::new(
       max(self.depth_max, other.depth_max),
@@ -1172,7 +1181,7 @@ impl BMOC {
     let mut prev_max = 0_u64;
     let mut prev_flag = self
       .entries
-      .get(0)
+      .first()
       .map(|v| (v & 1_u64) == 1_u64)
       .unwrap_or(false);
     for cell in self.into_iter() {
@@ -1213,13 +1222,15 @@ impl BMOC {
   /// during the operation, we loose the `flag` information attached to each BMOC cell.
   /// # Remark
   /// * If needed we could store the flag information!
+  ///
   /// # Info
   /// * Original idea by F.-X. Pineau (see Java library), improved by M. Reinecke (through
-  /// private communication) leading to an even better compression factor.
+  ///   private communication) leading to an even better compression factor.
   /// * Although its seems (c.f. M. Reinecke) that this is quite similar to `Interpolative coding`,
-  /// M. Reinecke tests show a slightly better compression factor. M. Reinecke raised the following
-  /// question: was it worth implementing this specific case instead of using an
-  /// `Interpolative coding` library?
+  ///   M. Reinecke tests show a slightly better compression factor. M. Reinecke raised the following
+  ///   question: was it worth implementing this specific case instead of using an
+  ///   `Interpolative coding` library?
+  ///
   /// # Idea
   /// * The basic idea consists in...
   #[allow(clippy::many_single_char_names)]
@@ -1626,7 +1637,7 @@ impl<'a> BMOCFlatIter<'a> {
   }
 }
 
-impl<'a> Iterator for BMOCFlatIter<'a> {
+impl Iterator for BMOCFlatIter<'_> {
   type Item = u64;
 
   fn next(&mut self) -> Option<u64> {
@@ -1705,7 +1716,7 @@ impl<'a> BMOCFlatIterCell<'a> {
   }
 }
 
-impl<'a> Iterator for BMOCFlatIterCell<'a> {
+impl Iterator for BMOCFlatIterCell<'_> {
   type Item = Cell;
 
   fn next(&mut self) -> Option<Cell> {
@@ -1738,7 +1749,7 @@ pub struct BMOCIter<'a> {
   iter: Iter<'a, u64>,
 }
 
-impl<'a> Iterator for BMOCIter<'a> {
+impl Iterator for BMOCIter<'_> {
   type Item = Cell;
 
   fn next(&mut self) -> Option<Cell> {

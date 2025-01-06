@@ -103,9 +103,9 @@ pub const F64_BUT_SIGN_BIT_MASK: u64 = 0x7FFFFFFFFFFFFFFF;
 /// - this value x2 is larger than the smallest edge
 /// - BUT there is no case in which the value is larger than the four center-to-vertex distance
 /// - BUT there is no case in which the value x2 is larger than both diagonals
-/// => this radius is smaller than the smaller circumcircle radius (=> no cone having the smaller
-/// -edge-to-opposite-edge-radius radius can contains the 4 vertices of a cell (but 3 is ok)
-/// vertices
+///
+/// So this radius is smaller than the smaller circumcircle radius (=> no cone having the smaller
+/// edge-to-opposite-edge-radius radius can contains the 4 vertices of a cell (but 3 is ok))
 static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] = [
   8.410686705679302e-1,  // depth = 0
   3.7723631722170065e-1, // depth = 1
@@ -854,8 +854,8 @@ pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
 /// from its center to a border overlaps a maximum of 9 cells (the cell containing the center of
 /// the shape plus the 8 neighbouring cells).  
 /// Info: internally, unrolled binary search loop on 30 pre-computed values (one by depth).
-
-/// @return -1 if the given distance is very large (> ~48deg), else returns the smallest depth
+///
+/// Returns -1 if the given distance is very large (> ~48deg), else returns the smallest depth
 /// (in [0, 29]) at which a shape having the given largest distance from its center to a border
 /// overlaps a maximum of 9 cells (the cell containing the center of the shape plus the 8
 /// neighbouring cells).
@@ -865,8 +865,8 @@ pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
 ///
 /// # Output
 /// - `depth` = the smallest depth (in `[0, 29]`) at which a shape having the given largest distance
-/// from its center to a border overlaps a maximum of 9 cells (the cell containing the center of the
-/// shape plus the 8 neighbouring cells).
+///   from its center to a border overlaps a maximum of 9 cells (the cell containing the center of the
+///   shape plus the 8 neighbouring cells).
 ///
 /// # Panics
 /// If the given distance is very large (> ~48deg), this function is not valid since the 12 base
@@ -1152,7 +1152,7 @@ pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
 ///
 /// # Input
 /// - `(x, y)` the coordinates in the Euclidean projection plane, i.e. $x \in [0, 8[$
-/// and $y \in [-2, 2]$
+///   and $y \in [-2, 2]$
 ///
 /// # Ouput
 /// - `d0h` the hash value of the base cell (i.e. the depth 0 / nside 1 cell)

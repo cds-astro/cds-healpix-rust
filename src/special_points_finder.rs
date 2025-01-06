@@ -87,8 +87,8 @@ pub fn arc_special_points<'a>(
 ///
 /// This method is valid on the Equatorial Zone only (cylindrical equal area projection).
 /// It is ok for radius > 20 mas:
-///  - if radius < 20 mas = 1e-7 rad, then 1 - 2*sin^2(r/2) = 1 - 1e-14 which is close from the
-/// precision of a double floating point.
+/// - if radius < 20 mas = 1e-7 rad, then 1 - 2*sin^2(r/2) = 1 - 1e-14 which is close from the
+///   precision of a double floating point.
 ///
 /// The function rely on the Newton-Raphson method to solve `(DeltaX)/dY -+ 1 = 0`.
 ///
@@ -268,8 +268,8 @@ fn f_over_df_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
 ///
 /// This method is valid on the polar caps only (Collignon projection).
 /// It is ok for radius > 20 mas:
-///  - if radius < 20 mas = 1e-7 rad, then 1 - 2*sin^2(r/2) = 1 - 1e-14 which is close from the
-/// precision of a double floating point.
+/// - if radius < 20 mas = 1e-7 rad, then 1 - 2*sin^2(r/2) = 1 - 1e-14 which is close from the
+///   precision of a double floating point.
 ///
 /// The function rely on the Newton-Raphson method to solve `(DeltaX)/dY -+ 1 = 0`.
 ///
@@ -613,6 +613,7 @@ fn f_over_df_npc(
 /// Let's use the following notations:
 /// - Coordinates of $`\vec{a}\times\vec{b} = (x_0, y_0, z_0)`$
 /// - Coordinates of the points we are looking for $`\vec{i} = (x, y, z=cte)`$
+///
 /// We look for `x` and `y` solving
 /// ```math
 /// \left\{
