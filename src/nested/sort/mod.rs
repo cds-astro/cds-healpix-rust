@@ -10,16 +10,12 @@ use std::{
   cmp::Ordering,
   error::Error,
   fs::{self, read_dir, remove_dir, remove_file, File, OpenOptions},
-  io::{
-    self, BufRead, BufReader, BufWriter, Error as IoError, ErrorKind as IoErrorKind, Lines, Seek,
-    Write,
-  },
-  iter::{Peekable, Zip},
+  io::{BufRead, BufReader, BufWriter, Error as IoError, Seek, Write},
+  iter::Zip,
   marker::{Send, Sync},
-  num::ParseIntError,
   ops::Range,
   path::{Path, PathBuf},
-  time::{Duration, SystemTime},
+  time::SystemTime,
   vec::IntoIter,
 };
 
@@ -28,7 +24,7 @@ use bincode::{
   config::{FixintEncoding, WithOtherIntEncoding},
   DefaultOptions, Error as BincodeError, Options,
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use rayon::{prelude::ParallelSliceMut, ThreadPool}; // iter::ZipEq
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
@@ -69,7 +65,7 @@ pub enum SortError {
 /// # Note
 /// Having a costly `hpx29` method is ok: internally it will be called only once per row
 /// (not multiple times durng the sort process).
-pub fn hpx_internal_sort<T, F>(mut elems: &mut [T], hpx29: F, n_threads: Option<usize>)
+pub fn hpx_internal_sort<T, F>(elems: &mut [T], hpx29: F, n_threads: Option<usize>)
 where
   T: IntSortable,
   F: Fn(&T) -> u64 + Sync,
@@ -201,17 +197,17 @@ impl SimpleExtSortParams {
     Ok(())
   }
 
-  fn set_tmp_dir(mut self, tmp_dir: PathBuf) -> Self {
+  pub fn set_tmp_dir(mut self, tmp_dir: PathBuf) -> Self {
     self.tmp_dir = tmp_dir;
     self
   }
 
-  fn set_n_elems_per_chunk(mut self, n_elems_per_chunk: u32) -> Self {
+  pub fn set_n_elems_per_chunk(mut self, n_elems_per_chunk: u32) -> Self {
     self.n_elems_per_chunk = n_elems_per_chunk;
     self
   }
 
-  fn set_n_threads(mut self, n_threads: usize) -> Self {
+  pub fn set_n_threads(mut self, n_threads: usize) -> Self {
     self.n_threads = Some(n_threads);
     self
   }
@@ -298,7 +294,7 @@ impl SimpleExtSortParams {
       .map_err(|e| format!("Error writing file {}: {:?}.", path.to_string_lossy(), e).into())
   }
 
-  fn read_info(&self) -> Result<SimpleExtSortInfo, Box<dyn Error>> {
+  pub fn read_info(&self) -> Result<SimpleExtSortInfo, Box<dyn Error>> {
     let path = self.create_info_file_path();
     fs::read_to_string(&path)
       .map_err(|e| format!("Error reading file {}: {:?}.", path.to_string_lossy(), e).into())
@@ -330,7 +326,7 @@ impl SimpleExtSortParams {
     fs::write(&path, "")
       .map_err(|e| format!("Error writing file {}: {:?}.", path.to_string_lossy(), e).into())
   }
-  fn ok_file_exists(&self) -> Result<bool, Box<dyn Error>> {
+  pub fn ok_file_exists(&self) -> Result<bool, Box<dyn Error>> {
     let path = self.create_ok_file_path();
     fs::exists(&path).map_err(|e| {
       format!(
@@ -551,7 +547,7 @@ where
       if to > 0 {
         let (to_be_writen, remaining) = entries_view.split_at_mut(to);
         entries_view = remaining;
-        let tstart = SystemTime::now();
+        // let tstart = SystemTime::now();
         let file = params.create_file_or_open_to_append(depth, range)?;
         let mut bufw = BufWriter::new(file);
         for row in to_be_writen {
@@ -570,7 +566,7 @@ where
 
         let to = to as u32;
         if to > *count {
-          // TODO: remove tmp files?
+          // TODO: clean removing tmp files?
           return Err(
             format!(
               "Wrong number of counts for range [{}, {}). N remaining: {}. N to be removed: {}.",
@@ -906,7 +902,7 @@ where
   let params = sort_params.unwrap_or_default();
   let twice_dd = (29 - depth) << 1;
   let bincode = get_bincode();
-  /// Write tmp file containing all rows, and compute the count map
+  // Write tmp file containing all rows, and compute the count map
   let count_map = {
     let tmp_file_all = params
       .create_tmp_dir()
@@ -934,7 +930,7 @@ where
         }),
     )
   };
-  /// Get an iterator over all written rows and apply the second part of the algorithm.
+  // Get an iterator over all written rows and apply the second part of the algorithm.
   let n_rows = count_map.values().map(|count| *count as u64).sum();
   let mut bufr = params.open_file_all().map(BufReader::new)?;
   hpx_external_sort_with_knowledge(
@@ -1066,7 +1062,7 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>>(
   }
   // Get the sorted iterator
   let tmp_path = sort_params.tmp_dir.clone();
-  let mut sorted_it =
+  let sorted_it =
     hpx_external_sort_with_knowledge(line_res_it, &count_map, hpx29, Some(sort_params))?;
 
   debug!("Starts writing sorted rows in output file...");

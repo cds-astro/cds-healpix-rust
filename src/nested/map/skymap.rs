@@ -20,8 +20,7 @@ use num_traits::ToBytes;
 use rayon::prelude::{ParallelSlice, ParallelSliceMut};
 use rayon::{
   prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
-    IntoParallelRefMutIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
   },
   ThreadPool,
 };
@@ -29,9 +28,8 @@ use rayon::{
 use crate::{
   n_hash,
   nested::{
-    get, hash,
+    get,
     map::{
-      fits::keywords::TForm1::I,
       mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
       HHash,
     },
@@ -552,7 +550,7 @@ impl CountMap {
   }
 
   pub fn to_chi2_mom(&self) -> MomVecImpl<u64, f64> {
-    let chi2_merger = |depth: u8, hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+    let chi2_merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
       // With Poisson distribution:
       // * mu_i = source density in cell i
       // * sigma_i = sqrt(mu_i)
@@ -588,7 +586,7 @@ impl CountMap {
         None
       }
     };
-    let mut mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
     let mom = MomVecImpl::from(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
@@ -607,7 +605,7 @@ impl Add for CountMap {
       .0
       .values
       .iter_mut()
-      .zip_eq(rhs.0.values.into_iter())
+      .zip_eq(rhs.0.values.iter())
       .for_each(|(l, r)| *l += r);
     self
   }
@@ -725,7 +723,7 @@ impl CountMapU32 {
   ) -> Result<Self, IoError> {
     let mut it = BufReader::new(File::open(&path)?).lines().peekable();
     // Handle starting comments
-    while let Some(Ok(line)) = it.next_if(|res| {
+    while let Some(Ok(_)) = it.next_if(|res| {
       res
         .as_ref()
         .map(|line| line.starts_with('#'))
@@ -800,7 +798,7 @@ impl CountMapU32 {
       chunk
         .par_chunks((chunk.len() / (n_thread << 2)).max(10_000))
         .map(|elems| CountMapU32::from_hash_values(depth, elems.iter().filter_map(hpx)))
-        .reduce_with(|mut mapl, mapr| mapl.par_add(mapr))
+        .reduce_with(|mapl, mapr| mapl.par_add(mapr))
     };
     fn load_n<I: Iterator<Item = Result<String, IoError>>>(
       chunk_size: usize,
@@ -856,7 +854,7 @@ impl CountMapU32 {
   }
 
   pub fn to_chi2_mom(&self) -> MomVecImpl<u32, f64> {
-    let chi2_merger = |depth: u8, hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+    let chi2_merger = |_depth: u8, _hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
       // With Poisson distribution:
       // * mu_i = source density in cell i
       // * sigma_i = sqrt(mu_i)
@@ -892,7 +890,7 @@ impl CountMapU32 {
         None
       }
     };
-    let mut mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
     let mom = MomVecImpl::from(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
@@ -911,7 +909,7 @@ impl Add for CountMapU32 {
       .0
       .values
       .iter_mut()
-      .zip_eq(rhs.0.values.into_iter())
+      .zip_eq(rhs.0.values.iter())
       .for_each(|(l, r)| *l += r);
     self
   }
