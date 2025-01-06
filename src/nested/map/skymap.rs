@@ -756,8 +756,8 @@ impl CountMapU32 {
   /// # Warning
   /// Ensure that you have already removed the comment and the possible header line,
   /// E.g. using:
-  /// ```rust
-  /// let mut it = it.peekable();
+  /// ```rust,ignore
+  ///     let mut it = it.peekable();
   ///     // Handle starting comments
   ///     while let Some(Ok(line)) = it.next_if(|res| {
   ///       res
@@ -1077,6 +1077,7 @@ mod tests {
       .try_init();
   }
 
+  /*  Test only on personal computer
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
   fn test_xmm_slew_dens() {
@@ -1122,7 +1123,9 @@ mod tests {
     )
     .unwrap();
   }
+  */
 
+  /*  Test only on personal computer
   #[test]
   #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
   fn test_xmm_slew_count() {
@@ -1169,6 +1172,7 @@ mod tests {
     )
     .unwrap();
   }
+  */
 
   /* Test only on personal computer
   #[test]
