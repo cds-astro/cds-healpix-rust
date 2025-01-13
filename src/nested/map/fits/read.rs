@@ -81,7 +81,7 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
   // See Table 10 and 17 in https://fits.gsfc.nasa.gov/standard40/fits_standard40aa-le.pdf
   check_keyword_and_val(it80.next().unwrap(), b"XTENSION", b"'BINTABLE'")?;
   check_keyword_and_val(it80.next().unwrap(), b"BITPIX  ", b"8")?;
-  check_keyword_and_val(it80.next().unwrap(), b"NAXIS  ", b"2")?;
+  check_keyword_and_val(it80.next().unwrap(), b"NAXIS   ", b"2")?;
   let n_bytes_per_row = check_keyword_and_parse_uint_val::<u64>(it80.next().unwrap(), b"NAXIS1  ")?;
   let n_rows = check_keyword_and_parse_uint_val::<u64>(it80.next().unwrap(), b"NAXIS2 ")?;
   check_keyword_and_val(it80.next().unwrap(), b"PCOUNT  ", b"0")?;
@@ -232,12 +232,14 @@ fn consume_primary_hdu<R: BufRead>(
   Ok(())
 }
 
-fn next_36_chunks_of_80_bytes<'a, R: BufRead>(
+pub(crate) fn next_36_chunks_of_80_bytes<'a, R: Read>(
   reader: &'a mut R,
   header_block: &'a mut [u8; 2880],
 ) -> Result<ChunksExact<'a, u8>, FitsError> {
-  reader.read_exact(header_block)?;
-  Ok(header_block.chunks_exact(80))
+  reader
+    .read_exact(header_block)
+    .map_err(FitsError::Io)
+    .map(|()| header_block.chunks_exact(80))
 }
 
 fn contains_end<'a, I: Iterator<Item = &'a [u8]>>(chunks_of_80: &'a mut I) -> bool {
@@ -250,40 +252,42 @@ fn contains_end<'a, I: Iterator<Item = &'a [u8]>>(chunks_of_80: &'a mut I) -> bo
   false
 }
 
-pub(super) fn check_keyword_and_val(
+pub(crate) fn check_keyword_and_val(
   keyword_record: &[u8],
   expected_kw: &[u8],
   expected_val: &[u8],
 ) -> Result<(), FitsError> {
-  check_expected_keyword(keyword_record, expected_kw)?;
-  check_for_value_indicator(keyword_record)?;
-  check_expected_value(keyword_record, expected_val)
+  check_expected_keyword(keyword_record, expected_kw)
+    .and_then(|()| check_for_value_indicator(keyword_record))
+    .and_then(|()| check_expected_value(keyword_record, expected_val))
 }
 
-fn check_keyword_and_parse_uint_val<T>(
+pub(crate) fn check_keyword_and_parse_uint_val<T>(
   keyword_record: &[u8],
   expected_kw: &[u8],
 ) -> Result<T, FitsError>
 where
   T: Into<u64> + FromStr<Err = ParseIntError>,
 {
-  check_expected_keyword(keyword_record, expected_kw)?;
-  check_for_value_indicator(keyword_record)?;
-  parse_uint_val::<T>(keyword_record)
+  check_expected_keyword(keyword_record, expected_kw)
+    .and_then(|()| check_for_value_indicator(keyword_record))
+    .and_then(|()| parse_uint_val::<T>(keyword_record))
 }
 
 #[allow(dead_code)]
-pub(super) fn check_keyword_and_get_str_val<'a>(
+pub(crate) fn check_keyword_and_get_str_val<'a>(
   keyword_record: &'a [u8],
   expected_kw: &[u8],
 ) -> Result<&'a str, FitsError> {
-  check_expected_keyword(keyword_record, expected_kw)?;
-  check_for_value_indicator(keyword_record)?;
-  // We go unsafe because FITS headers are not supposed to contain non-ASCII chars
-  get_str_val_no_quote(keyword_record).map(|bytes| unsafe { str::from_utf8_unchecked(bytes) })
+  check_expected_keyword(keyword_record, expected_kw)
+    .and_then(|()| check_for_value_indicator(keyword_record))
+    .and_then(|()| {
+      // We go unsafe because FITS headers are not supposed to contain non-ASCII chars
+      get_str_val_no_quote(keyword_record).map(|bytes| unsafe { str::from_utf8_unchecked(bytes) })
+    })
 }
 
-pub(super) fn check_expected_keyword(
+pub(crate) fn check_expected_keyword(
   keyword_record: &[u8],
   expected: &[u8],
 ) -> Result<(), FitsError> {
@@ -303,7 +307,7 @@ pub(super) fn check_expected_keyword(
   }
 }
 
-pub(super) fn check_for_value_indicator(keyword_record: &[u8]) -> Result<(), FitsError> {
+pub(crate) fn check_for_value_indicator(keyword_record: &[u8]) -> Result<(), FitsError> {
   debug_assert!(keyword_record.len() == 80); // length of a FITS keyword-record
   if get_value_indicator(keyword_record) == VALUE_INDICATOR {
     Ok(())
@@ -315,20 +319,20 @@ pub(super) fn check_for_value_indicator(keyword_record: &[u8]) -> Result<(), Fit
   }
 }
 
-pub(super) fn get_keyword(keyword_record: &[u8]) -> &[u8] {
+pub(crate) fn get_keyword(keyword_record: &[u8]) -> &[u8] {
   &keyword_record[..8]
 }
-pub(super) fn get_value_indicator(keyword_record: &[u8]) -> &[u8] {
+pub(crate) fn get_value_indicator(keyword_record: &[u8]) -> &[u8] {
   &keyword_record[8..10]
 }
-pub(super) fn get_value(keyword_record: &[u8]) -> &[u8] {
+pub(crate) fn get_value(keyword_record: &[u8]) -> &[u8] {
   &keyword_record[10..]
 }
-pub(super) fn get_left_trimmed_value(keyword_record: &[u8]) -> &[u8] {
+pub(crate) fn get_left_trimmed_value(keyword_record: &[u8]) -> &[u8] {
   get_value(keyword_record).trim_ascii_start()
 }
 
-pub(super) fn check_expected_value(
+pub(crate) fn check_expected_value(
   keyword_record: &[u8],
   expected: &[u8],
 ) -> Result<(), FitsError> {
@@ -339,7 +343,7 @@ pub(super) fn check_expected_value(
     Ok(())
   } else {
     let keyword = String::from_utf8_lossy(&src[0..8]).trim_end().to_string();
-    // We know what we put in it, so unsae is ok here
+    // We know what we put in it, so unsafe is ok here
     let expected = String::from(unsafe { str::from_utf8_unchecked(expected) });
     // Here, may contains binary data
     let actual = String::from_utf8_lossy(&lt_src[..expected.len()]).to_string();
@@ -353,7 +357,7 @@ pub(super) fn check_expected_value(
 
 /// We know that the expected value does not contains a simple quote.
 /// A trim_end is applied so that the result does not contain leading or trailing spaces.
-pub(super) fn get_str_val_no_quote(keyword_record: &[u8]) -> Result<&[u8], FitsError> {
+pub(crate) fn get_str_val_no_quote(keyword_record: &[u8]) -> Result<&[u8], FitsError> {
   let mut it = get_left_trimmed_value(keyword_record).split_inclusive(|c| *c == b'\'');
   if let Some([b'\'']) = it.next() {
     if let Some([subslice @ .., b'\'']) = it.next() {
@@ -366,7 +370,7 @@ pub(super) fn get_str_val_no_quote(keyword_record: &[u8]) -> Result<&[u8], FitsE
   Err(FitsError::StringValueNotFound { keyword_record })
 }
 
-pub(super) fn parse_uint_val<T>(keyword_record: &[u8]) -> Result<T, FitsError>
+pub(crate) fn parse_uint_val<T>(keyword_record: &[u8]) -> Result<T, FitsError>
 where
   T: Into<u64> + FromStr<Err = ParseIntError>,
 {
@@ -387,7 +391,7 @@ where
   }
 }
 
-pub(super) fn index_of_last_digit(src: &[u8]) -> usize {
+pub(crate) fn index_of_last_digit(src: &[u8]) -> usize {
   for (i, c) in src.iter().enumerate() {
     if !c.is_ascii_digit() {
       return i;

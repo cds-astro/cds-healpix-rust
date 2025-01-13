@@ -66,7 +66,7 @@ where
 
 /// Possible add blanks at the end of the FITS file to complete the last
 /// 2880 bytes block.
-fn write_final_padding<R: Write>(
+pub(crate) fn write_final_padding<R: Write>(
   mut writer: R,
   n_bytes_already_written: usize,
 ) -> Result<(), FitsError> {
@@ -102,7 +102,7 @@ pub(crate) fn write_keyword_record(dest: &mut [u8], keyword: &[u8; 8], value_par
   dest[10..10 + val_bytes.len()].copy_from_slice(val_bytes);
 }
 
-fn write_uint_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], val: u64) {
+pub(crate) fn write_uint_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], val: u64) {
   const VALUE_INDICATOR: &[u8; 2] = b"= ";
   debug_assert_eq!(dest.len(), 80);
   dest[0..8].copy_from_slice(&keyword[..]);
@@ -112,7 +112,7 @@ fn write_uint_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], val: 
   dest[30 - val_bytes.len()..30].copy_from_slice(val_bytes);
 }
 
-fn write_str_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], s: &str) {
+pub(crate) fn write_str_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], s: &str) {
   const VALUE_INDICATOR: &[u8; 2] = b"= ";
   debug_assert_eq!(dest.len(), 80);
   dest[0..8].copy_from_slice(&keyword[..]);
@@ -122,7 +122,7 @@ fn write_str_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8; 8], s: &st
   dest[10..10 + val_bytes.len()].copy_from_slice(val_bytes);
 }
 
-fn write_primary_hdu<R: Write>(writer: &mut R) -> Result<(), FitsError> {
+pub(crate) fn write_primary_hdu<R: Write>(writer: &mut R) -> Result<(), FitsError> {
   let mut header_block = [b' '; 2880];
   header_block[0..30].copy_from_slice(b"SIMPLE  =                    T");
   header_block[80..110].copy_from_slice(b"BITPIX  =                    8");

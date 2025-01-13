@@ -35,6 +35,8 @@ use crate::nested::{
   n_hash,
 };
 
+pub mod cindex;
+
 /// Type defining a row that can be sorted internally.
 pub trait IntSortable: Send {}
 /// All types that implement `Send` are `IntSortable`.
