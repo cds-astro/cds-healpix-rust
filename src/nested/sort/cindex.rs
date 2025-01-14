@@ -603,7 +603,7 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
   _phantom: PhantomData<T>,
 }
 impl<T: HCIndexValue> FitsMMappedCIndex<T> {
-  /// Private, only ment to be called from FITS reader.
+  /// Private, only meant to be called from FITS reader.
   fn new(
     fits_creation_date: Option<String>,
     indexed_file_name: Option<String>,
