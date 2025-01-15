@@ -139,7 +139,12 @@ impl SimpleExtSortParams {
   const SUCCESS_FILENAME: &'static str = "hpxsort.success";
   const SUFFIX: &'static str = ".unsorted.bin";
 
-  fn new(tmp_dir: PathBuf, n_elems_per_chunk: u32, n_threads: Option<usize>, clean: bool) -> Self {
+  pub fn new(
+    tmp_dir: PathBuf,
+    n_elems_per_chunk: u32,
+    n_threads: Option<usize>,
+    clean: bool,
+  ) -> Self {
     Self {
       tmp_dir,
       n_elems_per_chunk,
