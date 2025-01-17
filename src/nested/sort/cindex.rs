@@ -14,6 +14,7 @@
 // * e.g. pour 2.10^9 sources, si on fait prend n = 2_000 lignes, ca fait 1_000_000 ligne d'index,
 //   soit moins de 8 MB (idx29 sur u64).
 
+use std::time::SystemTime;
 use std::{
   cmp::Ordering,
   fs::File,
@@ -237,10 +238,12 @@ pub trait HCIndex {
     indexed_file_name: Option<&str>,
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<[u8; 32]>, // 32 hex characters (128 bits)
-    indexed_file_last_modif_date: Option<DateTime<Utc>>,
+    indexed_file_last_modif_date: Option<SystemTime>,
     indexed_colname_lon: Option<&str>,
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
+    let indexed_file_last_modif_date =
+      indexed_file_last_modif_date.map(|st| DateTime::<Utc>::from(st));
     let n_values = n_hash(self.depth()) + 1;
     // Perpare the header
     let mut header_block = [b' '; 2880];
@@ -327,7 +330,7 @@ pub trait HCIndex {
     indexed_file_name: Option<&str>,
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<[u8; 32]>, // 32 hex characters (128 bits)
-    indexed_file_last_modif_date: Option<DateTime<Utc>>,
+    indexed_file_last_modif_date: Option<SystemTime>,
     indexed_colname_lon: Option<&str>,
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
@@ -494,7 +497,7 @@ impl FITSCIndex {
     let mut indexed_file_name: Option<String> = None;
     let mut indexed_file_len: Option<u64> = None;
     let mut indexed_file_md5: Option<String> = None;
-    let mut indexed_file_last_modif_date: Option<String> = None;
+    let mut indexed_file_last_modif_date: Option<SystemTime> = None;
     let mut indexed_colname_lon: Option<String> = None;
     let mut indexed_colname_lat: Option<String> = None;
     let mut date: Option<String> = None;
@@ -519,8 +522,12 @@ impl FITSCIndex {
         b"IDXF_LEN" => parse_uint_val::<u64>(kw_record).map(|v| indexed_file_len = Some(v)),
         b"IDXF_MD5" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_file_md5 = Some(String::from_utf8_lossy(v).to_string())),
-        b"IDXF_LMD" => get_str_val_no_quote(kw_record)
-          .map(|v| indexed_file_last_modif_date = Some(String::from_utf8_lossy(v).to_string())),
+        b"IDXF_LMD" => get_str_val_no_quote(kw_record).map(|v| {
+          indexed_file_last_modif_date = unsafe { str::from_utf8_unchecked(v) }
+            .parse::<DateTime<Utc>>()
+            .ok()
+            .map(|dt| dt.into())
+        }),
         b"IDXC_LON" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_colname_lon = Some(String::from_utf8_lossy(v).to_string())),
         b"IDXC_LAT" => get_str_val_no_quote(kw_record)
@@ -638,7 +645,7 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
   indexed_file_name: Option<String>,
   indexed_file_len: Option<u64>,
   indexed_file_md5: Option<String>,
-  indexed_file_last_modif_date: Option<String>,
+  indexed_file_last_modif_date: Option<SystemTime>,
   indexed_colname_lon: Option<String>,
   indexed_colname_lat: Option<String>,
   depth: u8,
@@ -652,7 +659,7 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
     indexed_file_name: Option<String>,
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<String>,
-    indexed_file_last_modif_date: Option<String>,
+    indexed_file_last_modif_date: Option<SystemTime>,
     indexed_colname_lon: Option<String>,
     indexed_colname_lat: Option<String>,
     depth: u8,
@@ -688,7 +695,7 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
   pub fn get_indexed_file_md5(&self) -> Option<&String> {
     self.indexed_file_md5.as_ref()
   }
-  pub fn get_indexed_file_last_modif_date(&self) -> Option<&String> {
+  pub fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime> {
     self.indexed_file_last_modif_date.as_ref()
   }
   pub fn get_indexed_colname_lon(&self) -> Option<&String> {
