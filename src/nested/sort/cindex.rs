@@ -225,10 +225,12 @@ pub trait HCIndex {
   /// * `HPXORDER`, mandatory: provide the depth (order) of the cumulative MAP.
   /// * `DATATYPE`, mandatory: **must** be one of `u32`, `u64`, `f32`, `f64`.
   /// * `DTENDIAN`, mandatory: **must** equal `LITTLE`, made to provide information so human readers can understand/guess the data structure.
-  /// * `IDXFILEN`, optional: name of the indexed file if the HCI is a file row index.
-  /// * `IDXFILEL`, optional: length, in bytes, of the indexed file if the HCI is a file row index.
-  /// * `IDXFILEM`, optional: md5 of the indexed file if the HCI is a file row index.
-  /// * `IDXFILED`, optional: last modification date of the indexed file if the HCI is a file row index.
+  /// * `IDXF_NAM`, optional: name of the indexed file if the HCI is a file row index.
+  /// * `IDXF_LEN`, optional: length, in bytes, of the indexed file if the HCI is a file row index.
+  /// * `IDXF_MD5`, optional: md5 of the indexed file if the HCI is a file row index.
+  /// * `IDXF_LMD`, optional: last modification date of the indexed file if the HCI is a file row index.
+  /// * `IDXC_LON`, optional: name, in the indexed file, of the column containing the longitudes used to compute HEALPix index.
+  /// * `IDXC_LAT`, optional: name, in the indexed file, of the column containing the latitudes used to compute HEALPix index.
   fn to_fits<W: Write>(
     &self,
     mut writer: W,
@@ -236,6 +238,8 @@ pub trait HCIndex {
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<[u8; 32]>, // 32 hex characters (128 bits)
     indexed_file_last_modif_date: Option<DateTime<Utc>>,
+    indexed_colname_lon: Option<&str>,
+    indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
     let n_values = n_hash(self.depth()) + 1;
     // Perpare the header
@@ -259,28 +263,34 @@ pub trait HCIndex {
     write_str_keyword_record(it.next().unwrap(), b"DATATYPE", Self::V::FITS_DATATYPE);
     it.next().unwrap()[0..20].copy_from_slice(b"DTENDIAN= 'LITTLE  '");
     if let Some(indexed_file_name) = indexed_file_name {
-      write_str_keyword_record(it.next().unwrap(), b"IDXFILEN", indexed_file_name);
+      write_str_keyword_record(it.next().unwrap(), b"IDXF_NAM", indexed_file_name);
     }
     if let Some(indexed_file_len) = indexed_file_len {
       write_keyword_record(
         it.next().unwrap(),
-        b"IDXFILEL",
+        b"IDXF_LEN",
         indexed_file_len.to_string().as_str(),
       );
     }
     if let Some(indexed_file_mdr5) = indexed_file_md5 {
-      write_str_keyword_record(it.next().unwrap(), b"IDXFILEM", unsafe {
+      write_str_keyword_record(it.next().unwrap(), b"IDXF_MD5", unsafe {
         str::from_utf8_unchecked(&indexed_file_mdr5)
       });
     }
     if let Some(indexed_file_last_modif_date) = indexed_file_last_modif_date {
       write_str_keyword_record(
         it.next().unwrap(),
-        b"IDXFILED",
+        b"IDXF_LMD",
         indexed_file_last_modif_date
           .to_rfc3339_opts(SecondsFormat::Secs, true)
           .as_str(),
       );
+    }
+    if let Some(indexed_colname_lon) = indexed_colname_lon {
+      write_str_keyword_record(it.next().unwrap(), b"IDXC_LON", indexed_colname_lon);
+    }
+    if let Some(indexed_colname_lat) = indexed_colname_lat {
+      write_str_keyword_record(it.next().unwrap(), b"IDXC_LAT", indexed_colname_lat);
     }
     write_keyword_record(
       it.next().unwrap(),
@@ -311,10 +321,27 @@ pub trait HCIndex {
       .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
   }
 
-  fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
-    File::create(path)
-      .map_err(FitsError::Io)
-      .and_then(|file| self.to_fits(BufWriter::new(file), None, None, None, None))
+  fn to_fits_file<P: AsRef<Path>>(
+    &self,
+    path: P,
+    indexed_file_name: Option<&str>,
+    indexed_file_len: Option<u64>,
+    indexed_file_md5: Option<[u8; 32]>, // 32 hex characters (128 bits)
+    indexed_file_last_modif_date: Option<DateTime<Utc>>,
+    indexed_colname_lon: Option<&str>,
+    indexed_colname_lat: Option<&str>,
+  ) -> Result<(), FitsError> {
+    File::create(path).map_err(FitsError::Io).and_then(|file| {
+      self.to_fits(
+        BufWriter::new(file),
+        indexed_file_name,
+        indexed_file_len,
+        indexed_file_md5,
+        indexed_file_last_modif_date,
+        indexed_colname_lon,
+        indexed_colname_lat,
+      )
+    })
   }
 }
 
@@ -468,6 +495,8 @@ impl FITSCIndex {
     let mut indexed_file_len: Option<u64> = None;
     let mut indexed_file_md5: Option<String> = None;
     let mut indexed_file_last_modif_date: Option<String> = None;
+    let mut indexed_colname_lon: Option<String> = None;
+    let mut indexed_colname_lat: Option<String> = None;
     let mut date: Option<String> = None;
     for kw_record in &mut raw_cards_it {
       match &kw_record[0..8] {
@@ -485,13 +514,17 @@ impl FITSCIndex {
           .map(|v| datatype = Some(String::from_utf8_lossy(v).to_string())),
         b"DTENDIAN" => check_keyword_and_val(kw_record, b"DTENDIAN", b"'LITTLE  '")
           .map(|()| dtendian_found = true),
-        b"IDXFILEN" => get_str_val_no_quote(kw_record)
+        b"IDXF_NAM" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_file_name = Some(String::from_utf8_lossy(v).to_string())),
-        b"IDXFILEL" => parse_uint_val::<u64>(kw_record).map(|v| indexed_file_len = Some(v)),
-        b"IDXFILEM" => get_str_val_no_quote(kw_record)
+        b"IDXF_LEN" => parse_uint_val::<u64>(kw_record).map(|v| indexed_file_len = Some(v)),
+        b"IDXF_MD5" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_file_md5 = Some(String::from_utf8_lossy(v).to_string())),
-        b"IDXFILED" => get_str_val_no_quote(kw_record)
+        b"IDXF_LMD" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_file_last_modif_date = Some(String::from_utf8_lossy(v).to_string())),
+        b"IDXC_LON" => get_str_val_no_quote(kw_record)
+          .map(|v| indexed_colname_lon = Some(String::from_utf8_lossy(v).to_string())),
+        b"IDXC_LAT" => get_str_val_no_quote(kw_record)
+          .map(|v| indexed_colname_lat = Some(String::from_utf8_lossy(v).to_string())),
         b"DATE    " => get_str_val_no_quote(kw_record)
           .map(|v| date = Some(String::from_utf8_lossy(v).to_string())),
         b"CREATOR " => continue,
@@ -547,6 +580,8 @@ impl FITSCIndex {
         indexed_file_len,
         indexed_file_md5,
         indexed_file_last_modif_date,
+        indexed_colname_lon,
+        indexed_colname_lat,
         depth,
         mmap,
       ))),
@@ -556,6 +591,8 @@ impl FITSCIndex {
         indexed_file_len,
         indexed_file_md5,
         indexed_file_last_modif_date,
+        indexed_colname_lon,
+        indexed_colname_lat,
         depth,
         mmap,
       ))),
@@ -565,6 +602,8 @@ impl FITSCIndex {
         indexed_file_len,
         indexed_file_md5,
         indexed_file_last_modif_date,
+        indexed_colname_lon,
+        indexed_colname_lat,
         depth,
         mmap,
       ))),
@@ -574,6 +613,8 @@ impl FITSCIndex {
         indexed_file_len,
         indexed_file_md5,
         indexed_file_last_modif_date,
+        indexed_colname_lon,
+        indexed_colname_lat,
         depth,
         mmap,
       ))),
@@ -598,6 +639,8 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
   indexed_file_len: Option<u64>,
   indexed_file_md5: Option<String>,
   indexed_file_last_modif_date: Option<String>,
+  indexed_colname_lon: Option<String>,
+  indexed_colname_lat: Option<String>,
   depth: u8,
   mmap: Mmap,
   _phantom: PhantomData<T>,
@@ -610,6 +653,8 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<String>,
     indexed_file_last_modif_date: Option<String>,
+    indexed_colname_lon: Option<String>,
+    indexed_colname_lat: Option<String>,
     depth: u8,
     mmap: Mmap,
   ) -> Self {
@@ -623,6 +668,8 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
       indexed_file_len,
       indexed_file_md5,
       indexed_file_last_modif_date,
+      indexed_colname_lon,
+      indexed_colname_lat,
       depth,
       mmap,
       _phantom: PhantomData,
@@ -643,6 +690,12 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
   }
   pub fn get_indexed_file_last_modif_date(&self) -> Option<&String> {
     self.indexed_file_last_modif_date.as_ref()
+  }
+  pub fn get_indexed_colname_lon(&self) -> Option<&String> {
+    self.indexed_colname_lon.as_ref()
+  }
+  pub fn get_indexed_colname_lat(&self) -> Option<&String> {
+    self.indexed_colname_lat.as_ref()
   }
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
@@ -671,9 +724,39 @@ mod tests {
     let n = n_hash(depth);
     let values: Vec<u32> = (0..=n as u32).into_iter().collect();
     let cindex = OwnedCIndex::new_unchecked(depth, values.into_boxed_slice());
-    cindex.to_fits_file(path).unwrap();
+    let mut indexex_file_md5 = [0_u8; 32];
+    indexex_file_md5.copy_from_slice("0123456789ABCDEF0123456789ABCDEF".as_bytes());
+    cindex
+      .to_fits_file(
+        path,
+        Some("filename"),
+        Some(42),
+        Some(indexex_file_md5),
+        None,
+        Some("RA"),
+        Some("Dec"),
+      )
+      .unwrap();
     match FITSCIndex::from_fits_file(path) {
       Ok(FITSCIndex::U32(hciprovider)) => {
+        assert_eq!(
+          hciprovider.get_indexed_file_name().map(|s| s.as_str()),
+          Some("filename")
+        );
+        assert_eq!(hciprovider.get_indexed_file_len(), Some(42));
+        assert_eq!(
+          hciprovider.get_indexed_file_md5().map(|s| s.as_str()),
+          Some("0123456789ABCDEF0123456789ABCDEF")
+        );
+        assert_eq!(
+          hciprovider.get_indexed_colname_lon().map(|s| s.as_str()),
+          Some("RA")
+        );
+        assert_eq!(
+          hciprovider.get_indexed_colname_lat().map(|s| s.as_str()),
+          Some("Dec")
+        );
+
         let cindex2 = hciprovider.get_hcindex();
         // println!("{:?}", &cindex2);
         assert_eq!(cindex2, (&cindex).into());
