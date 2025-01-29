@@ -35,7 +35,7 @@ pub fn write_implicit_skymap_fits<R: Write, T: SkyMapValue>(
   for value in values {
     writer.write_all(value.to_be_bytes().as_ref())?;
   }
-  write_final_padding(writer, n_cells as usize * T::fits_naxis1() as usize)
+  write_final_padding(writer, n_cells as usize * T::FITS_NAXIS1 as usize)
 }
 
 pub fn write_implicit_skymap_fits_from_it<R, I>(
@@ -61,7 +61,7 @@ where
       depth, n_cells, n
     )));
   }
-  write_final_padding(writer, n_cells as usize * I::Item::fits_naxis1() as usize)
+  write_final_padding(writer, n_cells as usize * I::Item::FITS_NAXIS1 as usize)
 }
 
 /// Possible add blanks at the end of the FITS file to complete the last
@@ -146,13 +146,13 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   it.next().unwrap()[0..20].copy_from_slice(b"XTENSION= 'BINTABLE'");
   it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8");
   it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2");
-  write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", T::fits_naxis1() as u64);
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", T::FITS_NAXIS1 as u64);
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", n_cells);
   it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
   it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
   it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    1");
   it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'T       '");
-  write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::fits_tform());
+  write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::FITS_TFORM);
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
   it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
   it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");

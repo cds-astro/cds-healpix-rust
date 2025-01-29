@@ -1,9 +1,8 @@
-use std::io::BufRead;
 use std::{
   error::Error,
   f64::consts::PI,
   fs::File,
-  io::{BufReader, BufWriter, Error as IoError, Read, Seek, Write},
+  io::{BufRead, BufReader, BufWriter, Error as IoError, Read, Seek, Write},
   iter::{Enumerate, Map},
   marker::PhantomData,
   ops::{Add, AddAssign, Deref, RangeInclusive},
@@ -17,10 +16,10 @@ use itertools::Itertools;
 use log::error;
 use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
-use rayon::prelude::{ParallelSlice, ParallelSliceMut};
 use rayon::{
   prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator, ParallelSlice, ParallelSliceMut,
   },
   ThreadPool,
 };
@@ -46,75 +45,56 @@ use super::{
 /// Trait marking the type of the values writable in a FITS skymap.
 pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone {
   /// FITS size, in bytes, of a value.
-  fn fits_naxis1() -> u8;
-  /// FITS type of the value
-  fn fits_tform() -> &'static str;
+  const FITS_NAXIS1: u8 = size_of::<Self>() as u8;
+  /// FITS TFORM type of the value
+  const FITS_TFORM: &'static str;
+  /// Non standard value used in FITS to support various datatypes (including unsigned integer, ...).
+  const FITS_DATATYPE: &'static str;
 }
 
 impl SkyMapValue for u8 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "B"
-  }
+  const FITS_TFORM: &'static str = "B";
+  const FITS_DATATYPE: &'static str = "u8";
 }
 impl SkyMapValue for i16 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "I"
-  }
+  const FITS_TFORM: &'static str = "B";
+  const FITS_DATATYPE: &'static str = "i16";
 }
 impl SkyMapValue for i32 {
-  fn fits_naxis1() -> u8 {
-    4
-  }
-  fn fits_tform() -> &'static str {
-    "J"
-  }
+  const FITS_TFORM: &'static str = "J";
+  const FITS_DATATYPE: &'static str = "i32";
 }
 impl SkyMapValue for i64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "K"
-  }
+  const FITS_TFORM: &'static str = "K";
+  const FITS_DATATYPE: &'static str = "i64";
 }
 impl SkyMapValue for u32 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "J"
-  }
+  const FITS_TFORM: &'static str = "J";
+  const FITS_DATATYPE: &'static str = "u32";
 }
 impl SkyMapValue for u64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "K"
-  }
+  const FITS_TFORM: &'static str = "K";
+  const FITS_DATATYPE: &'static str = "u64";
 }
 impl SkyMapValue for f32 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "E"
-  }
+  const FITS_TFORM: &'static str = "E";
+  const FITS_DATATYPE: &'static str = "f32";
 }
 impl SkyMapValue for f64 {
-  fn fits_naxis1() -> u8 {
-    size_of::<Self>() as u8
-  }
-  fn fits_tform() -> &'static str {
-    "D"
-  }
+  const FITS_TFORM: &'static str = "D";
+  const FITS_DATATYPE: &'static str = "f64";
 }
+
+// Make a struct:
+// SkyMapMap<S, F>
+// where
+//   F: FnMut(S::ValueType) -> B,
+// {
+//   skymap: S,
+//   f: F
+// }
+//
+// And implement SkyMap on it.
 
 pub trait SkyMap<'a> {
   /// Type of the HEALPix hash value (mainly `u32` or `u64`).
@@ -343,6 +323,27 @@ impl SkyMapEnum {
     from_fits_skymap(reader)
   }
 
+  pub fn to_count_map(self) -> Result<CountMap, String> {
+    match self {
+      Self::ImplicitU64I32(skymap) => {
+        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, unsafe {
+          std::mem::transmute(skymap.values)
+        })))
+      }
+      _ => Err(String::from("Unable to convert to coutn map.")),
+    }
+  }
+
+  pub fn to_count_map_u32(self) -> Result<CountMapU32, String> {
+    match self {
+      Self::ImplicitU64I32(skymap) => Ok(CountMapU32(ImplicitSkyMapArray::new(
+        skymap.depth,
+        unsafe { std::mem::transmute(skymap.values) },
+      ))),
+      _ => Err(String::from("Unable to convert to coutn map.")),
+    }
+  }
+
   pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
     match &self {
       Self::ImplicitU64U8(s) => write_implicit_skymap_fits(writer, s.values.deref()),
@@ -539,6 +540,36 @@ impl CountMap {
     self
   }
 
+  pub fn to_dens_map(&self) -> DensityMap {
+    let depth = self.depth();
+    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    DensityMap(ImplicitSkyMapArray::new(
+      depth,
+      self
+        .0
+        .values
+        .iter()
+        .map(|count| *count as f64 * on_over_area)
+        .collect::<Vec<f64>>()
+        .into_boxed_slice(),
+    ))
+  }
+
+  pub fn to_dens_map_par(&self) -> DensityMap {
+    let depth = self.depth();
+    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    DensityMap(ImplicitSkyMapArray::new(
+      depth,
+      self
+        .0
+        .values
+        .par_iter()
+        .map(|count| *count as f64 * on_over_area)
+        .collect::<Vec<f64>>()
+        .into_boxed_slice(),
+    ))
+  }
+
   pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
     write_implicit_skymap_fits(writer, self.as_implicit_skymap_array().values.deref())
   }
@@ -588,7 +619,7 @@ impl CountMap {
     };
     let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
-    MomVecImpl::from(mom, |z, v| {
+    MomVecImpl::from_map(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
     })
   }
@@ -852,7 +883,37 @@ impl CountMapU32 {
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
-  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, f64> {
+  pub fn to_dens_map(&self) -> DensityMap {
+    let depth = self.depth();
+    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    DensityMap(ImplicitSkyMapArray::new(
+      depth,
+      self
+        .0
+        .values
+        .iter()
+        .map(|count| *count as f64 * on_over_area)
+        .collect::<Vec<f64>>()
+        .into_boxed_slice(),
+    ))
+  }
+
+  pub fn to_dens_map_par(&self) -> DensityMap {
+    let depth = self.depth();
+    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    DensityMap(ImplicitSkyMapArray::new(
+      depth,
+      self
+        .0
+        .values
+        .par_iter()
+        .map(|count| *count as f64 * on_over_area)
+        .collect::<Vec<f64>>()
+        .into_boxed_slice(),
+    ))
+  }
+
+  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, u32> {
     let chi2_merger = |_depth: u8, _hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
       // With Poisson distribution:
       // * mu_i = source density in cell i
@@ -889,11 +950,12 @@ impl CountMapU32 {
         None
       }
     };
-    let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    /*let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
     // Create a new MOM transforming number of sources into densities.
     MomVecImpl::from(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
-    })
+    })*/
+    MomVecImpl::from_skymap_ref(&self.0, chi2_merger)
   }
 
   // to_png
@@ -1004,8 +1066,7 @@ impl DensityMap {
       // Applying Pineau et al. 2017:
       // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
 
-      let s = 4.0 * PI / n_hash(depth + 1) as f64;
-      let one_over_s = 1.0 / s;
+      let one_over_s = (n_hash(depth + 1) >> 2) as f64 / PI;
 
       let mu0 = *n0;
       let mu1 = *n1;
@@ -1019,7 +1080,7 @@ impl DensityMap {
         + 1.0 / mu3.max(one_over_s);
       // let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
       let weighted_mean = 4.0 / weighted_var_inv;
-      let chi2_of_3dof = s * (sum - 4.0 * weighted_mean);
+      let chi2_of_3dof = (sum - 4.0 * weighted_mean) / one_over_s;
       // chi2 3 dof:
       // 90.0% =>  6.251
       // 95.0% =>  7.815
