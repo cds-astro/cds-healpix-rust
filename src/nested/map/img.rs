@@ -68,7 +68,7 @@ impl PosConversion {
   }
 }
 
-pub trait Val: PartialOrd {
+pub trait Val: PartialOrd + Copy {
   fn to_f64(&self) -> f64;
 }
 
@@ -568,7 +568,7 @@ where
   let depth = mom.depth_max();
 
   // Unwrap is ok here since we already tested 'n_cell' which must be > 0.
-  let mut iter = mom.values();
+  let mut iter = mom.values_copy();
   let first_value = iter.next().unwrap();
   let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
     (
@@ -615,9 +615,9 @@ where
       if let Some(lonlat) = img2cel.img2lonlat(&ImgXY::new(x as f64, y as f64)) {
         let (lon, lat) = imgpos2mappos(lonlat.lon(), lonlat.lat());
         let idx = hpx.hash(lon, lat);
-        let color = if let Some((_, val)) = mom
-          .get_cell_containing_unsafe(M::ZUniqHType::to_zuniq(depth, M::ZUniqHType::from_u64(idx)))
-        {
+        let color = if let Some((_, val)) = mom.get_copy_of_cell_containing_unsafe(
+          M::ZUniqHType::to_zuniq(depth, M::ZUniqHType::from_u64(idx)),
+        ) {
           color_map.eval_continuous(color_map_func.value(val.to_f64()))
         } else {
           color_map.eval_continuous(color_map_func.value(0.0))
@@ -636,7 +636,7 @@ where
     }
   }
   // But, in case of sparse map with cells smaller than img pixels
-  for (depth, idx, val) in mom.entries().filter_map(|(zuniq, val)| {
+  for (depth, idx, val) in mom.entries_copy().filter_map(|(zuniq, val)| {
     let val = val.to_f64();
     if val > 0.0 {
       let (depth, idx) = M::ZUniqHType::from_zuniq(zuniq);

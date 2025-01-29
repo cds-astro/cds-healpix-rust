@@ -1,9 +1,20 @@
-use std::{cmp::Ordering, iter::Map, slice::Iter, vec::IntoIter};
-
-use super::super::{
-  super::skymap::{SkyMap, SkyMapValue},
-  LhsRhsBoth, Mom, ZUniqHashT,
+use std::{
+  cmp::Ordering,
+  iter::{Cloned, Map},
+  slice::Iter,
+  vec::IntoIter,
 };
+
+use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
+
+use super::{
+  super::{
+    super::skymap::{SkyMap, SkyMapValue},
+    LhsRhsBoth, Mom, ZUniqHashT,
+  },
+  bslice::{MomSliceImpl, V4FITS, Z4FITS},
+};
+use crate::nested::n_hash;
 
 /// Implementation of a MOM in an ordered vector of `(zuniq, values)` tuples.
 #[derive(Debug)]
@@ -15,6 +26,18 @@ where
   depth: u8,
   entries: Vec<(Z, V)>,
 }
+impl<'a, Z, V> From<MomSliceImpl<'a, Z, V>> for MomVecImpl<Z, V>
+where
+  Z: Z4FITS,
+  V: V4FITS,
+{
+  fn from(mom: MomSliceImpl<'a, Z, V>) -> Self {
+    let depth = mom.depth_max();
+    let entries = mom.owned_entries().collect();
+    Self { depth, entries }
+  }
+}
+
 impl<'a, Z, V> Mom<'a> for MomVecImpl<Z, V>
 where
   Z: ZUniqHashT,
@@ -22,9 +45,13 @@ where
 {
   type ZUniqHType = Z;
   type ValueType = V;
+  type OverlappedEntries = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> (Z, &'a V)>;
+  type OverlappedEntriesCopy = Cloned<Iter<'a, (Z, V)>>;
   type ZuniqIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> Z>;
   type ValuesIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> &'a V>;
+  type ValuesCopyIt = Cloned<Self::ValuesIt>;
   type EntriesIt = Map<Iter<'a, (Z, V)>, fn(&'a (Z, V)) -> (Z, &'a V)>;
+  type EntriesCopyIt = Cloned<Iter<'a, (Z, V)>>;
   type OwnedEntriesIt = IntoIter<(Z, V)>;
 
   fn depth_max(&self) -> u8 {
@@ -66,10 +93,38 @@ where
     }
   }
 
-  fn get_overlapped_cells(
+  fn get_copy_of_cell_containing_unsafe(
     &'a self,
-    zuniq: Self::ZUniqHType,
-  ) -> Vec<(Self::ZUniqHType, &'a Self::ValueType)> {
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Option<(Self::ZUniqHType, Self::ValueType)> {
+    match self
+      .entries
+      .binary_search_by(|&(z, _)| z.cmp(&zuniq_at_depth_max))
+    {
+      Ok(i) => {
+        let e = &self.entries[i];
+        Some(e.clone())
+      }
+      Err(i) => {
+        if i > 0 {
+          // if array len is 0, i will be 0 so we do not enter here.
+          let e = &self.entries[i - 1];
+          if Z::are_overlapping(zuniq_at_depth_max, e.0) {
+            return Some(e.clone());
+          }
+        }
+        if i < self.entries.len() {
+          let e = &self.entries[i];
+          if Z::are_overlapping(zuniq_at_depth_max, e.0) {
+            return Some(e.clone());
+          }
+        }
+        None
+      }
+    }
+  }
+
+  fn get_overlapped_cells(&'a self, zuniq: Self::ZUniqHType) -> Self::OverlappedEntries {
     let mut range = match self.entries.binary_search_by(|&(z, _)| z.cmp(&zuniq)) {
       Ok(i) => i..i + 1,
       Err(i) => i..i,
@@ -80,12 +135,24 @@ where
     while range.end < self.entries.len() && Z::are_overlapping(zuniq, self.entries[range.end].0) {
       range.end += 1;
     }
-    range
-      .map(|i| {
-        let (z, v) = &self.entries[i];
-        (*z, v)
-      })
-      .collect()
+    self.entries[range].iter().map(|(z, v)| (*z, v))
+  }
+
+  fn get_copy_of_overlapped_cells(
+    &'a self,
+    zuniq: Self::ZUniqHType,
+  ) -> Self::OverlappedEntriesCopy {
+    let mut range = match self.entries.binary_search_by(|&(z, _)| z.cmp(&zuniq)) {
+      Ok(i) => i..i + 1,
+      Err(i) => i..i,
+    };
+    while range.start - 1 > 0 && Z::are_overlapping(zuniq, self.entries[range.start - 1].0) {
+      range.start -= 1;
+    }
+    while range.end < self.entries.len() && Z::are_overlapping(zuniq, self.entries[range.end].0) {
+      range.end += 1;
+    }
+    self.entries[range].iter().cloned()
   }
 
   fn zuniqs(&'a self) -> Self::ZuniqIt {
@@ -96,8 +163,16 @@ where
     self.entries.iter().map(|(_, value)| value)
   }
 
+  fn values_copy(&'a self) -> Self::ValuesCopyIt {
+    self.values().cloned()
+  }
+
   fn entries(&'a self) -> Self::EntriesIt {
     self.entries.iter().map(|(z, v)| (*z, v))
+  }
+
+  fn entries_copy(&'a self) -> Self::EntriesCopyIt {
+    self.entries.iter().cloned()
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
@@ -214,11 +289,8 @@ where
         Self { d, h, z }
       }
       fn next(&self) -> Self {
-        Self::new(
-          self.d,
-          self.h + ZZ::one(),
-          ZZ::to_zuniq(self.d, self.h + ZZ::one()),
-        )
+        let next_h = self.h + ZZ::one();
+        Self::new(self.d, next_h, ZZ::to_zuniq(self.d, next_h))
       }
     }
     struct DHZV<ZZ: ZUniqHashT, VV> {
@@ -402,7 +474,9 @@ where
             }
           }
         },
-        (None, None) => break, // Important to let this test here!!!
+        (None, None) => break, // The position of the test in the match is important (do not modify it),
+        // because it is evaluated before the (left, None) and (None, right) branches that can also
+        // match (None, None).
         (mut left, None) => {
           while let Some(l) = left {
             if let Some(v) = op(LhsRhsBoth::Left(l.v)) {
@@ -472,7 +546,11 @@ where
   Z: ZUniqHashT,
   V: SkyMapValue,
 {
-  pub fn from<M, F>(mom: M, map: F) -> Self
+  pub(crate) fn new(depth: u8, entries: Vec<(Z, V)>) -> Self {
+    Self { depth, entries }
+  }
+
+  pub fn from_map<M, F>(mom: M, map: F) -> Self
   where
     M: for<'a> Mom<'a, ZUniqHType = Z>,
     F: Fn(Z, <M as Mom>::ValueType) -> V,
@@ -563,6 +641,91 @@ where
         }
       }
     }
+  }
+}
+
+impl<Z, V> MomVecImpl<Z, V>
+where
+  Z: ZUniqHashT,
+  V: SkyMapValue + Float + FloatConst + FromPrimitive,
+{
+  /// Performs a `multiplication` (time) operation between both input MOMs and multiply each result
+  /// cell by the given input constant.
+  /// The quantities in both input `lhs` and `rhs` MOMs are assumed to be densities. So if a cell
+  /// in `lhs` have to be multiplied sub-cells in `rhs`, the `lhs` cell is split and all sub-cell
+  /// will have the same value as the parent cell.
+  /// Additionally, if the resulting densities in 4 siblings are chi2 compatible, they are merged
+  /// (recursively) into their parent cell.
+  /// # Example of application  
+  /// * If both input MOMs contain density of sources in two catalogues and the given constant
+  ///   is the surface area of a cone or radius `r`, then the output MOM represents the density of
+  ///   spurious matches obtain when performing a cross-match of radius `r` between both catalogues
+  ///   (assuming a Poissonian distribution of sources in each cell).
+  ///   Warning: due to border effects, cells in the MOM may be empty while the xmatch do contains
+  ///   associations (take the weighted mean of neighbour cells in such a case?!).
+  pub fn lhs_time_rhs_time_cte_and_chi2merge_assuming_densities<'s, L, R, S, O, M>(
+    lhs: L,
+    rhs: R,
+    cte: V,
+  ) -> Self
+  where
+    L: Mom<'s, ZUniqHType = Z, ValueType = V>,
+    R: Mom<'s, ZUniqHType = Z, ValueType = V>,
+    S: Fn(u8, Z, V) -> [V; 4],
+    O: Fn(LhsRhsBoth<V>) -> Option<V>,
+    M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
+  {
+    let split = |_depth: u8, _hash: Z, val: V| -> [V; 4] { [val; 4] };
+    let op = |lrb: LhsRhsBoth<V>| -> Option<V> {
+      match lrb {
+        LhsRhsBoth::Left(_) => None,
+        LhsRhsBoth::Right(_) => None,
+        LhsRhsBoth::Both(l, b) => Some(cte * l * b),
+      }
+    };
+    let merge = |depth: u8, _hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
+      // Apply a chi2 merge
+
+      // With Poisson distribution:
+      // * s_i = Surface of cell i = s (all cell have the same surface at a given depth)
+      // * mu_i = Number of source in cell i / Surface of cell i = Density in cell i
+      // * sigma_i = sqrt(Number of source in cell i) / Surface cell i = sqrt(mu_i / s)
+      // weight_i = 1 / sigma_i^2 = s / mu_i
+      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
+      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
+      // V_e^{-1} = s * sum_{1=1}^4 1/mu_i
+      // Applying Pineau et al. 2017:
+      // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
+      let four = V::from_f64(4.0).unwrap();
+
+      let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shl(2)).unwrap() / V::PI();
+
+      let mu0 = values[0];
+      let mu1 = values[1];
+      let mu2 = values[2];
+      let mu3 = values[3];
+
+      let sum = mu0 + mu1 + mu2 + mu3;
+      let weighted_var_inv = V::one() / mu0.max(one_over_s)
+        + V::one() / mu1.max(one_over_s)
+        + V::one() / mu2.max(one_over_s)
+        + V::one() / mu3.max(one_over_s);
+      // let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+      let weighted_mean = four / weighted_var_inv;
+      let chi2_of_3dof = (sum - four * weighted_mean) / one_over_s;
+      // chi2 3 dof:
+      // 90.0% =>  6.251
+      // 95.0% =>  7.815
+      // 97.5% =>  9.348
+      // 99.0% => 11.345
+      // 99.9% => 16.266
+      if chi2_of_3dof < V::from_f64(16.266_f64).unwrap() {
+        Ok(sum / four)
+      } else {
+        Err(values)
+      }
+    };
+    Self::merge(lhs, rhs, split, op, merge)
   }
 }
 
