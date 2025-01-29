@@ -14,7 +14,6 @@
 // * e.g. pour 2.10^9 sources, si on fait prend n = 2_000 lignes, ca fait 1_000_000 ligne d'index,
 //   soit moins de 8 MB (idx29 sur u64).
 
-use std::time::SystemTime;
 use std::{
   cmp::Ordering,
   fs::File,
@@ -24,7 +23,9 @@ use std::{
   ops::{AddAssign, Range, Sub},
   path::Path,
   ptr::slice_from_raw_parts,
-  str, u32,
+  str,
+  time::SystemTime,
+  u32,
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -38,8 +39,8 @@ use crate::{
     fits::{
       error::FitsError,
       read::{
-        check_keyword_and_parse_uint_val, check_keyword_and_val, get_str_val_no_quote,
-        next_36_chunks_of_80_bytes, parse_uint_val,
+        check_keyword_and_parse_uint_val, check_keyword_and_str_val, check_keyword_and_val,
+        get_str_val_no_quote, next_36_chunks_of_80_bytes, parse_uint_val,
       },
       write::{
         write_final_padding, write_keyword_record, write_str_keyword_record,
@@ -500,22 +501,22 @@ impl FITSCIndex {
     let mut indexed_file_last_modif_date: Option<SystemTime> = None;
     let mut indexed_colname_lon: Option<String> = None;
     let mut indexed_colname_lat: Option<String> = None;
-    let mut date: Option<String> = None;
+    let mut date: Option<SystemTime> = None;
     for kw_record in &mut raw_cards_it {
       match &kw_record[0..8] {
         b"EXTEND  " => check_keyword_and_val(kw_record, b"EXTEND  ", b"F"),
-        b"PRODTYPE" => check_keyword_and_val(kw_record, b"PRODTYPE", b"'HEALPIX CUMUL INDEX'")
+        b"PRODTYPE" => check_keyword_and_str_val(kw_record, b"PRODTYPE", b"HEALPIX CUMUL INDEX")
           .map(|()| prodtype_found = true),
-        b"ORDERING" => check_keyword_and_val(kw_record, b"ORDERING", b"'NESTED  '")
+        b"ORDERING" => check_keyword_and_str_val(kw_record, b"ORDERING", b"NESTED")
           .map(|()| ordering_found = true),
-        b"INDXSCHM" => check_keyword_and_val(kw_record, b"INDXSCHM", b"'IMPLICIT'")
+        b"INDXSCHM" => check_keyword_and_str_val(kw_record, b"INDXSCHM", b"IMPLICIT")
           .map(|()| indxschm_found = true),
-        b"INDXCOV " => check_keyword_and_val(kw_record, b"INDXCOV ", b"'FULLSKY '")
+        b"INDXCOV " => check_keyword_and_str_val(kw_record, b"INDXCOV ", b"FULLSKY")
           .map(|()| indxcov_found = true),
         b"HPXORDER" => parse_uint_val::<u8>(kw_record).map(|v| hpxoder = Some(v)),
         b"DATATYPE" => get_str_val_no_quote(kw_record)
           .map(|v| datatype = Some(String::from_utf8_lossy(v).to_string())),
-        b"DTENDIAN" => check_keyword_and_val(kw_record, b"DTENDIAN", b"'LITTLE  '")
+        b"DTENDIAN" => check_keyword_and_str_val(kw_record, b"DTENDIAN", b"LITTLE")
           .map(|()| dtendian_found = true),
         b"IDXF_NAM" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_file_name = Some(String::from_utf8_lossy(v).to_string())),
@@ -532,8 +533,12 @@ impl FITSCIndex {
           .map(|v| indexed_colname_lon = Some(String::from_utf8_lossy(v).to_string())),
         b"IDXC_LAT" => get_str_val_no_quote(kw_record)
           .map(|v| indexed_colname_lat = Some(String::from_utf8_lossy(v).to_string())),
-        b"DATE    " => get_str_val_no_quote(kw_record)
-          .map(|v| date = Some(String::from_utf8_lossy(v).to_string())),
+        b"DATE    " => get_str_val_no_quote(kw_record).map(|v| {
+          date = unsafe { str::from_utf8_unchecked(v) }
+            .parse::<DateTime<Utc>>()
+            .ok()
+            .map(|dt| dt.into())
+        }),
         b"CREATOR " => continue,
         b"END     " => {
           end_found = true;
@@ -625,10 +630,10 @@ impl FITSCIndex {
         depth,
         mmap,
       ))),
-      Some(_) => Err(FitsError::UnexpectedValue {
+      Some(s) => Err(FitsError::UnexpectedValue {
         keyword: "DATATYPE".to_string(),
         expected: format!("One of: {}, {}.", u32::FITS_DATATYPE, u64::FITS_DATATYPE),
-        actual: "other".to_string(),
+        actual: s.to_string(),
       }),
       None => Err(FitsError::new_custom(String::from(
         "FITS card DATATYPE is missing",
@@ -641,7 +646,7 @@ impl FITSCIndex {
 /// an actual Healpix Cumulative Index object.
 #[derive(Debug)]
 pub struct FitsMMappedCIndex<T: HCIndexValue> {
-  fits_creation_date: Option<String>,
+  fits_creation_date: Option<SystemTime>,
   indexed_file_name: Option<String>,
   indexed_file_len: Option<u64>,
   indexed_file_md5: Option<String>,
@@ -655,7 +660,7 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
 impl<T: HCIndexValue> FitsMMappedCIndex<T> {
   /// Private, only meant to be called from FITS reader.
   fn new(
-    fits_creation_date: Option<String>,
+    fits_creation_date: Option<SystemTime>,
     indexed_file_name: Option<String>,
     indexed_file_len: Option<u64>,
     indexed_file_md5: Option<String>,
@@ -683,7 +688,7 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
     }
   }
 
-  pub fn get_fits_creation_date(&self) -> Option<&String> {
+  pub fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
   }
   pub fn get_indexed_file_name(&self) -> Option<&String> {

@@ -252,6 +252,11 @@ fn contains_end<'a, I: Iterator<Item = &'a [u8]>>(chunks_of_80: &'a mut I) -> bo
   false
 }
 
+/// Check the given 'expected_val' including the delimiting simple quotes and possible spaces inside
+/// the simple quotes in case of String value.
+/// It is made for fast checking, but assuming we know the exact format of the
+/// value (including simple quotes and extra spaces in case of String values).
+/// To specifically  check the trimmed string value after having parse simple quotes, see `check_keyword_and_str_val`.   
 pub(crate) fn check_keyword_and_val(
   keyword_record: &[u8],
   expected_kw: &[u8],
@@ -262,6 +267,17 @@ pub(crate) fn check_keyword_and_val(
     .and_then(|()| check_expected_value(keyword_record, expected_val))
 }
 
+pub(crate) fn check_keyword_and_str_val(
+  keyword_record: &[u8],
+  expected_kw: &[u8],
+  expected_val: &[u8],
+) -> Result<(), FitsError> {
+  check_expected_keyword(keyword_record, expected_kw)
+    .and_then(|()| check_for_value_indicator(keyword_record))
+    .and_then(|()| check_expected_str_value(keyword_record, expected_val))
+}
+
+/// Checks the keyword and returns the integer value it is associated with.
 pub(crate) fn check_keyword_and_parse_uint_val<T>(
   keyword_record: &[u8],
   expected_kw: &[u8],
@@ -353,6 +369,31 @@ pub(crate) fn check_expected_value(
       actual,
     })
   }
+}
+
+pub(crate) fn check_expected_str_value(
+  keyword_record: &[u8],
+  expected: &[u8],
+) -> Result<(), FitsError> {
+  debug_assert!(keyword_record.len() == 80); // length of a FITS keyword-record
+  get_str_val_no_quote(keyword_record).and_then(|actual| {
+    if actual == expected {
+      Ok(())
+    } else {
+      let keyword = String::from_utf8_lossy(&keyword_record[0..8])
+        .trim_end()
+        .to_string();
+      // We know what we put in it, so unsafe is ok here
+      let expected = String::from(unsafe { str::from_utf8_unchecked(expected) });
+      // Here, may contains binary data
+      let actual = String::from_utf8_lossy(actual).to_string();
+      Err(FitsError::UnexpectedValue {
+        keyword,
+        expected,
+        actual,
+      })
+    }
+  })
 }
 
 /// We know that the expected value does not contains a simple quote.
