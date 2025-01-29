@@ -1608,24 +1608,151 @@ impl Layer {
     if include_center {
       result_map.put(C, hash);
     }
-    let h_bits: HashBits = self.pull_bits_appart(hash);
-    if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
+    let HashBits { d0h, i, j} = self.pull_bits_appart(hash);
+    if self.is_in_base_cell_border(i, j) {
       self.edge_cell_neighbours(hash, &mut result_map);
     } else {
-      self.inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, &mut result_map);
+      self.inner_cell_neighbours(d0h, i, j, &mut result_map);
     }
     result_map
   }
+
+  /// Returns the hash values of the cells which are in the internal border of a square of
+  /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
+  /// The regular `neighbours` methods correspond to `k=1`.
+  ///
+  /// # Panics
+  /// * if `k` is larger than or equals to `nside`.
+  ///
+  /// # Warning
+  /// The algorithm we use works in the 2D projection plane.
+  /// When the corner of a base cell has 2 neighbours instead of 3, the result shape on the sphere
+  /// may be strange. Those corners are:
+  /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap base cells (cells 8 to 11)
+  /// * North and south corners of equatorial base cells (cell 4 to 7)
+  pub fn neighbours_in_kth_ring(&self, hash: u64, k: u32) -> Vec<u64> {
+    match k {
+      0 => [hash; 1].to_vec(),
+      1 => self.neighbours(hash, false).values_vec(),
+      k if k < self.nside => {
+        let HashParts { d0h, i, j } = self.decode_hash(hash);
+        let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
+        if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
+          // Simple case, we stay in the same base cell
+          let xfrom = i - k;
+          let xto = i + k;
+          let yfrom = j - k;
+          let yto = j + k;
+          // S (inclusive) to W (exclusive)
+          for y in yfrom..yto {
+            result.push(self.build_hash_from_parts(d0h, xfrom, y));
+          }
+          // W (inclusive) to N (exclusive)
+          for x in xfrom..xto {
+            result.push(self.build_hash_from_parts(d0h, x, yto));
+          }
+          // N (inslusive) to E (exclusive)
+          for y in (yfrom + 1..=yto).rev() {
+            result.push(self.build_hash_from_parts(d0h, xto, y));
+          }
+          // E (inclusive) to S (exclusive)
+          for x in (xfrom + 1..=xto).rev() {
+            result.push(self.build_hash_from_parts(d0h, x, yfrom));
+          }
+        } else {
+          // We cross several base cells: things are more complicated!!
+          let k = k as i32;
+          let i = i as i32;
+          let j = j as i32;
+          let xfrom = i - k;
+          let xto = i + k;
+          let yfrom = j - k;
+          let yto = j + k;
+
+          // In this method, both i and j can be < 0 or >= nside
+          let partial_compute = move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
+            let xfrom = i - k;
+            let xto = i + k;
+            let yfrom = j - k;
+            let yto = j + k;
+            // S (inclusive) to W (exclusive)
+            if (0..nside).contains(&xfrom) {
+              for y in yfrom.max(0)..yto.min(nside) {
+                res.push(self.build_hash_from_parts(d0h, xfrom as u32, y as u32));
+              }
+            }
+            // W (inclusive) to N (exclusive)
+            if (0..nside as i32).contains(&yto) {
+              for x in xfrom.max(0)..xto.min(nside) {
+                res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
+              }
+            }
+            // N (inslusive) to E (exclusive)
+            if (0..nside as i32).contains(&xto) {
+              for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
+                res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
+              }
+            }
+            // E (inclusive) to S (exclusive)
+            if (0..nside as i32).contains(&yfrom) {
+              for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
+                res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
+              }
+            }
+          };
+
+          let nside = self.nside as i32;
+          let overflow_sw = xfrom < 0;
+          let overflow_ne = xto >= nside;
+          let overflow_se = yfrom < 0;
+          let overflow_nw = yto >= nside;
+          let overflow_s = overflow_sw && overflow_se;
+          let overflow_w = overflow_sw && overflow_nw;
+          let overflow_n = overflow_nw && overflow_ne;
+          let overflow_e = overflow_se && overflow_ne;
+
+          if overflow_s {
+            self.to_neighbour_base_cell_coo(d0h, i, j, S).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_sw {
+            self.to_neighbour_base_cell_coo(d0h, i, j, SW) .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_w {
+            self.to_neighbour_base_cell_coo(d0h, i, j, W).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_nw {
+            self.to_neighbour_base_cell_coo(d0h, i, j, NW).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_n {
+            self.to_neighbour_base_cell_coo(d0h, i, j, N).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_ne {
+            self.to_neighbour_base_cell_coo(d0h, i, j, NE).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_e {
+            self.to_neighbour_base_cell_coo(d0h, i, j, E).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          if overflow_se {
+            self.to_neighbour_base_cell_coo(d0h, i, j, SE).map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          }
+          partial_compute(nside, d0h, i, j, k, &mut result);
+        }
+        result
+      },
+      _ => panic!("The 'k' parameter is too large. Expected: <{}. Actual: {}.", self.nside, k)
+    }
+  }
+
 
   /// Same method as [neighbours](#method.neighbours) except that neighbours are appended
   /// to the given vector.
   pub fn append_bulk_neighbours(&self, hash: u64, dest: &mut Vec<u64>) {
     self.check_hash(hash);
-    let h_bits: HashBits = self.pull_bits_appart(hash);
-    if self.is_in_base_cell_border(h_bits.i, h_bits.j) {
+    let HashBits { d0h, i, j} = self.pull_bits_appart(hash);
+    if self.is_in_base_cell_border(i, j) {
       self.append_bulk_edge_cell_neighbours(hash, dest);
     } else {
-      self.append_bulk_inner_cell_neighbours(h_bits.d0h, h_bits.i, h_bits.j, dest);
+      self.append_bulk_inner_cell_neighbours(d0h, i, j, dest);
     }
   }
 
@@ -2019,11 +2146,8 @@ impl Layer {
 
   fn edge_cell_neighbours(&self, hash: u64, result_map: &mut MainWindMap<u64>) {
     // Could have simply been edgeCellNeighbours(hash, EnumSet.allOf(MainWind.class) result)
-    // but we prefered to unroll the for loop.
-    let h_parts: HashParts = self.decode_hash(hash);
-    let d0h = h_parts.d0h;
-    let i = h_parts.i;
-    let j = h_parts.j;
+    // but we preferred to unroll the for loop.
+    let HashParts { d0h, i, j } = self.decode_hash(hash);
     result_map.put_opt(S, self.neighbour_from_parts(d0h, i, j, S));
     result_map.put_opt(SE, self.neighbour_from_parts(d0h, i, j, SE));
     result_map.put_opt(E, self.neighbour_from_parts(d0h, i, j, E));
@@ -2035,10 +2159,7 @@ impl Layer {
   }
 
   fn append_bulk_edge_cell_neighbours(&self, hash: u64, dest: &mut Vec<u64>) {
-    let h_parts: HashParts = self.decode_hash(hash);
-    let d0h = h_parts.d0h;
-    let i = h_parts.i;
-    let j = h_parts.j;
+    let HashParts { d0h, i, j } = self.decode_hash(hash);
     if let Some(n) = self.neighbour_from_parts(d0h, i, j, S) {
       dest.push(n);
     }
@@ -2112,19 +2233,16 @@ impl Layer {
       debug_assert!(i < self.nside && j < self.nside);
       self.build_hash_from_parts_opt(d0h, i, j)
     } else {
-      let d0h_mod_4 = d0h & 3_u8; // <=> base_cell modulo 4
+      let d0h_mod_4 = div4_remainder(d0h);
       match div4_quotient(d0h) {
-        // <=> base_cell / 4
-        0 => self.ncp_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
+        0 => self.npc_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
         1 => self.eqr_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
         2 => self.spc_neighbour(d0h_mod_4, i, j, base_cell_neighbour_dir),
-        _ => panic!("Base cell must be in [0, 12["),
+        _ => unreachable!("Base cell must be in [0, 12["),
       }
     }
   }
-
-  #[inline]
-  fn ncp_neighbour(
+  fn npc_neighbour(
     &self,
     d0h_mod_4: u8,
     i: u32,
@@ -2142,8 +2260,6 @@ impl Layer {
       _ => None,
     }
   }
-
-  #[inline]
   fn eqr_neighbour(
     &self,
     d0h_mod_4: u8,
@@ -2162,8 +2278,6 @@ impl Layer {
       _ => None,
     }
   }
-
-  #[inline]
   fn spc_neighbour(
     &self,
     d0h_mod_4: u8,
@@ -2181,6 +2295,87 @@ impl Layer {
       _ => None,
     }
   }
+  
+  /// In the 2D projection plane, transform the given `(i, j)` coordinates in the frame defined by:
+  /// * origin: South vertex of the input base cell
+  /// * x-axis: South vertex to East vertex of the input base cell
+  /// * y-axis: South vertex to West vertex of the input base cell
+  /// into coordinates in the frame attached to the neighbour cell of given direction (with respect to
+  /// the input base cell).
+  /// # Params:
+  /// * `new_base_cell_dir`: direction of the base cell in which we want the new coordinates, with
+  ///   respect to the given `d0h` base cell.
+  /// # Retuned params:
+  /// * returns `None` if the base cell has no neighbour in the given direction.
+  /// * `r.0`: base cell number of the cell in which the new coordinates are expressed.
+  /// * `r.1`: coordinate along the `S to SE` axis in the new base cell.
+  /// * `r.2`: coordinate along the `S to SW` axis in the new base cell.
+  /// # Info:
+  /// * input `i` and `j` coordinates are supposed to be in `[0, nside[` while output coordinates
+  ///   may be negative and or larger that `nside`.
+  pub fn to_neighbour_base_cell_coo(&self, d0h: u8, i: i32, j: i32, new_base_cell_dir: MainWind) -> Option<(u8, i32, i32)> {
+    if new_base_cell_dir == MainWind::C {
+      Some((d0h, i, j))
+    } else {
+      let d0h_mod_4 = div4_remainder(d0h);
+      match div4_quotient(d0h) {
+        0 => self.to_neighbour_base_cell_coo_npc(d0h_mod_4, i, j, new_base_cell_dir),
+        1 => self.to_neighbour_base_cell_coo_eqr(d0h_mod_4, i, j, new_base_cell_dir),
+        2 => self.to_neighbour_base_cell_coo_spc(d0h_mod_4, i, j, new_base_cell_dir),
+        _ => unreachable!("Base cell must be in [0, 12["),
+      }
+    }
+  }
+  fn to_neighbour_base_cell_coo_npc(&self, d0h_mod_4: u8, i: i32, j: i32, new_base_cell_dir: MainWind) -> Option<(u8, i32, i32)> {
+    let n = self.nside as i32;
+    let m = (n << 1) - 1;
+    match new_base_cell_dir {
+      S => Some((base_cell(iden(d0h_mod_4), 2), n + i, n + j)),
+      SE => Some((base_cell(next(d0h_mod_4), 1), i, n + j)),
+      SW => Some((base_cell(iden(d0h_mod_4), 1), n + i, j)),
+      NE => Some((base_cell(next(d0h_mod_4), 0), j, m - i)),
+      NW => Some((base_cell(prev(d0h_mod_4), 0), m - j, i)),
+      N => Some((base_cell(oppo(d0h_mod_4), 0), m - i, m - j)),
+      _ => None,
+    }
+  }
+  fn to_neighbour_base_cell_coo_eqr(
+    &self,
+    d0h_mod_4: u8,
+    i: i32,
+    j: i32,
+    new_base_cell_dir: MainWind,
+  ) -> Option<(u8, i32, i32)>  {
+    let n = self.nside as i32;
+    match new_base_cell_dir {
+      SE => Some((base_cell(iden(d0h_mod_4), 2), i, n + j)),
+      E => Some((base_cell(next(d0h_mod_4), 1), i - n, n + j)),
+      SW => Some((base_cell(prev(d0h_mod_4), 2), n + i, j)),
+      NE => Some((base_cell(iden(d0h_mod_4), 0), i - n, j)),
+      W => Some((base_cell(prev(d0h_mod_4), 1), n + i, j - n)),
+      NW => Some((base_cell(prev(d0h_mod_4), 0), i, j - n)),
+      _ => None,
+    }
+  }
+  fn to_neighbour_base_cell_coo_spc(
+    &self,
+    d0h_mod_4: u8,
+    i: i32,
+    j: i32,
+    new_base_cell_dir: MainWind,
+  ) -> Option<(u8, i32, i32)> {
+    let n = self.nside as i32;
+    match new_base_cell_dir {
+      S => Some((base_cell(oppo(d0h_mod_4), 2), -i - 1, -j - 1)),
+      SE => Some((base_cell(next(d0h_mod_4), 2), -j - 1, i)),
+      SW => Some((base_cell(prev(d0h_mod_4), 2), j, -i - 1)),
+      NE => Some((base_cell(next(d0h_mod_4), 1), i - n, j)),
+      NW => Some((base_cell(iden(d0h_mod_4), 1), i, j - n)),
+      N => Some((base_cell(iden(d0h_mod_4), 0), i - n, j - n)),
+      _ => None,
+    }
+  }
+  
 
   /// Center of the given cell in the Euclidean projection space.
   /// # Output
@@ -7414,6 +7609,7 @@ mod tests {
   #[test]
   fn test_gen_file() -> std::io::Result<()> {
     use std::io::prelude::*;
+    use super::get;
 
     let depth = 8;
     let layer = get(depth);
@@ -7454,6 +7650,140 @@ mod tests {
     }
   }
 
+  
+  #[test]
+  fn test_neighbours_in_kth_ring() {
+    let depth = 8;
+    let nside = nside(depth);
+    let k = 4;
+    let layer = get(depth);
+
+    // For visual inspection in Aladin
+    fn to_aladin(depth: u8, center: u64, cells: &[u64]) {
+      print!("draw moc {}/{}, ", depth, center);
+      for cell in cells {
+        print!("{}, ", cell);
+      }
+      println!();
+    }
+    
+    let expected = [
+      // NPC
+      [
+        vec![589817, 589819, 589821, 589820, 283985, 283987, 283993, 283995, 284017, 284019, 284025, 284028, 284029, 371387, 371385, 371384, 371373, 371372, 371369, 371368, 40, 41, 44, 45, 56, 57, 51, 49, 27, 25, 19, 17],
+        vec![109246, 109244, 109238, 109235, 109234, 109223, 109222, 109219, 109218, 393196, 393198, 393213, 393212, 393209, 393208, 393197, 21828, 21830, 21836, 21838, 21860, 21862, 21868, 21869, 21880, 21881, 21884, 21885],
+        vec![262108, 262110, 262132, 262134, 262140, 262142, 262109, 196601, 196603, 196605, 196604, 131043, 131049, 131051, 131063, 131062, 131059, 131058, 131047, 131046, 65478, 65484, 65486, 65508, 65510, 65516, 65518, 65495, 65494, 65491, 65490, 65479],
+        vec![327635, 327641, 327643, 327665, 327667, 327673, 327675, 327639, 327638, 218452, 218454, 218460, 218462, 218484, 218486, 218487, 43707, 43705, 43699, 43697, 43675, 43673, 43667, 43666, 43655, 43654, 43651, 43650]
+      ],
+      [
+        vec![655353, 655355, 655357, 655356, 349521, 349523, 349529, 349531, 349553, 349555, 349561, 349564, 349565, 436923, 436921, 436920, 436909, 436908, 436905, 436904, 65576, 65577, 65580, 65581, 65592, 65593, 65587, 65585, 65563, 65561, 65555, 65553],
+        vec![174782, 174780, 174774, 174771, 174770, 174759, 174758, 174755, 174754, 458732, 458734, 458749, 458748, 458745, 458744, 458733, 87364, 87366, 87372, 87374, 87396, 87398, 87404, 87405, 87416, 87417, 87420, 87421],
+        vec![65500, 65502, 65524, 65526, 65532, 65534, 65501, 262137, 262139, 262141, 262140, 196579, 196585, 196587, 196599, 196598, 196595, 196594, 196583, 196582, 131014, 131020, 131022, 131044, 131046, 131052, 131054, 131031, 131030, 131027, 131026, 131015],
+        vec![393171, 393177, 393179, 393201, 393203, 393209, 393211, 393175, 393174, 21844, 21846, 21852, 21854, 21876, 21878, 21879, 109243, 109241, 109235, 109233, 109211, 109209, 109203, 109202, 109191, 109190, 109187, 109186]
+      ],
+      [
+        vec![720889, 720891, 720893, 720892, 415057, 415059, 415065, 415067, 415089, 415091, 415097, 415100, 415101, 502459, 502457, 502456, 502445, 502444, 502441, 502440, 131112, 131113, 131116, 131117, 131128, 131129, 131123, 131121, 131099, 131097, 131091, 131089],
+        vec![240318, 240316, 240310, 240307, 240306, 240295, 240294, 240291, 240290, 524268, 524270, 524285, 524284, 524281, 524280, 524269, 152900, 152902, 152908, 152910, 152932, 152934, 152940, 152941, 152952, 152953, 152956, 152957],
+        vec![131036, 131038, 131060, 131062, 131068, 131070, 131037, 65529, 65531, 65533, 65532, 262115, 262121, 262123, 262135, 262134, 262131, 262130, 262119, 262118, 196550, 196556, 196558, 196580, 196582, 196588, 196590, 196567, 196566, 196563, 196562, 196551],
+        vec![458707, 458713, 458715, 458737, 458739, 458745, 458747, 458711, 458710, 87380, 87382, 87388, 87390, 87412, 87414, 87415, 174779, 174777, 174771, 174769, 174747, 174745, 174739, 174738, 174727, 174726, 174723, 174722]
+      ],
+      [
+        vec![786425, 786427, 786429, 786428, 480593, 480595, 480601, 480603, 480625, 480627, 480633, 480636, 480637, 305851, 305849, 305848, 305837, 305836, 305833, 305832, 196648, 196649, 196652, 196653, 196664, 196665, 196659, 196657, 196635, 196633, 196627, 196625],
+        vec![43710, 43708, 43702, 43699, 43698, 43687, 43686, 43683, 43682, 327660, 327662, 327677, 327676, 327673, 327672, 327661, 218436, 218438, 218444, 218446, 218468, 218470, 218476, 218477, 218488, 218489, 218492, 218493],
+        vec![196572, 196574, 196596, 196598, 196604, 196606, 196573, 131065, 131067, 131069, 131068, 65507, 65513, 65515, 65527, 65526, 65523, 65522, 65511, 65510, 262086, 262092, 262094, 262116, 262118, 262124, 262126, 262103, 262102, 262099, 262098, 262087],
+        vec![524243, 524249, 524251, 524273, 524275, 524281, 524283, 524247, 524246, 152916, 152918, 152924, 152926, 152948, 152950, 152951, 240315, 240313, 240307, 240305, 240283, 240281, 240275, 240274, 240263, 240262, 240259, 240258]
+      ],
+      // EQR
+      [
+        vec![742737, 742739, 742745, 742747, 742769, 742771, 742777, 742780, 742781, 567995, 567993, 567992, 567981, 567980, 567977, 567976, 262184, 262185, 262188, 262189, 262200, 262201, 262195, 262193, 262171, 262169, 262163, 262161],
+        vec![40, 41, 44, 38, 36, 14, 12, 6, 4, 371374, 371372, 371369, 371368, 589804, 589806, 589821, 589820, 589817, 589816, 589805, 283972, 283974, 283980, 283982, 284004, 284006, 284012, 284013, 284024, 284025, 284028, 284029],
+        vec![218436, 218438, 218439, 218450, 218451, 218454, 218455, 43694, 43692, 43686, 43684, 43662, 43660, 43654, 43651, 43650, 327622, 327628, 327630, 327652, 327654, 327660, 327662, 327639, 327638, 327635, 327634, 327623],
+        vec![786387, 786393, 786395, 786417, 786419, 786425, 786427, 786391, 786390, 480593, 480595, 480598, 480599, 196610, 196611, 196614, 196615, 196626, 196627, 196625, 305851, 305849, 305843, 305841, 305819, 305817, 305811, 305810, 305799, 305798, 305795, 305794]
+      ],
+      [
+        vec![546129, 546131, 546137, 546139, 546161, 546163, 546169, 546172, 546173, 633531, 633529, 633528, 633517, 633516, 633513, 633512, 327720, 327721, 327724, 327725, 327736, 327737, 327731, 327729, 327707, 327705, 327699, 327697],
+        vec![65576, 65577, 65580, 65574, 65572, 65550, 65548, 65542, 65540, 436910, 436908, 436905, 436904, 655340, 655342, 655357, 655356, 655353, 655352, 655341, 349508, 349510, 349516, 349518, 349540, 349542, 349548, 349549, 349560, 349561, 349564, 349565],
+        vec![21828, 21830, 21831, 21842, 21843, 21846, 21847, 109230, 109228, 109222, 109220, 109198, 109196, 109190, 109187, 109186, 393158, 393164, 393166, 393188, 393190, 393196, 393198, 393175, 393174, 393171, 393170, 393159],
+        vec![589779, 589785, 589787, 589809, 589811, 589817, 589819, 589783, 589782, 283985, 283987, 283990, 283991, 2, 3, 6, 7, 18, 19, 17, 371387, 371385, 371379, 371377, 371355, 371353, 371347, 371346, 371335, 371334, 371331, 371330]
+      ],
+      [
+        vec![611665, 611667, 611673, 611675, 611697, 611699, 611705, 611708, 611709, 699067, 699065, 699064, 699053, 699052, 699049, 699048, 393256, 393257, 393260, 393261, 393272, 393273, 393267, 393265, 393243, 393241, 393235, 393233],
+        vec![131112, 131113, 131116, 131110, 131108, 131086, 131084, 131078, 131076, 502446, 502444, 502441, 502440, 720876, 720878, 720893, 720892, 720889, 720888, 720877, 415044, 415046, 415052, 415054, 415076, 415078, 415084, 415085, 415096, 415097, 415100, 415101],
+        vec![87364, 87366, 87367, 87378, 87379, 87382, 87383, 174766, 174764, 174758, 174756, 174734, 174732, 174726, 174723, 174722, 458694, 458700, 458702, 458724, 458726, 458732, 458734, 458711, 458710, 458707, 458706, 458695],
+        vec![655315, 655321, 655323, 655345, 655347, 655353, 655355, 655319, 655318, 349521, 349523, 349526, 349527, 65538, 65539, 65542, 65543, 65554, 65555, 65553, 436923, 436921, 436915, 436913, 436891, 436889, 436883, 436882, 436871, 436870, 436867, 436866]
+      ],
+      [
+        vec![677201, 677203, 677209, 677211, 677233, 677235, 677241, 677244, 677245, 764603, 764601, 764600, 764589, 764588, 764585, 764584, 458792, 458793, 458796, 458797, 458808, 458809, 458803, 458801, 458779, 458777, 458771, 458769],
+        vec![196648, 196649, 196652, 196646, 196644, 196622, 196620, 196614, 196612, 305838, 305836, 305833, 305832, 786412, 786414, 786429, 786428, 786425, 786424, 786413, 480580, 480582, 480588, 480590, 480612, 480614, 480620, 480621, 480632, 480633, 480636, 480637],
+        vec![152900, 152902, 152903, 152914, 152915, 152918, 152919, 240302, 240300, 240294, 240292, 240270, 240268, 240262, 240259, 240258, 524230, 524236, 524238, 524260, 524262, 524268, 524270, 524247, 524246, 524243, 524242, 524231],
+        vec![720851, 720857, 720859, 720881, 720883, 720889, 720891, 720855, 720854, 415057, 415059, 415062, 415063, 131074, 131075, 131078, 131079, 131090, 131091, 131089, 502459, 502457, 502451, 502449, 502427, 502425, 502419, 502418, 502407, 502406, 502403, 502402]
+      ],
+      // SPC
+      [
+        vec![655362, 655363, 655366, 655364, 720904, 720905, 720908, 720909, 720920, 720921, 720924, 720918, 720916, 589858, 589859, 589857, 589835, 589833, 589827, 589825, 524328, 524329, 524332, 524333, 524344, 524345, 524339, 524337, 524315, 524313, 524307, 524305],
+        vec![327720, 327721, 327724, 327718, 327716, 327694, 327692, 327686, 327684, 633515, 633513, 633507, 633505, 633483, 633481, 633480, 546116, 546118, 546124, 546126, 546148, 546150, 546156, 546157, 546168, 546169, 546172, 546173],
+        vec![283972, 283974, 283975, 283986, 283987, 283990, 283991, 2, 3, 6, 4, 371374, 371372, 371366, 371364, 371342, 371340, 371334, 371331, 371330, 589766, 589772, 589774, 589796, 589798, 589804, 589806, 589783, 589782, 589779, 589778, 589767],
+        vec![742721, 742723, 742729, 742732, 742733, 742744, 742745, 742748, 742749, 262146, 262147, 262150, 262151, 262162, 262163, 262161, 567995, 567993, 567987, 567985, 567963, 567961, 567955, 567954, 567943, 567942, 567939, 567938]
+      ],
+      [
+        vec![720898, 720899, 720902, 720900, 524296, 524297, 524300, 524301, 524312, 524313, 524316, 524310, 524308, 655394, 655395, 655393, 655371, 655369, 655363, 655361, 589864, 589865, 589868, 589869, 589880, 589881, 589875, 589873, 589851, 589849, 589843, 589841],
+        vec![393256, 393257, 393260, 393254, 393252, 393230, 393228, 393222, 393220, 699051, 699049, 699043, 699041, 699019, 699017, 699016, 611652, 611654, 611660, 611662, 611684, 611686, 611692, 611693, 611704, 611705, 611708, 611709],
+        vec![349508, 349510, 349511, 349522, 349523, 349526, 349527, 65538, 65539, 65542, 65540, 436910, 436908, 436902, 436900, 436878, 436876, 436870, 436867, 436866, 655302, 655308, 655310, 655332, 655334, 655340, 655342, 655319, 655318, 655315, 655314, 655303],
+        vec![546113, 546115, 546121, 546124, 546125, 546136, 546137, 546140, 546141, 327682, 327683, 327686, 327687, 327698, 327699, 327697, 633531, 633529, 633523, 633521, 633499, 633497, 633491, 633490, 633479, 633478, 633475, 633474]
+      ],
+      [
+        vec![524290, 524291, 524294, 524292, 589832, 589833, 589836, 589837, 589848, 589849, 589852, 589846, 589844, 720930, 720931, 720929, 720907, 720905, 720899, 720897, 655400, 655401, 655404, 655405, 655416, 655417, 655411, 655409, 655387, 655385, 655379, 655377],
+        vec![458792, 458793, 458796, 458790, 458788, 458766, 458764, 458758, 458756, 764587, 764585, 764579, 764577, 764555, 764553, 764552, 677188, 677190, 677196, 677198, 677220, 677222, 677228, 677229, 677240, 677241, 677244, 677245],
+        vec![415044, 415046, 415047, 415058, 415059, 415062, 415063, 131074, 131075, 131078, 131076, 502446, 502444, 502438, 502436, 502414, 502412, 502406, 502403, 502402, 720838, 720844, 720846, 720868, 720870, 720876, 720878, 720855, 720854, 720851, 720850, 720839],
+        vec![611649, 611651, 611657, 611660, 611661, 611672, 611673, 611676, 611677, 393218, 393219, 393222, 393223, 393234, 393235, 393233, 699067, 699065, 699059, 699057, 699035, 699033, 699027, 699026, 699015, 699014, 699011, 699010]
+      ],
+      [
+        vec![589826, 589827, 589830, 589828, 655368, 655369, 655372, 655373, 655384, 655385, 655388, 655382, 655380, 524322, 524323, 524321, 524299, 524297, 524291, 524289, 720936, 720937, 720940, 720941, 720952, 720953, 720947, 720945, 720923, 720921, 720915, 720913],
+        vec![262184, 262185, 262188, 262182, 262180, 262158, 262156, 262150, 262148, 567979, 567977, 567971, 567969, 567947, 567945, 567944, 742724, 742726, 742732, 742734, 742756, 742758, 742764, 742765, 742776, 742777, 742780, 742781],
+        vec![480580, 480582, 480583, 480594, 480595, 480598, 480599, 196610, 196611, 196614, 196612, 305838, 305836, 305830, 305828, 305806, 305804, 305798, 305795, 305794, 786374, 786380, 786382, 786404, 786406, 786412, 786414, 786391, 786390, 786387, 786386, 786375],
+        vec![677185, 677187, 677193, 677196, 677197, 677208, 677209, 677212, 677213, 458754, 458755, 458758, 458759, 458770, 458771, 458769, 764603, 764601, 764595, 764593, 764571, 764569, 764563, 764562, 764551, 764550, 764547, 764546]
+      ]
+    ];
+
+    
+    for d0h in 0..12 {
+      let expected_array = &expected[d0h as usize];
+
+      let hs = layer.build_hash_from_parts(d0h, 1, 2);
+      let neig = layer.neighbours_in_kth_ring(hs, k);
+      //to_aladin(depth, hs,neig.as_slice());
+      let expected = &expected_array[0_usize];
+      //if !expected.is_empty() {
+        assert_eq!(&neig, expected);
+      //}
+      
+      let he = layer.build_hash_from_parts(d0h, nside - 2, 2);
+      let neig = layer.neighbours_in_kth_ring(he, k);
+      //to_aladin(depth, he,neig.as_slice());
+      let expected = &expected_array[1_usize];
+      //if !expected.is_empty() {
+        assert_eq!(&neig, expected);
+      //}
+
+      let hn = layer.build_hash_from_parts(d0h, nside - 2, nside - 3);
+      let neig = layer.neighbours_in_kth_ring(hn, k);
+      //to_aladin(depth, hn, neig.as_slice());
+      let expected = &expected_array[2_usize];
+      //if !expected.is_empty() {
+        assert_eq!(&neig, expected);
+      //}
+      
+      let hw = layer.build_hash_from_parts(d0h, 1, nside - 3);
+      let neig = layer.neighbours_in_kth_ring(hw, k);
+      //to_aladin(depth, hw,neig.as_slice());
+      let expected = &expected_array[3_usize];
+      //if !expected.is_empty() {
+        assert_eq!(&neig, expected);
+      //}
+      
+    }
+  }
+  
   /*#[test]
   fn test_xpm1_and_q () {
     let a = Layer::d0h_lh_in_d0c(std::f64::NAN, 0.0);
