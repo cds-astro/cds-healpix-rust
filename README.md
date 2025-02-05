@@ -24,12 +24,13 @@ It is used in:
      + [MOCli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli) a standalone command line tool to manipulate MOCs on linux, MacOS and Windows;
      + [MOCWasm](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/wasm), a WASM library to manipulate MOCs from web browsers;
      + [MOCSet](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/set), a standalone command line tool to build, update and query a persistent set of MOCs.
+ * [The CDS HEALPix Python](https://github.com/cds-astro/cds-healpix-python)
  * CDS internal developments
  * *Please help me fill in this list*
 
 
 Initially, it is a port of a part of the CDS Java library available [here](https://github.com/cds-astro/cds-healpix-java),
-but improvement have been added while porting the code.
+but improvement have been added while porting the code and new features are added.
 
 For information on HEALPix in general, see:
  * The [official web site](https://healpix.jpl.nasa.gov/)
@@ -43,7 +44,7 @@ Other independent HEALPix implementations:
  * [Javascript/Typescript](https://github.com/michitaro/healpix) implementation by Koike Michitaro
  * [Julia](https://github.com/ziotom78/Healpix.jl) implementation by Maurizio Tomasi
  * [C](https://sourceforge.net/projects/healpix/files/healpix_bare_1.0/) "official" core functionalities implementation in BSD by Martin Reinecke
- * ... (Help me to add links to other HEALPix resources and codes).
+ * *Please Help me adding links to other HEALPix resources and codes*
 
 Warning
 -------
@@ -56,7 +57,7 @@ This uses BMI2 instructions PDEP and PEXT, if supported by your processor, for b
 
 However, the implementaion of those instructions on **AMD Ryzen processors** are **extremely slow** (20x slower than a lookup table, 
 doubling the `hash` computation time)! 
-You can test it usingi:
+You can test it using:
 ```bash
 RUSTFLAGS='-C target-cpu=native' cargo bench
 ```
@@ -81,6 +82,10 @@ Features
      + Supports approximated `cone` and `elliptical cone` coverage plus **exact** `polygon` coverage queries
      + Supports `BMOC` (MOC with a flag telling if a cell is fully or partially covered by a surface) as a result of `cone`, `polygon` ot `elliptical cone` coverage queries
      + Supports logical operations on `BMOCs` and `BMOC` creation from a list of cell number at a given depth
+     + Supports implicit HEALPix density maps (single column so far), with PNG image creation for density maps
+     + Supports (non standard) HEALPix multi-order maps (MOM, single columns so far), with PNG image creation for density MOMs
+     + Supports HEALPix external sort
+     + Supports sorted indexation
  * Supports the **HEALPix Ring scheme** with **any** NSIDE (i.e. not necessarilly powers of 2)
 
 Missing Features
@@ -89,7 +94,7 @@ Missing Features
  * Not supported
    * Polygon and ellipse in the RING scheme
    * Spherical Harmonics computations
-   * (Help me fill this)
+   * *Help me fill this*
  * Not yet implemented
    * Exact cone and ellipse solution (but using the `custom` approx methods, one can handle the rate of false positives)  
    * Cone query in the RING scheme
@@ -100,16 +105,16 @@ Examples
 Compute the cell number of a given position on the unit-sphere at a given HEALPix depth.
 
 ```rust
-use cdshealpix::{nside};
-use cdshealpix::nested::{get_or_create, Layer};
+use cdshealpix::nside;
+use cdshealpix::nested::{get, Layer};
 
 
 let depth = 12_u8;
 let lon = 12.5_f64.to_radians();
 let lat = 89.99999_f64.to_radians();
 
-let nested_d12 = get_or_create(depth);
-let nside = nside(depth) as u_64;
+let nested_d12 = get(depth);
+let nside = nside(depth) as u64;
 let expected_cell_number = nside * nside - 1
 
 assert_eq!(expected_cell_number, nested_d12.hash(lon, lat));
@@ -137,10 +142,10 @@ let [
 Get a hierarchical view (a [MOC](http://www.ivoa.net/documents/MOC/)) on the cells overlapped by a given cone:
 
 ```rust
-use cdshealpix::nested::{get_or_create, Layer};
+use cdshealpix::nested::{get, Layer};
 
 let depth = 6_u8;
-let nested_d6 = get_or_create(depth);
+let nested_d6 = get(depth);
 
 let lon = 13.158329_f64.to_radians();
 let lat = -72.80028_f64.to_radians();
@@ -172,8 +177,7 @@ Python
 (Not on crates.io, but on github) 
 See the `libpython` directory containing a very first integration in python  using [CFFI](https://cffi.readthedocs.io/en/latest/).
 
-For a clean Python wrapper and associated Wheels, see Matthieu Baumann's project [cds-healpix-python](https://github.com/cds-astro/cds-healpix-python/).
-To use the library in python, install it through `pip` (examples are provided on github [cds-healpix-python](https://github.com/cds-astro/cds-healpix-python/)):
+For a clean Python wrapper and associated Wheels, see [cdshealpix python](https://github.com/cds-astro/cds-healpix-python/) available on [pypi](https://pypi.org/project/cdshealpix/):
 ```bash
 pip install cdshealpix
 ```
@@ -184,6 +188,17 @@ ToDo list
 
 * [ ] Modify elliptical cone: compute distance to both foci
 * [ ] Implement the exact cone solution
+
+
+Acknowledgements
+----------------
+
+If you use this code and work in a scientific public domain
+(especially astronomy), please acknowledge its usage and the
+[CDS](https://en.wikipedia.org/wiki/Centre_de_donn%C3%A9es_astronomiques_de_Strasbourg)
+who developed it.
+It may help us in promoting our work to our financiers.
+
 
 License
 -------
@@ -209,5 +224,5 @@ shall be dual licensed as above, without any additional terms or conditions.
 Disclaimer
 ----------
 
-It a first code in Rust, feel free to give some advice/feedback.
+This code started has my first Rust code.
 
