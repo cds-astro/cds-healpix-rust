@@ -1,26 +1,24 @@
-//! Multi-order Map, i.e. list of non-overlapping `(UNIQ, VALUE)`.
-// IDEE:
-// * use zuniq
-// * use array of tuple, sorted according to zuniq
-// * for each img pixel, get sky position, get zuniq, binay_search in map
+//! Multi-Order healpix Map, i.e. list of non-overlapping `(UNIQ, VALUE)`.
+//! We could also call this a `Valued-MOC` (`VMOC`), i.e. a list of non-overlapping HEALPix cells, at
+//! various oder, having a value (or a quantity) associated to each cell.
 
 use std::{
   cmp::Ordering,
   fmt::{Debug, Display},
-  io::Error as IoError,
   ops::AddAssign,
   io::{Write, BufWriter},
   fs::File,
   path::Path
 };
 
+use byteorder::WriteBytesExt;
 use chrono::{SecondsFormat, Utc};
 use num::PrimInt;
 use num_traits::ToBytes;
 
 use crate::nested::map::fits::{
   error::FitsError,
-  write::{write_final_padding, write_keyword_record, write_str_keyword_record, write_uint_mandatory_keyword_record}
+  write::{write_primary_hdu, write_final_padding, write_keyword_record, write_str_keyword_record, write_uint_mandatory_keyword_record, write_str_mandatory_keyword_record}
 };
 use super::{
   HHash,
@@ -53,6 +51,8 @@ pub trait ZUniqHashT:
   const LAST_LAYER_MASK: Self; // = Self:: Self::one().unsigned_shl(Self::DIM as u32) - Self::one();
   /// The datatype writen in FITS
   const FITS_DATATYPE: &'static str;
+  /// The TFORM compliant FITS keyword value.
+  const FITS_TFORM: &'static str;
   
   /// Must return 2.
   fn two() -> Self;
@@ -114,6 +114,7 @@ pub trait ZUniqHashT:
 impl ZUniqHashT for u32 {
   const LAST_LAYER_MASK: Self = 3;
   const FITS_DATATYPE: &'static str = "u32";
+  const FITS_TFORM: &'static str = "J";
   fn two() -> Self {
     2
   }
@@ -124,6 +125,7 @@ impl ZUniqHashT for u32 {
 impl ZUniqHashT for u64 {
   const LAST_LAYER_MASK: Self = 3;
   const FITS_DATATYPE: &'static str = "u64";
+  const FITS_TFORM: &'static str = "K";
   fn two() -> Self {
     2
   }
@@ -324,26 +326,38 @@ pub trait Mom<'a>: Sized {
 pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapValue + ToBytes + 'a  {
 
 
-  fn write_all_values<W: Write>(&'a self, mut writer: W) -> Result<usize, IoError> {
+  fn write_all_entries<W: Write>(&'a self, mut writer: W) -> Result<usize, FitsError> {
     for (z, v) in self.entries() {
       writer.write_all(z.to_le_bytes().as_ref())
-        .and_then(|()| writer.write_all(v.to_le_bytes().as_ref()))?;
+        .and_then(|()| writer.write_all(v.to_le_bytes().as_ref()))
+        .map_err(FitsError::Io)?;
     }
     Ok(self.len() * Self::ZV_SIZE)
+  }
+
+  fn write_all_bintable_entries<W: Write>(&'a self, mut writer: W) -> Result<usize, FitsError> {
+    for (z, v) in self.entries() {
+      let (d, h) = Self::ZUniqHType::from_zuniq(z);
+      writer.write_u8(d)
+        .and_then(|()| writer.write_all(h.to_be_bytes().as_ref()))
+        .and_then(|()| writer.write_all(v.to_be_bytes().as_ref()))
+        .map_err(FitsError::Io)?;
+    }
+    Ok(self.len() * (1 + Self::ZV_SIZE))
   }
 
   fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(&'a self, path: P, value_name: T) -> Result<(), FitsError> {
     File::create(path)
       .map_err(FitsError::Io)
-      .and_then(|file| self.to_fits(value_name, BufWriter::new(file)))
+      .and_then(|file| self.to_fits(BufWriter::new(file), value_name))
   }
   
   /// # Params
   /// * `value_name`: the name of the value so we know the king of quantity this map stores.
   fn to_fits<T: AsRef<str>, W: Write>(
     &'a self,
+    mut writer: W,
     value_name: T,
-    mut writer: W
   ) -> Result<(), FitsError> {
     // Perpare the header
     let mut header_block = [b' '; 2880];
@@ -388,9 +402,67 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
     writer.write_all(&header_block[..]).map_err(FitsError::Io)?;
     // Write the data part
     self
-      .write_all_values(&mut writer)
-      .map_err(FitsError::Io)
+      .write_all_entries(&mut writer)
       .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
+  }
+
+  fn to_fits_bintable_file<P: AsRef<Path>, T: AsRef<str>>(&'a self, path: P, value_name: T) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(FitsError::Io)
+      .and_then(|file| self.to_fits_bintable(BufWriter::new(file), value_name))
+  }
+  
+  /// Write the MOM in a bintable with 3 columns:
+  /// * healpix order (depth)
+  /// * healpix cell number (hash value)
+  /// * the associated value
+  /// This is supposedly less efficient to work with (to be tested), and required extra space 
+  /// (`depth` coded on a `u8` instead of a sentinel bit in the cell number, useless ITS PRimary header
+  /// of 2880 bytes), but has a broder compatibility since it can be read from a all tools supporting
+  /// FITS BINTABLE reading.
+  // Allow for other, user custom, FIST cards in input parameters?
+  fn to_fits_bintable<T: AsRef<str>, W: Write>(
+    &'a self,
+    mut writer: W,
+    value_colname: T,
+  ) -> Result<(), FitsError> {
+    write_primary_hdu(&mut writer)
+      .and_then(|()| self.write_bintable_fits_header(&mut writer, value_colname))
+      .and_then(|()| self.write_all_bintable_entries(&mut writer))
+      .and_then(|n_data_bytes|  write_final_padding(&mut writer, n_data_bytes))
+  }
+  
+  fn write_bintable_fits_header<T: AsRef<str>, W: Write>(&'a self,
+    mut writer: W,
+    value_colname: T,
+  ) -> Result<(), FitsError> {
+    write_primary_hdu(&mut writer)?;
+    let mut header_block = [b' '; 2880];
+    let mut it = header_block.chunks_mut(80);
+    // Write BINTABLE specific keywords in the buffer
+    it.next().unwrap()[0..20].copy_from_slice(b"XTENSION= 'BINTABLE'");
+    it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8");
+    it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2");
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", (1 + Self::ZV_SIZE) as u64);
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.len() as u64);
+    it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
+    it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
+    it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    3");
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'ORDER   '");
+    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", u8::FITS_TFORM);
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE2  = 'IPIX    '");
+    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM2  ", Self::ZUniqHType::FITS_TFORM);
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE3  = 'VALUE   '");
+    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM3  ", Self::ValueType::FITS_TFORM);
+    it.next().unwrap()[0..23].copy_from_slice(b"PRODTYPE= 'HEALPIX MOM'");
+    it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
+    it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"MAXORDER", self.depth_max() as u64);
+    write_str_mandatory_keyword_record(it.next().unwrap(), b"VALNAME ", value_colname.as_ref());
+    it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
+    it.next().unwrap()[0..3].copy_from_slice(b"END");
+    // Do write the header
+    writer.write_all(&header_block[..]).map_err(FitsError::Io)
   }
 }
 /// Implement `WritableMom` for all `Mom` having a `ValueType` implementing `ToBytes`.

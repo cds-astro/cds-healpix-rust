@@ -83,7 +83,7 @@ mod tests {
     }
   }
 
-  /*
+  /* Do not run on github!
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
   fn test_skymap_to_mom_tofromfits_topng_big() {
@@ -219,6 +219,12 @@ mod tests {
     dens_mom
       .to_fits_file(
         "test/resources/skymap/gaiadr3.mom.density.order11.fits",
+        "density",
+      )
+      .unwrap();
+    dens_mom
+      .to_fits_bintable_file(
+        "test/resources/skymap/gaiadr3.mom.density.order11.bintable.fits",
         "density",
       )
       .unwrap();

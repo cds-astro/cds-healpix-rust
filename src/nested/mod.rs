@@ -422,7 +422,7 @@ pub fn cone_coverage_fullin(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius
   get(depth).cone_coverage_fullin(cone_lon, cone_lat, cone_radius)
 }
 
-/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
+/// Conveniency function simply calling the [ring_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn ring_coverage_approx(
@@ -435,7 +435,7 @@ pub fn ring_coverage_approx(
   get(depth).ring_coverage_approx(cone_lon, cone_lat, cone_radius_int, cone_radius_ext)
 }
 
-/// Conveniency function simply calling the [cone_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
+/// Conveniency function simply calling the [ring_coverage_approx_custom](struct.Layer.html#method.ring_coverage_approx) method
 /// of the [Layer] of the given *depth*.
 #[inline]
 pub fn ring_coverage_approx_custom(
