@@ -1633,133 +1633,139 @@ impl Layer {
   pub fn neighbours_in_kth_ring(&self, hash: u64, k: u32) -> Vec<u64> {
     match k {
       0 => [hash; 1].to_vec(),
-      1 => self.neighbours(hash, false).values_vec(),
+      1 => self.neighbours(hash, true).values_vec(),
       k if k < self.nside => {
         let HashParts { d0h, i, j } = self.decode_hash(hash);
         let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
-        if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
-          // Simple case, we stay in the same base cell
-          let xfrom = i - k;
-          let xto = i + k;
-          let yfrom = j - k;
-          let yto = j + k;
-          // S (inclusive) to W (exclusive)
-          for y in yfrom..yto {
-            result.push(self.build_hash_from_parts(d0h, xfrom, y));
-          }
-          // W (inclusive) to N (exclusive)
-          for x in xfrom..xto {
-            result.push(self.build_hash_from_parts(d0h, x, yto));
-          }
-          // N (inslusive) to E (exclusive)
-          for y in (yfrom + 1..=yto).rev() {
-            result.push(self.build_hash_from_parts(d0h, xto, y));
-          }
-          // E (inclusive) to S (exclusive)
-          for x in (xfrom + 1..=xto).rev() {
-            result.push(self.build_hash_from_parts(d0h, x, yfrom));
-          }
-        } else {
-          // We cross several base cells: things are more complicated!!
-          let k = k as i32;
-          let i = i as i32;
-          let j = j as i32;
-          let xfrom = i - k;
-          let xto = i + k;
-          let yfrom = j - k;
-          let yto = j + k;
-
-          // In this method, both i and j can be < 0 or >= nside
-          let partial_compute =
-            move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
-              let xfrom = i - k;
-              let xto = i + k;
-              let yfrom = j - k;
-              let yto = j + k;
-              // S (inclusive) to W (exclusive)
-              if (0..nside).contains(&xfrom) {
-                for y in yfrom.max(0)..yto.min(nside) {
-                  res.push(self.build_hash_from_parts(d0h, xfrom as u32, y as u32));
-                }
-              }
-              // W (inclusive) to N (exclusive)
-              if (0..nside as i32).contains(&yto) {
-                for x in xfrom.max(0)..xto.min(nside) {
-                  res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
-                }
-              }
-              // N (inslusive) to E (exclusive)
-              if (0..nside as i32).contains(&xto) {
-                for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
-                  res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
-                }
-              }
-              // E (inclusive) to S (exclusive)
-              if (0..nside as i32).contains(&yfrom) {
-                for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
-                  res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
-                }
-              }
-            };
-
-          let nside = self.nside as i32;
-          let overflow_sw = xfrom < 0;
-          let overflow_ne = xto >= nside;
-          let overflow_se = yfrom < 0;
-          let overflow_nw = yto >= nside;
-          let overflow_s = overflow_sw && overflow_se;
-          let overflow_w = overflow_sw && overflow_nw;
-          let overflow_n = overflow_nw && overflow_ne;
-          let overflow_e = overflow_se && overflow_ne;
-
-          if overflow_s {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, S)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_sw {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, SW)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_w {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, W)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_nw {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, NW)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_n {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, N)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_ne {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, NE)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_e {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, E)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_se {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, SE)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          partial_compute(nside, d0h, i, j, k, &mut result);
-        }
+        self.neighbours_in_kth_ring_internal(d0h, i, j, k, result);
         result
       }
       _ => panic!(
         "The 'k' parameter is too large. Expected: <{}. Actual: {}.",
         self.nside, k
       ),
+    }
+  }
+
+  fn neighbours_in_kth_ring_internal(
+    &self,
+    d0h: u32,
+    i: u32,
+    j: u32,
+    k: u32,
+    result: &mut Vec<u64>,
+  ) {
+    if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
+      let xfrom = i - k;
+      let xto = i + k;
+      let yfrom = j - k;
+      let yto = j + k;
+      // S (inclusive) to W (exclusive)
+      for y in yfrom..yto {
+        result.push(self.build_hash_from_parts(d0h, xfrom, y));
+      }
+      // W (inclusive) to N (exclusive)
+      for x in xfrom..xto {
+        result.push(self.build_hash_from_parts(d0h, x, yto));
+      }
+      // N (inslusive) to E (exclusive)
+      for y in (yfrom + 1..=yto).rev() {
+        result.push(self.build_hash_from_parts(d0h, xto, y));
+      }
+      // E (inclusive) to S (exclusive)
+      for x in (xfrom + 1..=xto).rev() {
+        result.push(self.build_hash_from_parts(d0h, x, yfrom));
+      }
+    } else {
+      let xfrom = i - k;
+      let xto = i + k;
+      let yfrom = j - k;
+      let yto = j + k;
+
+      // In this method, both i and j can be < 0 or >= nside
+      let partial_compute =
+        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
+          let xfrom = i - k;
+          let xto = i + k;
+          let yfrom = j - k;
+          let yto = j + k;
+          // S (inclusive) to W (exclusive)
+          if (0..nside).contains(&xfrom) {
+            for y in yfrom.max(0)..yto.min(nside) {
+              res.push(self.build_hash_from_parts(d0h, xfrom as u32, y as u32));
+            }
+          }
+          // W (inclusive) to N (exclusive)
+          if (0..nside as i32).contains(&yto) {
+            for x in xfrom.max(0)..xto.min(nside) {
+              res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
+            }
+          }
+          // N (inslusive) to E (exclusive)
+          if (0..nside as i32).contains(&xto) {
+            for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
+              res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
+            }
+          }
+          // E (inclusive) to S (exclusive)
+          if (0..nside as i32).contains(&yfrom) {
+            for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
+              res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
+            }
+          }
+        };
+
+      let nside = self.nside as i32;
+      let overflow_sw = xfrom < 0;
+      let overflow_ne = xto >= nside;
+      let overflow_se = yfrom < 0;
+      let overflow_nw = yto >= nside;
+      let overflow_s = overflow_sw && overflow_se;
+      let overflow_w = overflow_sw && overflow_nw;
+      let overflow_n = overflow_nw && overflow_ne;
+      let overflow_e = overflow_se && overflow_ne;
+
+      if overflow_s {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, S)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_sw {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, SW)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_w {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, W)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_nw {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, NW)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_n {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, N)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_ne {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, NE)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_e {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, E)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      if overflow_se {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, SE)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+      }
+      partial_compute(nside, d0h, i, j, k, &mut result);
     }
   }
 
