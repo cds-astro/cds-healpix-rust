@@ -1637,7 +1637,7 @@ impl Layer {
       k if k < self.nside => {
         let HashParts { d0h, i, j } = self.decode_hash(hash);
         let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
-        self.neighbours_in_kth_ring_internal(d0h, i, j, k, result);
+        self.neighbours_in_kth_ring_internal(d0h, i, j, k, &mut result);
         result
       }
       _ => panic!(
@@ -1677,8 +1677,10 @@ impl Layer {
         let mut result = Vec::with_capacity(capacity);
         result.push(hash);
         for r in 1..(k + 1) {
-          self.neighbours_in_kth_ring_internal(d0h, i, j, r, result);
+          self.neighbours_in_kth_ring_internal(d0h, i, j, r, &mut result);
         }
+
+        result
       }
       _ => panic!(
         "The 'k' parameter is too large. Expected: <{}. Actual: {}.",
@@ -1717,6 +1719,10 @@ impl Layer {
         result.push(self.build_hash_from_parts(d0h, x, yfrom));
       }
     } else {
+      let k = k as i32;
+      let i = i as i32;
+      let j = j as i32;
+
       let xfrom = i - k;
       let xto = i + k;
       let yfrom = j - k;
@@ -1805,7 +1811,7 @@ impl Layer {
           .to_neighbour_base_cell_coo(d0h, i, j, SE)
           .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
       }
-      partial_compute(nside, d0h, i, j, k, &mut result);
+      partial_compute(nside, d0h, i, j, k, result);
     }
   }
 
