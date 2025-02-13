@@ -1647,6 +1647,46 @@ impl Layer {
     }
   }
 
+  /// Returns the hash values of all cells which are within the internal border of a square of
+  /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
+  ///
+  /// If that square does not cross base cells the result will contain `(1 + 2k) × (1 + 2k)` cells,
+  /// if it does there will be fewer cells.
+  ///
+  /// The regular `neighbours` methods correspond to `k=1`, `k=0` returns the input cell.
+  ///
+  /// # Panics
+  /// * if `k` is larger than or equals to `nside`.
+  ///
+  /// # Warning
+  /// The algorithm we use works in the 2D projection plane.
+  /// When the corner of a base cell has 2 neighbours instead of 3, the result shape on the sphere
+  /// may be strange. Those corners are:
+  /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap base cells (cells 8 to 11)
+  /// * North and south corners of equatorial base cells (cell 4 to 7)
+  pub fn neighbours_disk(&self, hash: u64, k: u32) -> Vec<u64> {
+    match k {
+      0 => vec![hash],
+      k if k < self.nside => {
+        let HashParts { d0h, i, j } = self.decode_hash(hash);
+        let capacity = {
+          let k = k as usize;
+
+          ((k * (k + 1)) << 2) | 1
+        };
+        let mut result = Vec::with_capacity(capacity);
+        result.push(hash);
+        for r in 1..(k + 1) {
+          self.neighbours_in_kth_ring_internal(d0h, i, j, r, result);
+        }
+      }
+      _ => panic!(
+        "The 'k' parameter is too large. Expected: <{}. Actual: {}.",
+        self.nside, k
+      ),
+    }
+  }
+
   fn neighbours_in_kth_ring_internal(
     &self,
     d0h: u32,
