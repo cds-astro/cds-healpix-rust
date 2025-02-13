@@ -1619,7 +1619,11 @@ impl Layer {
 
   /// Returns the hash values of the cells which are on the internal border of a square of
   /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
-  /// The regular `neighbours` methods correspond to `k=1`.
+  ///
+  /// If that square does not cross base cells the result will contain `(1 + 2k) × (1 + 2k)` cells,
+  /// if it does there will be fewer cells.
+  ///
+  /// The regular `neighbours` methods correspond to `k=1`, `k=0` returns the input cell.
   ///
   /// # Panics
   /// * if `k` is larger than or equals to `nside`.
