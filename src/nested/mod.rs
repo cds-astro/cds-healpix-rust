@@ -1617,7 +1617,7 @@ impl Layer {
     result_map
   }
 
-  /// Returns the hash values of the cells which are in the internal border of a square of
+  /// Returns the hash values of the cells which are on the internal border of a square of
   /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
   /// The regular `neighbours` methods correspond to `k=1`.
   ///
