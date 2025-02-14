@@ -1637,7 +1637,7 @@ impl Layer {
   pub fn neighbours_in_kth_ring(&self, hash: u64, k: u32) -> Vec<u64> {
     match k {
       0 => [hash; 1].to_vec(),
-      1 => self.neighbours(hash, true).values_vec(),
+      1 => self.neighbours(hash, false).values_vec(),
       k if k <= self.nside => {
         let HashParts { d0h, i, j } = self.decode_hash(hash);
         let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
