@@ -1680,7 +1680,7 @@ impl Layer {
         };
         let mut result = Vec::with_capacity(capacity);
         result.push(hash);
-        for r in 1..(k + 1) {
+        for r in 1..=k {
           self.neighbours_in_kth_ring_internal(d0h, i, j, r, &mut result);
         }
 
