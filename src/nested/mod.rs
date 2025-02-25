@@ -1578,7 +1578,7 @@ impl Layer {
     self.neighbour_from_parts(h_parts.d0h, h_parts.i, h_parts.j, direction)
   }
 
-  /// Returns the hash values of all the neighbour cells of the cell of given hash.
+  /// Returns the hash values of all the neighbour cells of the cell of given hash (8-connected).
   /// The given cell itself can be included (setting the `include_center` parameters to `true`).
   ///
   /// # Input
@@ -1617,9 +1617,49 @@ impl Layer {
     result_map
   }
 
-  /// Returns the hash values of the cells which are in the internal border of a square of
+  /// Returns the hash values of the cells which are on the internal border of a square of
+  /// size `(1 + 2k) x (1 + 2k)` cells around the given cell (on the 2D projection plane,
+  /// in the non-degenerated cases). This corresponds to an extension of the 8-connected definition.
+  ///
+  /// If that square does not cross base cells the result will contain `(1 + 2k) × (1 + 2k)` cells,
+  /// if it does there will be fewer cells.
+  ///
+  /// The regular `neighbours` methods correspond to `k=1`, `k=0` returns the input cell.
+  ///
+  /// # Panics
+  /// * if `k` is larger than or equals to `nside`.
+  ///
+  /// # Warning
+  /// The algorithm we use works in the 2D projection plane.
+  /// When the corner of a base cell has 2 neighbours instead of 3, the result shape on the sphere
+  /// may be strange. Those corners are:
+  /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap
+  ///   base cells (cells 8 to 11)
+  /// * North and south corners of equatorial base cells (cell 4 to 7)
+  pub fn kth_neighbours(&self, hash: u64, k: u32) -> Vec<u64> {
+    match k {
+      0 => [hash; 1].to_vec(),
+      1 => self.neighbours(hash, false).values_vec(),
+      k if k <= self.nside => {
+        let HashParts { d0h, i, j } = self.decode_hash(hash);
+        let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
+        self.kth_neighbours_internal(d0h, i, j, k, &mut result);
+        result
+      }
+      _ => panic!(
+        "The 'k' parameter is too large. Expected: <{}. Actual: {}.",
+        self.nside, k
+      ),
+    }
+  }
+
+  /// Returns the hash values of all cells which are within the internal border of a square of
   /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
-  /// The regular `neighbours` methods correspond to `k=1`.
+  ///
+  /// If that square does not cross base cells the result will contain `(1 + 2k) × (1 + 2k)` cells,
+  /// if it does there will be fewer cells.
+  ///
+  /// The regular `neighbours` methods correspond to `k=1`, `k=0` returns the input cell.
   ///
   /// # Panics
   /// * if `k` is larger than or equals to `nside`.
@@ -1630,136 +1670,147 @@ impl Layer {
   /// may be strange. Those corners are:
   /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap base cells (cells 8 to 11)
   /// * North and south corners of equatorial base cells (cell 4 to 7)
-  pub fn neighbours_in_kth_ring(&self, hash: u64, k: u32) -> Vec<u64> {
+  pub fn kth_neighbourhood(&self, hash: u64, k: u32) -> Vec<u64> {
     match k {
-      0 => [hash; 1].to_vec(),
-      1 => self.neighbours(hash, false).values_vec(),
-      k if k < self.nside => {
+      0 => vec![hash],
+      k if k <= self.nside => {
         let HashParts { d0h, i, j } = self.decode_hash(hash);
-        let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
-        if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
-          // Simple case, we stay in the same base cell
-          let xfrom = i - k;
-          let xto = i + k;
-          let yfrom = j - k;
-          let yto = j + k;
-          // S (inclusive) to W (exclusive)
-          for y in yfrom..yto {
-            result.push(self.build_hash_from_parts(d0h, xfrom, y));
-          }
-          // W (inclusive) to N (exclusive)
-          for x in xfrom..xto {
-            result.push(self.build_hash_from_parts(d0h, x, yto));
-          }
-          // N (inslusive) to E (exclusive)
-          for y in (yfrom + 1..=yto).rev() {
-            result.push(self.build_hash_from_parts(d0h, xto, y));
-          }
-          // E (inclusive) to S (exclusive)
-          for x in (xfrom + 1..=xto).rev() {
-            result.push(self.build_hash_from_parts(d0h, x, yfrom));
-          }
-        } else {
-          // We cross several base cells: things are more complicated!!
-          let k = k as i32;
-          let i = i as i32;
-          let j = j as i32;
-          let xfrom = i - k;
-          let xto = i + k;
-          let yfrom = j - k;
-          let yto = j + k;
+        let capacity = {
+          let k = k as usize;
 
-          // In this method, both i and j can be < 0 or >= nside
-          let partial_compute =
-            move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
-              let xfrom = i - k;
-              let xto = i + k;
-              let yfrom = j - k;
-              let yto = j + k;
-              // S (inclusive) to W (exclusive)
-              if (0..nside).contains(&xfrom) {
-                for y in yfrom.max(0)..yto.min(nside) {
-                  res.push(self.build_hash_from_parts(d0h, xfrom as u32, y as u32));
-                }
-              }
-              // W (inclusive) to N (exclusive)
-              if (0..nside as i32).contains(&yto) {
-                for x in xfrom.max(0)..xto.min(nside) {
-                  res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
-                }
-              }
-              // N (inslusive) to E (exclusive)
-              if (0..nside as i32).contains(&xto) {
-                for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
-                  res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
-                }
-              }
-              // E (inclusive) to S (exclusive)
-              if (0..nside as i32).contains(&yfrom) {
-                for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
-                  res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
-                }
-              }
-            };
-
-          let nside = self.nside as i32;
-          let overflow_sw = xfrom < 0;
-          let overflow_ne = xto >= nside;
-          let overflow_se = yfrom < 0;
-          let overflow_nw = yto >= nside;
-          let overflow_s = overflow_sw && overflow_se;
-          let overflow_w = overflow_sw && overflow_nw;
-          let overflow_n = overflow_nw && overflow_ne;
-          let overflow_e = overflow_se && overflow_ne;
-
-          if overflow_s {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, S)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_sw {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, SW)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_w {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, W)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_nw {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, NW)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_n {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, N)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_ne {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, NE)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_e {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, E)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          if overflow_se {
-            self
-              .to_neighbour_base_cell_coo(d0h, i, j, SE)
-              .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
-          }
-          partial_compute(nside, d0h, i, j, k, &mut result);
+          ((k * (k + 1)) << 2) | 1
+        };
+        let mut result = Vec::with_capacity(capacity);
+        result.push(hash);
+        for r in 1..=k {
+          self.kth_neighbours_internal(d0h, i, j, r, &mut result);
         }
+
         result
       }
       _ => panic!(
         "The 'k' parameter is too large. Expected: <{}. Actual: {}.",
         self.nside, k
       ),
+    }
+  }
+
+  fn kth_neighbours_internal(&self, d0h: u8, i: u32, j: u32, k: u32, result: &mut Vec<u64>) {
+    if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
+      let xfrom = i - k;
+      let xto = i + k;
+      let yfrom = j - k;
+      let yto = j + k;
+      // S (inclusive) to W (exclusive)
+      for y in yfrom..yto {
+        result.push(self.build_hash_from_parts(d0h, xfrom, y));
+      }
+      // W (inclusive) to N (exclusive)
+      for x in xfrom..xto {
+        result.push(self.build_hash_from_parts(d0h, x, yto));
+      }
+      // N (inslusive) to E (exclusive)
+      for y in (yfrom + 1..=yto).rev() {
+        result.push(self.build_hash_from_parts(d0h, xto, y));
+      }
+      // E (inclusive) to S (exclusive)
+      for x in (xfrom + 1..=xto).rev() {
+        result.push(self.build_hash_from_parts(d0h, x, yfrom));
+      }
+    } else {
+      let k = k as i32;
+      let i = i as i32;
+      let j = j as i32;
+
+      let xfrom = i - k;
+      let xto = i + k;
+      let yfrom = j - k;
+      let yto = j + k;
+
+      // In this method, both i and j can be < 0 or >= nside
+      let partial_compute =
+        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
+          let xfrom = i - k;
+          let xto = i + k;
+          let yfrom = j - k;
+          let yto = j + k;
+          // S (inclusive) to W (exclusive)
+          if (0..nside).contains(&xfrom) {
+            for y in yfrom.max(0)..yto.min(nside) {
+              res.push(self.build_hash_from_parts(d0h, xfrom as u32, y as u32));
+            }
+          }
+          // W (inclusive) to N (exclusive)
+          if (0..nside as i32).contains(&yto) {
+            for x in xfrom.max(0)..xto.min(nside) {
+              res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
+            }
+          }
+          // N (inslusive) to E (exclusive)
+          if (0..nside as i32).contains(&xto) {
+            for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
+              res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
+            }
+          }
+          // E (inclusive) to S (exclusive)
+          if (0..nside as i32).contains(&yfrom) {
+            for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
+              res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
+            }
+          }
+        };
+
+      let nside = self.nside as i32;
+      let overflow_sw = xfrom < 0;
+      let overflow_ne = xto >= nside;
+      let overflow_se = yfrom < 0;
+      let overflow_nw = yto >= nside;
+      let overflow_s = overflow_sw && overflow_se;
+      let overflow_w = overflow_sw && overflow_nw;
+      let overflow_n = overflow_nw && overflow_ne;
+      let overflow_e = overflow_se && overflow_ne;
+
+      if overflow_s {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, S)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_sw {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, SW)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_w {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, W)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_nw {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, NW)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_n {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, N)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_ne {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, NE)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_e {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, E)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      if overflow_se {
+        self
+          .to_neighbour_base_cell_coo(d0h, i, j, SE)
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+      }
+      partial_compute(nside, d0h, i, j, k, result);
     }
   }
 
@@ -7690,7 +7741,7 @@ mod tests {
   }
 
   #[test]
-  fn test_neighbours_in_kth_ring() {
+  fn test_kth_neighbours() {
     let depth = 8;
     let nside = nside(depth);
     let k = 4;
@@ -7979,7 +8030,7 @@ mod tests {
       let expected_array = &expected[d0h as usize];
 
       let hs = layer.build_hash_from_parts(d0h, 1, 2);
-      let neig = layer.neighbours_in_kth_ring(hs, k);
+      let neig = layer.kth_neighbours(hs, k);
       //to_aladin(depth, hs,neig.as_slice());
       let expected = &expected_array[0_usize];
       //if !expected.is_empty() {
@@ -7987,7 +8038,7 @@ mod tests {
       //}
 
       let he = layer.build_hash_from_parts(d0h, nside - 2, 2);
-      let neig = layer.neighbours_in_kth_ring(he, k);
+      let neig = layer.kth_neighbours(he, k);
       //to_aladin(depth, he,neig.as_slice());
       let expected = &expected_array[1_usize];
       //if !expected.is_empty() {
@@ -7995,7 +8046,7 @@ mod tests {
       //}
 
       let hn = layer.build_hash_from_parts(d0h, nside - 2, nside - 3);
-      let neig = layer.neighbours_in_kth_ring(hn, k);
+      let neig = layer.kth_neighbours(hn, k);
       //to_aladin(depth, hn, neig.as_slice());
       let expected = &expected_array[2_usize];
       //if !expected.is_empty() {
@@ -8003,7 +8054,7 @@ mod tests {
       //}
 
       let hw = layer.build_hash_from_parts(d0h, 1, nside - 3);
-      let neig = layer.neighbours_in_kth_ring(hw, k);
+      let neig = layer.kth_neighbours(hw, k);
       //to_aladin(depth, hw,neig.as_slice());
       let expected = &expected_array[3_usize];
       //if !expected.is_empty() {
