@@ -1303,10 +1303,11 @@ pub fn get_hpx(
   layer: &'static Layer,
 ) -> impl Fn(&String) -> u64 {
   let (index_first_col, offset_to_second_col, ilon, ilat) = if ilon < ilat {
-    (ilon, ilat - ilon, 0, 1)
+    (ilon, ilat - ilon - 1, 0, 1)
   } else {
-    (ilat, ilon - ilat, 1, 0)
+    (ilat, ilon - ilat - 1, 1, 0)
   };
+
   move |line: &String| {
     let mut field_it = line.as_str().split(separator);
     let coos = [
@@ -1341,9 +1342,9 @@ pub fn get_hpx_opt(
   layer: &'static Layer,
 ) -> impl Fn(&String) -> Option<u64> {
   let (index_first_col, offset_to_second_col, ilon, ilat) = if ilon < ilat {
-    (ilon, ilat - ilon, 0, 1)
+    (ilon, ilat - ilon - 1, 0, 1)
   } else {
-    (ilat, ilon - ilat, 1, 0)
+    (ilat, ilon - ilat - 1, 1, 0)
   };
   move |line: &String| {
     let mut field_it = line.as_str().split(separator);
