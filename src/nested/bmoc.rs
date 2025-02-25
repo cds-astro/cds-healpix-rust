@@ -1078,8 +1078,13 @@ impl BMOC {
     sum
   }
 
-  /// Iterator on the BMOC raw values
-  /// See method `` to extract informations from a raw value
+  /// Iterator on the BMOC **raw values**. Raw values contains:
+  /// * the depth if the cell;
+  /// * the cell number;
+  /// * a flag telling if the cell is fully covered or not.
+  /// WARNING: this is probably not the method you are interested in as a user,
+  /// see [flat_iter](#method.flat_iter) instead.
+  /// TODO: make a public method to extract information from the raw value
   pub fn iter(&self) -> Iter<u64> {
     self.entries.iter()
   }
