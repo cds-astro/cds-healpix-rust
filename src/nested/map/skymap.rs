@@ -13,7 +13,6 @@ use std::{
 
 use colorous::Gradient;
 use itertools::Itertools;
-use log::error;
 use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
 use rayon::{
@@ -32,6 +31,7 @@ use crate::{
       mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
       HHash,
     },
+    sort::get_hpx_opt,
   },
 };
 
@@ -814,20 +814,13 @@ impl CountMapU32 {
     let layer = get(depth);
     let n_hash = layer.n_hash as usize;
     let n_thread = thread_pool.current_num_threads();
-    let hpx = move |s: &String| {
-      let cols = s.split(separator).collect::<Vec<&str>>();
-      match (cols[ilon].parse::<f64>(), cols[ilat].parse::<f64>()) {
-        (Ok(lon), Ok(lat)) => Some(layer.hash(lon.to_radians(), lat.to_radians()) as u32),
-        _ => {
-          error!("Error parsing coordinates at line: {}. Hash set to 0.", s);
-          None
-        }
-      }
-    };
+    let hpx = get_hpx_opt(ilon, ilat, separator, layer);
     let count_map_fn = |chunk: Vec<String>| {
       chunk
         .par_chunks((chunk.len() / (n_thread << 2)).max(10_000))
-        .map(|elems| CountMapU32::from_hash_values(depth, elems.iter().filter_map(hpx)))
+        .map(|elems| {
+          CountMapU32::from_hash_values(depth, elems.iter().filter_map(&hpx).map(|h| h as u32))
+        })
         .reduce_with(|mapl, mapr| mapl.par_add(mapr))
     };
     fn load_n<I: Iterator<Item = Result<String, IoError>>>(

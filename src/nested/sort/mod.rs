@@ -1,7 +1,9 @@
+use std::io::stdin;
 use std::{
   cmp::Ordering,
   error::Error,
   fs::{self, read_dir, remove_dir, remove_file, File, OpenOptions},
+  io,
   io::{BufRead, BufReader, BufWriter, Error as IoError, Seek, Write},
   iter::Zip,
   marker::{Send, Sync},
@@ -24,7 +26,7 @@ use thiserror::Error;
 use crate::nested::{
   get,
   map::skymap::{CountMapU32, SkyMap},
-  n_hash,
+  n_hash, Layer,
 };
 
 pub mod cindex;
@@ -938,11 +940,155 @@ where
   )
 }
 
-/// Apply the HEALPix external sort on a CSV file.
+/// Apply the HEALPix external sort on a CSV data streammed from `stdin`, writing the output in `stdout`.
 /// # Params
-/// * `input_path` path of the file to be sorted.
-/// * `output_path` path of a file in which the result has to be put.
-/// * `output_overwrite` do not fail if the output path already exists, but overwrite the file content
+/// * `ilon`: index of the longitude column (starting at 0)
+/// * `ilat`: index of the latitude column (starting at 0)
+/// * `has_header`: tells that the first non-commented line is a header line (to be ignored in the
+///   sort process, but to be copied in output)
+/// * `separator`: ASCII value of the separator (`b','` if None)
+/// * `depth`: depth used to compute the count map and for the file ranges
+/// * `sort_params`: common sorting parameters
+/// * `clean`: remove temporary files if the operation succeed
+/// # Note
+/// For small files, we advice to read the full content of the in memory and use the
+/// [hpx_internal_sort](#hpx_internal_sort) method.
+pub fn hpx_external_sort_csv_stdin_stdout<P: AsRef<Path>>(
+  ilon: usize,
+  ilat: usize,
+  has_header: bool,
+  separator: Option<char>,
+  depth: u8,
+  save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
+  sort_params: Option<SimpleExtSortParams>,
+) -> Result<(), Box<dyn Error>> {
+  let writer = io::stdout().lock();
+  hpx_external_sort_csv_stdin_gen(
+    writer,
+    ilon,
+    ilat,
+    has_header,
+    separator,
+    depth,
+    save_countmap_in_file,
+    sort_params,
+  )
+}
+
+/// Apply the HEALPix external sort on CSV data streamed from `stdin`, writing the output in a file.
+/// # Params
+/// * `output_path`: path of a file in which the result has to be put.
+/// * `output_overwrite`: do not fail if the output path already exists, but overwrite the file content
+///   (WARNING: setting this flag to `true` is discouraged).
+/// * `ilon`: index of the longitude column (starting at 0)
+/// * `ilat`: index of the latitude column (starting at 0)
+/// * `has_header`: tells that the first non-commented line is a header line (to be ignored in the
+///   sort process, but to be copied in output)
+/// * `separator`: ASCII value of the separator (`b','` if None)
+/// * `depth`: depth used to compute the count map and for the file ranges
+/// * `sort_params`: common sorting parameters
+/// * `clean`: remove temporary files if the operation succeed
+/// # Note
+/// For small files, we advice to read the full content of the in memory and use the
+/// [hpx_internal_sort](#hpx_internal_sort) method.
+pub fn hpx_external_sort_csv_stdin<OUT: AsRef<Path>, P: AsRef<Path>>(
+  output_path: OUT,
+  output_overwrite: bool,
+  ilon: usize,
+  ilat: usize,
+  has_header: bool,
+  separator: Option<char>,
+  depth: u8,
+  save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
+  sort_params: Option<SimpleExtSortParams>,
+) -> Result<(), Box<dyn Error>> {
+  let writer = BufWriter::new(if output_overwrite {
+    OpenOptions::new()
+      .write(true)
+      .create(true)
+      .truncate(true)
+      .open(output_path)
+  } else {
+    OpenOptions::new()
+      .write(true)
+      .create_new(true)
+      .open(output_path)
+  }?);
+  hpx_external_sort_csv_stdin_gen(
+    writer,
+    ilon,
+    ilat,
+    has_header,
+    separator,
+    depth,
+    save_countmap_in_file,
+    sort_params,
+  )
+}
+
+/// Apply the HEALPix external sort on CSV data streamed from `stdin`,
+/// writing the output in the provided writer.
+/// # Params
+/// * `writer`: the writer in which the result is written
+/// * `ilon`: index of the longitude column (starting at 0)
+/// * `ilat`: index of the latitude column (starting at 0)
+/// * `has_header`: tells that the first non-commented line is a header line (to be ignored in the
+///   sort process, but to be copied in output)
+/// * `separator`: ASCII value of the separator (`b','` if None)
+/// * `depth`: depth used to compute the count map and for the file ranges
+/// * `sort_params`: common sorting parameters
+/// * `clean`: remove temporary files if the operation succeed
+/// # Note
+/// For small files, we advice to read the full content of the in memory and use the
+/// [hpx_internal_sort](#hpx_internal_sort) method.
+pub fn hpx_external_sort_csv_stdin_gen<W: Write, P: AsRef<Path>>(
+  mut writer: W,
+  ilon: usize,
+  ilat: usize,
+  has_header: bool,
+  separator: Option<char>,
+  depth: u8,
+  save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
+  sort_params: Option<SimpleExtSortParams>,
+) -> Result<(), Box<dyn Error>> {
+  // Start reading file to create the count map
+  let mut line_res_it = stdin().lock().lines().peekable();
+  // Handle starting comments
+  while let Some(Ok(line)) = line_res_it.next_if(|res| {
+    res
+      .as_ref()
+      .map(|line| line.starts_with('#'))
+      .unwrap_or(false)
+  }) {
+    writer.write_all(line.as_bytes())?;
+  }
+  // Handle header line
+  if has_header {
+    if let Some(header) = line_res_it.next().transpose()? {
+      writer.write_all(header.as_bytes())?;
+    }
+  }
+  // Get the sorted iterator
+  let hpx29 = get_hpx(ilon, ilat, separator.unwrap_or(','), get(29));
+  let sorted_it = hpx_external_sort_stream(
+    line_res_it,
+    hpx29,
+    depth,
+    save_countmap_in_file,
+    sort_params,
+  )?;
+  // Write the results
+  for row_res in sorted_it {
+    row_res.and_then(|row| writeln!(&mut writer, "{}", row).map_err(|e| e.into()))?;
+  }
+  Ok(())
+}
+
+/// Apply the HEALPix external sort on a CSV file, writing the output in a file.
+/// # Params
+/// * `input_path`: path of the file to be sorted.
+/// * `output_path`: path of a file in which the result has to be put.
+/// * `output_overwrite`: do not fail if the output path already exists, but overwrite the file content
 ///   (WARNING: setting this flag to `true` is discouraged).
 /// * `ilon`: index of the longitude column (starting at 0)
 /// * `ilat`: index of the latitude column (starting at 0)
@@ -967,23 +1113,7 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
   save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
   sort_params: Option<SimpleExtSortParams>,
 ) -> Result<(), Box<dyn Error>> {
-  // Declare variables/functions
-  let separator = separator.unwrap_or(',');
-  let layer29 = get(29);
-  let hpx29 = move |s: &String| {
-    let cols = s.split(separator).collect::<Vec<&str>>();
-    match (cols[ilon].parse::<f64>(), cols[ilat].parse::<f64>()) {
-      (Ok(lon), Ok(lat)) => layer29.hash(lon.to_radians(), lat.to_radians()),
-      _ => {
-        error!("Error parsing coordinates at line: {}. Hash set to 0.", s);
-        0
-      }
-    }
-  };
-
-  // Start reading file to create the count map
-  let mut line_res_it = BufReader::new(File::open(&input_path)?).lines().peekable();
-  let mut bufw = BufWriter::new(if output_overwrite {
+  let writer = BufWriter::new(if output_overwrite {
     OpenOptions::new()
       .write(true)
       .create(true)
@@ -995,6 +1125,88 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
       .create_new(true)
       .open(output_path)
   }?);
+  hpx_external_sort_csv_file_gen(
+    input_path,
+    writer,
+    ilon,
+    ilat,
+    has_header,
+    separator,
+    depth,
+    save_countmap_in_file,
+    sort_params,
+  )
+}
+
+/// Apply the HEALPix external sort on a CSV file, writing the output in `stdout`.
+/// # Params
+/// * `input_path`: path of the file to be sorted.
+/// * `ilon`: index of the longitude column (starting at 0)
+/// * `ilat`: index of the latitude column (starting at 0)
+/// * `has_header`: tells that the first non-commented line is a header line (to be ignored in the
+///   sort process, but to be copied in output)
+/// * `separator`: ASCII value of the separator (`b','` if None)
+/// * `depth`: depth used to compute the count map and for the file ranges
+/// * `sort_params`: common sorting parameters
+/// * `clean`: remove temporary files if the operation succeed
+/// # Note
+/// For small files, we advice to read the full content of the in memory and use the
+/// [hpx_internal_sort](#hpx_internal_sort) method.
+pub fn hpx_external_sort_csv_file_stdout<IN: AsRef<Path>, P: AsRef<Path>>(
+  input_path: IN,
+  ilon: usize,
+  ilat: usize,
+  has_header: bool,
+  separator: Option<char>,
+  depth: u8,
+  save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
+  sort_params: Option<SimpleExtSortParams>,
+) -> Result<(), Box<dyn Error>> {
+  let writer = io::stdout().lock();
+  hpx_external_sort_csv_file_gen(
+    input_path,
+    writer,
+    ilon,
+    ilat,
+    has_header,
+    separator,
+    depth,
+    save_countmap_in_file,
+    sort_params,
+  )
+}
+
+/// Apply the HEALPix external sort on a CSV file, writing the output in the provided writer.
+/// # Params
+/// * `input_path`: path of the file to be sorted.
+/// * `writer`: the writer in which the result is written
+/// * `ilon`: index of the longitude column (starting at 0)
+/// * `ilat`: index of the latitude column (starting at 0)
+/// * `has_header`: tells that the first non-commented line is a header line (to be ignored in the
+///   sort process, but to be copied in output)
+/// * `separator`: ASCII value of the separator (`b','` if None)
+/// * `depth`: depth used to compute the count map and for the file ranges
+/// * `sort_params`: common sorting parameters
+/// * `clean`: remove temporary files if the operation succeed
+/// # Note
+/// For small files, we advice to read the full content of the in memory and use the
+/// [hpx_internal_sort](#hpx_internal_sort) method.
+pub fn hpx_external_sort_csv_file_gen<IN: AsRef<Path>, W: Write, P: AsRef<Path>>(
+  input_path: IN,
+  mut writer: W,
+  ilon: usize,
+  ilat: usize,
+  has_header: bool,
+  separator: Option<char>,
+  depth: u8,
+  save_countmap_in_file: Option<P>, // Save a copy of the computed count map in the given Path
+  sort_params: Option<SimpleExtSortParams>,
+) -> Result<(), Box<dyn Error>> {
+  // Declare variables/functions
+  let hpx29 = get_hpx(ilon, ilat, separator.unwrap_or(','), get(29));
+
+  // Start reading file to create the count map
+  let mut line_res_it = BufReader::new(File::open(&input_path)?).lines().peekable();
   // Handle starting comments
   while let Some(Ok(line)) = line_res_it.next_if(|res| {
     res
@@ -1002,12 +1214,12 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
       .map(|line| line.starts_with('#'))
       .unwrap_or(false)
   }) {
-    bufw.write_all(line.as_bytes())?;
+    writer.write_all(line.as_bytes())?;
   }
   // Handle header line
   if has_header {
     if let Some(header) = line_res_it.next().transpose()? {
-      bufw.write_all(header.as_bytes())?;
+      writer.write_all(header.as_bytes())?;
     }
   }
   let sort_params = sort_params.unwrap_or_default();
@@ -1019,7 +1231,7 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
     line_res_it,
     ilon,
     ilat,
-    Some(separator),
+    separator,
     depth,
     sort_params.n_elems_per_chunk as usize,
     &thread_pool,
@@ -1068,7 +1280,7 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
   let tstart = SystemTime::now();
   // Write the results
   for row_res in sorted_it {
-    row_res.and_then(|row| writeln!(bufw, "{}", row).map_err(|e| e.into()))?;
+    row_res.and_then(|row| writeln!(&mut writer, "{}", row).map_err(|e| e.into()))?;
   }
   debug!(
     "... writing sorted rows in {} ms",
@@ -1078,6 +1290,82 @@ pub fn hpx_external_sort_csv_file<IN: AsRef<Path>, OUT: AsRef<Path>, P: AsRef<Pa
       .as_millis()
   );
   Ok(())
+}
+
+/// Returns a function computing given layer depth Healpix hash values from an input line of
+/// `separator` separated fields in which the field at index `ilon` contains the longitude (in decimal degrees)
+/// and the field at index `ilat` contains the latitude (also in decimal degrees).
+/// WARNING: the returned hash value is `0` in case of error.
+pub fn get_hpx(
+  ilon: usize,
+  ilat: usize,
+  separator: char,
+  layer: &'static Layer,
+) -> impl Fn(&String) -> u64 {
+  let (index_first_col, offset_to_second_col, ilon, ilat) = if ilon < ilat {
+    (ilon, ilat - ilon, 0, 1)
+  } else {
+    (ilat, ilon - ilat, 1, 0)
+  };
+  move |line: &String| {
+    let mut field_it = line.as_str().split(separator);
+    let coos = [
+      field_it
+        .nth(index_first_col)
+        .and_then(|s| s.parse::<f64>().ok()),
+      field_it
+        .nth(offset_to_second_col)
+        .and_then(|s| s.parse::<f64>().ok()),
+    ];
+    match (coos[ilon], coos[ilat]) {
+      (Some(lon), Some(lat)) => layer.hash(lon.to_radians(), lat.to_radians()),
+      _ => {
+        error!(
+          "Error parsing coordinates at line: {}. Hash set to 0.",
+          line
+        );
+        0
+      }
+    }
+  }
+}
+
+/// Returns a function computing given layer depth Healpix hash values from an input line of
+/// `separator` separated fields in which the field at index `ilon` contains the longitude (in decimal degrees)
+/// and the field at index `ilat` contains the latitude (also in decimal degrees).
+/// WARNING: returns None in case of error.
+pub fn get_hpx_opt(
+  ilon: usize,
+  ilat: usize,
+  separator: char,
+  layer: &'static Layer,
+) -> impl Fn(&String) -> Option<u64> {
+  let (index_first_col, offset_to_second_col, ilon, ilat) = if ilon < ilat {
+    (ilon, ilat - ilon, 0, 1)
+  } else {
+    (ilat, ilon - ilat, 1, 0)
+  };
+  move |line: &String| {
+    let mut field_it = line.as_str().split(separator);
+    let coos = [
+      field_it
+        .nth(index_first_col)
+        .and_then(|s| s.parse::<f64>().ok()),
+      field_it
+        .nth(offset_to_second_col)
+        .and_then(|s| s.parse::<f64>().ok()),
+    ];
+    match (coos[ilon], coos[ilat]) {
+      (Some(lon), Some(lat)) => Some(layer.hash(lon.to_radians(), lat.to_radians())),
+      _ => {
+        error!(
+          "Error parsing coordinates at line: {}. Hash set to 0.",
+          line
+        );
+        None
+      }
+    }
+  }
 }
 
 /// Create an HEALPix ordered CSV file containing one row per HEALPix hash values at the given
