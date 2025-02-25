@@ -1578,7 +1578,7 @@ impl Layer {
     self.neighbour_from_parts(h_parts.d0h, h_parts.i, h_parts.j, direction)
   }
 
-  /// Returns the hash values of all the neighbour cells of the cell of given hash.
+  /// Returns the hash values of all the neighbour cells of the cell of given hash (8-connected).
   /// The given cell itself can be included (setting the `include_center` parameters to `true`).
   ///
   /// # Input
@@ -1618,7 +1618,8 @@ impl Layer {
   }
 
   /// Returns the hash values of the cells which are on the internal border of a square of
-  /// size `(1 + 2k) x (1 + 2k)` cells around the given cell.
+  /// size `(1 + 2k) x (1 + 2k)` cells around the given cell (on the 2D projection plane,
+  /// in the non-degenerated cases). This corresponds to an extension of the 8-connected definition.
   ///
   /// If that square does not cross base cells the result will contain `(1 + 2k) × (1 + 2k)` cells,
   /// if it does there will be fewer cells.
@@ -1632,16 +1633,17 @@ impl Layer {
   /// The algorithm we use works in the 2D projection plane.
   /// When the corner of a base cell has 2 neighbours instead of 3, the result shape on the sphere
   /// may be strange. Those corners are:
-  /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap base cells (cells 8 to 11)
+  /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap
+  ///   base cells (cells 8 to 11)
   /// * North and south corners of equatorial base cells (cell 4 to 7)
-  pub fn neighbours_in_kth_ring(&self, hash: u64, k: u32) -> Vec<u64> {
+  pub fn kth_neighbours(&self, hash: u64, k: u32) -> Vec<u64> {
     match k {
       0 => [hash; 1].to_vec(),
       1 => self.neighbours(hash, false).values_vec(),
       k if k <= self.nside => {
         let HashParts { d0h, i, j } = self.decode_hash(hash);
         let mut result = Vec::with_capacity(((k << 1) as usize) << 2);
-        self.neighbours_in_kth_ring_internal(d0h, i, j, k, &mut result);
+        self.kth_neighbours_internal(d0h, i, j, k, &mut result);
         result
       }
       _ => panic!(
@@ -1668,7 +1670,7 @@ impl Layer {
   /// may be strange. Those corners are:
   /// * East and West corners of both north polar cap base cells (cells 0 to 3) and south polar cap base cells (cells 8 to 11)
   /// * North and south corners of equatorial base cells (cell 4 to 7)
-  pub fn neighbours_disk(&self, hash: u64, k: u32) -> Vec<u64> {
+  pub fn kth_neighbourhood(&self, hash: u64, k: u32) -> Vec<u64> {
     match k {
       0 => vec![hash],
       k if k <= self.nside => {
@@ -1681,7 +1683,7 @@ impl Layer {
         let mut result = Vec::with_capacity(capacity);
         result.push(hash);
         for r in 1..=k {
-          self.neighbours_in_kth_ring_internal(d0h, i, j, r, &mut result);
+          self.kth_neighbours_internal(d0h, i, j, r, &mut result);
         }
 
         result
@@ -1693,14 +1695,7 @@ impl Layer {
     }
   }
 
-  fn neighbours_in_kth_ring_internal(
-    &self,
-    d0h: u32,
-    i: u32,
-    j: u32,
-    k: u32,
-    result: &mut Vec<u64>,
-  ) {
+  fn kth_neighbours_internal(&self, d0h: u8, i: u32, j: u32, k: u32, result: &mut Vec<u64>) {
     if i >= k && j >= k && i + k < self.nside && j + k < self.nside {
       let xfrom = i - k;
       let xto = i + k;
@@ -1778,42 +1773,42 @@ impl Layer {
       if overflow_s {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, S)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_sw {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, SW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_w {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, W)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_nw {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, NW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_n {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, N)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_ne {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, NE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_e {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, E)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       if overflow_se {
         self
           .to_neighbour_base_cell_coo(d0h, i, j, SE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, &mut result));
+          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
       }
       partial_compute(nside, d0h, i, j, k, result);
     }
@@ -7746,7 +7741,7 @@ mod tests {
   }
 
   #[test]
-  fn test_neighbours_in_kth_ring() {
+  fn test_kth_neighbours() {
     let depth = 8;
     let nside = nside(depth);
     let k = 4;
@@ -8035,7 +8030,7 @@ mod tests {
       let expected_array = &expected[d0h as usize];
 
       let hs = layer.build_hash_from_parts(d0h, 1, 2);
-      let neig = layer.neighbours_in_kth_ring(hs, k);
+      let neig = layer.kth_neighbours(hs, k);
       //to_aladin(depth, hs,neig.as_slice());
       let expected = &expected_array[0_usize];
       //if !expected.is_empty() {
@@ -8043,7 +8038,7 @@ mod tests {
       //}
 
       let he = layer.build_hash_from_parts(d0h, nside - 2, 2);
-      let neig = layer.neighbours_in_kth_ring(he, k);
+      let neig = layer.kth_neighbours(he, k);
       //to_aladin(depth, he,neig.as_slice());
       let expected = &expected_array[1_usize];
       //if !expected.is_empty() {
@@ -8051,7 +8046,7 @@ mod tests {
       //}
 
       let hn = layer.build_hash_from_parts(d0h, nside - 2, nside - 3);
-      let neig = layer.neighbours_in_kth_ring(hn, k);
+      let neig = layer.kth_neighbours(hn, k);
       //to_aladin(depth, hn, neig.as_slice());
       let expected = &expected_array[2_usize];
       //if !expected.is_empty() {
@@ -8059,7 +8054,7 @@ mod tests {
       //}
 
       let hw = layer.build_hash_from_parts(d0h, 1, nside - 3);
-      let neig = layer.neighbours_in_kth_ring(hw, k);
+      let neig = layer.kth_neighbours(hw, k);
       //to_aladin(depth, hw,neig.as_slice());
       let expected = &expected_array[3_usize];
       //if !expected.is_empty() {
