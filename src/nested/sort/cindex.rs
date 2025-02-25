@@ -349,7 +349,7 @@ pub trait HCIndex {
   }
 }
 
-// Make an 'inclomplete' HCI for which the first (or the last) value is provided so that on disk
+// Make an 'incomplete' HCI for which the first (or the last) value is provided so that on disk
 // the binary size will be 12 * a power of two, which is buffer, cache, ... friendly.
 
 #[derive(Debug, PartialEq)]
@@ -642,7 +642,7 @@ impl FITSCIndex {
   }
 }
 
-/// The result of reading a FITS file, containing a memeory map on the data, and from which we can obtain
+/// The result of reading a FITS file, containing a memory map on the data, and from which we can obtain
 /// an actual Healpix Cumulative Index object.
 #[derive(Debug)]
 pub struct FitsMMappedCIndex<T: HCIndexValue> {
