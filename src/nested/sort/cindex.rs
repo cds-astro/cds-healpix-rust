@@ -213,17 +213,17 @@ pub trait HCIndex {
   /// Regular softwares will thus not load "wrong" integer values but array of bytes, and
   /// cumulative-index-aware softwares (recognizing so from FITS cards) will know how to interpret
   /// those arrays.
-  ///  * if `NAXIS1=4`, the stored type may be either a `u32` or a `f32`, in little-endian.
-  ///  * if `NAXIS1=8`, the stored type may be either a `u64` or a `f64`, in little-endian.
-  /// Here the list of card htat must appear, in this order:
+  /// * if `NAXIS1=4`, the stored type may be either a `u32` or a `f32`, in little-endian.
+  /// * if `NAXIS1=8`, the stored type may be either a `u64` or a `f64`, in little-endian.
+  ///   Here the list of card htat must appear, in this order:
   /// * `PRODTYPE`, mandatory: **must** equal `HEALPIX CUMUL INDEX`
   /// * `ORDERING`, mandatory: **must** equal `NESTED`
   /// * `INDXSCHM`, mandatory: so far only `IMPLICIT` is supported. An `EXPLICIT` would rely on
-  ///               an ordered ZINDEX followed by the CVALUE.
+  ///   an ordered ZINDEX followed by the CVALUE.
   /// * `INDXCOV`, mandatory if `INDXSCHM = IMPLICIT`: so far only `FULLSKY` is supported, but we
-  ///              may support `PARTIAL` with 2 additional FITS cards providing the starting and ending HEALPix indices.
-  ///              It may be usefull, e.g. to index a file containing data located in a given (large) HEALPix cell,
-  ///              e.g. individual HATS parquet files.
+  ///   may support `PARTIAL` with 2 additional FITS cards providing the starting and ending HEALPix indices.
+  ///   It may be usefull, e.g. to index a file containing data located in a given (large) HEALPix cell,
+  ///   e.g. individual HATS parquet files.
   /// * `HPXORDER`, mandatory: provide the depth (order) of the cumulative MAP.
   /// * `DATATYPE`, mandatory: **must** be one of `u32`, `u64`, `f32`, `f64`.
   /// * `DTENDIAN`, mandatory: **must** equal `LITTLE`, made to provide information so human readers can understand/guess the data structure.

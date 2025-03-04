@@ -28,7 +28,7 @@ pub trait Proj: Default {
   /// - `y` coordinates along the y-axis on the projection plane
   /// # Output
   /// - `(lon, lat)` the position on the unit sphere (in radians), if the input coordinates `(x, y)`
-  ///    are valid
+  ///   are valid
   fn unproj(&self, x: f64, y: f64) -> Option<(f64, f64)>;
 }
 

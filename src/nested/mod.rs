@@ -566,8 +566,8 @@ impl Layer {
   /// Returns the cell number (hash value) associated with the given position on the unit sphere
   /// # Inputs
   /// - `lon`: longitude in radians, support reasonably large positive and negative values
-  ///          producing accurate results with a naive range reduction like modulo 2*pi
-  ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+  ///   producing accurate results with a naive range reduction like modulo 2*pi
+  ///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
   /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
   /// # Output
   /// - the cell number (hash value) associated with the given position on the unit sphere,
@@ -714,8 +714,8 @@ impl Layer {
   /// respect to the origin of the cell (South vertex).
   /// # Inputs
   /// - `lon`: longitude in radians, support reasonably large positive and negative values
-  ///          producing accurate results with a naive range reduction like modulo 2*pi
-  ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+  ///   producing accurate results with a naive range reduction like modulo 2*pi
+  ///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
   /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
   /// # Output
   /// - the cell number (hash value) associated with the given position on the unit sphere,
@@ -1378,8 +1378,8 @@ impl Layer {
   /// - `from_vertex`: direction (from the cell center) of the path starting vertex
   /// - `to_vertex`: direction (from the cell center) of the path ending vertex
   /// - `include_to_vertex`: if set to *false*, the result contains `n_segments` points and do
-  ///                        not include the ending vertex.
-  ///                        Else the result contains `n_segments + 1` points.
+  ///   not include the ending vertex.
+  ///   Else the result contains `n_segments + 1` points.
   /// - `n_segments`: number of segments in the path from the starting vertex to the ending vertex
   ///
   /// # Output
@@ -1449,7 +1449,7 @@ impl Layer {
   /// - `starting_vertex`: direction (from the cell center) of the path starting vertex
   /// - `clockwise_direction`: tells if the path is in the clockwise or anti-clockwise direction
   /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of
-  ///                         points in the path equals *4 x n_segments_by_side*.
+  ///   points in the path equals *4 x n_segments_by_side*.
   /// # Output
   /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
   ///
@@ -1514,7 +1514,7 @@ impl Layer {
   /// # Input
   /// - `hash`: the hash value of the cell we look for the grid on the unit sphere.
   /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of
-  ///                         points in the path equals *(n_segments_by_side + 1)^2*.
+  ///   points in the path equals *(n_segments_by_side + 1)^2*.
   /// # Output
   /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
   ///
@@ -2370,8 +2370,8 @@ impl Layer {
   /// * origin: South vertex of the input base cell
   /// * x-axis: South vertex to East vertex of the input base cell
   /// * y-axis: South vertex to West vertex of the input base cell
-  /// into coordinates in the frame attached to the neighbour cell of given direction (with respect to
-  /// the input base cell).
+  ///   into coordinates in the frame attached to the neighbour cell of given direction (with respect to
+  ///   the input base cell).
   /// # Params:
   /// * `new_base_cell_dir`: direction of the base cell in which we want the new coordinates, with
   ///   respect to the given `d0h` base cell.
@@ -2554,7 +2554,7 @@ impl Layer {
   /// with a weight of 0.  
   /// # Output
   /// - `[(cell, weigth), (cell, weigth), (cell, weigth), (cell, weigth)]` the cell number
-  ///    together with their weight
+  ///   together with their weight
   /// # Panics
   ///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
   pub fn bilinear_interpolation(&self, lon: f64, lat: f64) -> [(u64, f64); 4] {
@@ -4138,7 +4138,7 @@ impl Layer {
   ///
   /// # Input
   /// - `vertices` the list of vertices (in a slice) coordinates, in radians
-  ///              `[(lon, lat), (lon, lat), ..., (lon, lat)]`
+  ///   `[(lon, lat), (lon, lat), ..., (lon, lat)]`
   /// - `exact_solution` if set
   ///
   /// # Output

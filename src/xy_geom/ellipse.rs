@@ -15,7 +15,7 @@ impl Ellipse {
   /// - `a` ellipse semi-major axis
   /// - `b` ellipse semi-minor axis
   /// - `(sin(theta), cos(theta)` in which `theta` is the counterclockwise angle between the x-axis
-  ///                             and the semi-major axis = `theta_radians.sin_cos()`
+  ///   and the semi-major axis = `theta_radians.sin_cos()`
   pub fn from_oriented(a: f64, b: f64, theta_sin_cos: (f64, f64)) -> Ellipse {
     let a2 = a.pow2();
     let b2 = b.pow2();

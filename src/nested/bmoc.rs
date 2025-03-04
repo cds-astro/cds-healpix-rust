@@ -404,13 +404,13 @@ impl BMOCBuilderFixedDepth {
 /// Structure defining a simple BMOC.
 /// Three different iterators are available:
 /// - `bmoc.iter() -> Iterator<u64>` : iterates on the raw value stored in the BMOC (the ordering
-///    follow the z-order-curve order).
+///   follow the z-order-curve order).
 /// - `bmoc.into_iter() -> Iterator<Cell>`: same a `iter()` except that it returns Cells,
-///    i.e. decoded raw value containing the `depth`, `order` and `flag`.
+///   i.e. decoded raw value containing the `depth`, `order` and `flag`.
 /// - `bmoc.flat_iter() -> Iterator<u64>`: iterates on all the cell number at the maximum depth, in
-///    ascending order (flag information is lost).
+///   ascending order (flag information is lost).
 /// - `bmoc.flat_iter_cell() -> Iterator<Cell>` same as `flat_iter()` but conserving then `flag`
-///    information (and the depth which must always equals the BMOC depth).
+///   information (and the depth which must always equals the BMOC depth).
 #[derive(Debug, PartialEq, Eq)]
 pub struct BMOC {
   depth_max: u8,
