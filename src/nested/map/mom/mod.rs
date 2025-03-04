@@ -155,6 +155,7 @@ pub enum LhsRhsBoth<V> {
 /// This last property allow for streaming processing and operations.
 /// In practice, we use the `zuniq` index: it encodes both the depth and the cell hash value
 /// and is built in such a way that the natural order follow the z-order curve order.  
+#[allow(clippy::len_without_is_empty, clippy::type_complexity)]
 pub trait Mom<'a>: Sized {
   /// Byte size, in memory, of the zuniq type.
   const Z_SIZE: usize = size_of::<Self::ZUniqHType>();

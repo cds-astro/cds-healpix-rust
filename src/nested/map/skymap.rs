@@ -96,6 +96,7 @@ impl SkyMapValue for f64 {
 //
 // And implement SkyMap on it.
 
+#[allow(clippy::len_without_is_empty)]
 pub trait SkyMap<'a> {
   /// Type of the HEALPix hash value (mainly `u32` or `u64`).
   type HashType: HHash;

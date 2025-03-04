@@ -233,6 +233,7 @@ pub trait HCIndex {
   /// * `IDXF_LMD`, optional: last modification date of the indexed file if the HCI is a file row index.
   /// * `IDXC_LON`, optional: name, in the indexed file, of the column containing the longitudes used to compute HEALPix index.
   /// * `IDXC_LAT`, optional: name, in the indexed file, of the column containing the latitudes used to compute HEALPix index.
+  #[allow(clippy::too_many_arguments)]
   fn to_fits<W: Write>(
     &self,
     mut writer: W,
@@ -325,6 +326,7 @@ pub trait HCIndex {
       .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn to_fits_file<P: AsRef<Path>>(
     &self,
     path: P,
@@ -659,6 +661,7 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
 }
 impl<T: HCIndexValue> FitsMMappedCIndex<T> {
   /// Private, only meant to be called from FITS reader.
+  #[allow(clippy::too_many_arguments)]
   fn new(
     fits_creation_date: Option<SystemTime>,
     indexed_file_name: Option<String>,

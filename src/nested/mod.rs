@@ -2925,6 +2925,7 @@ impl Layer {
   }
 
   // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_fullin_recur
+  #[allow(clippy::too_many_arguments)]
   fn cone_coverage_centers_recur<F>(
     &self,
     depth: u8,                            // cell depth
@@ -3108,6 +3109,7 @@ impl Layer {
   }
 
   // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_centers_recur
+  #[allow(clippy::too_many_arguments)]
   fn cone_coverage_fullin_recur<F>(
     &self,
     depth: u8,                            // cell depth

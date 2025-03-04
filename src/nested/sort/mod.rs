@@ -655,6 +655,7 @@ where
       Ok(rows)
     }
   }
+  #[allow(clippy::type_complexity)]
   fn load_next_file<TT: ExtSortable>(
     elem: Option<((PathBuf, u8, Range<u32>), (Range<u32>, u32))>,
   ) -> Option<Result<Vec<TT>, SortError>> {
@@ -692,6 +693,7 @@ where
     /// Method to extract/compute the HEALPix order29 index from a row.
     hpx29: FF,
     /// Iterates on the files and range info: ((PathBuf, Depth, Range), (Range, NRows)).
+    #[allow(clippy::type_complexity)]
     ordered_files_counts_it: Zip<IntoIter<(PathBuf, u8, Range<u32>)>, IntoIter<(Range<u32>, u32)>>,
     /// Iterates on the sorted rows of a file.
     rows_it: IntoIter<TT>,
