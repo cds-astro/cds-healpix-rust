@@ -1817,6 +1817,7 @@ mod tests {
 
   #[test]
   #[should_panic]
+  #[allow(clippy::approx_constant)]
   fn testpanic_proj_2() {
     proj(3.14159, -1.58);
   }

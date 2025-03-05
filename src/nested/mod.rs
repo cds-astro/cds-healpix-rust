@@ -4834,6 +4834,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn testok_hash_2() {
     let layer = get(0);
     // ra = 179.99999999999998633839 deg
@@ -4850,6 +4851,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn testok_hash_3() {
     let layer = get(0);
     // ra = 89.99999999999999889877 deg
@@ -7688,6 +7690,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn test_bilinear_interpolation_3() {
     let lon_rad = [0.17453293_f64, 0.43633231_f64, 0.0_f64];
     let lat_rad = [0.08726646_f64, 0.17453293_f64, 0.78539816_f64];
