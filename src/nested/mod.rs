@@ -3394,6 +3394,7 @@ impl Layer {
     }
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn ring_coverage_approx_recur<F>(
     &self,
     depth: u8,                // cell depth
