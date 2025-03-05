@@ -406,7 +406,7 @@ pub struct BorrowedCIndex<'a, T: HCIndexValue> {
   depth: u8,
   values: &'a [T],
 }
-impl<'a, T: HCIndexValue> HCIndex for BorrowedCIndex<'a, T> {
+impl<T: HCIndexValue> HCIndex for BorrowedCIndex<'_, T> {
   type V = T;
   fn depth(&self) -> u8 {
     self.depth

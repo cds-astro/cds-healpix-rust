@@ -145,7 +145,7 @@ pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
   values: Box<[V]>,
   _htype: PhantomData<H>,
 }
-impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
+impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
   /// WARNING: we assume that the coherency between the depth and the number of elements in the
   ///array has already been tested.
   pub fn new(depth: u8, values: Box<[V]>) -> Self {
@@ -163,7 +163,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
     }
   }
 }
-impl<'a, H: HHash, V: SkyMapValue + Send + Sync + AddAssign + 'a> ImplicitSkyMapArray<H, V> {
+impl<H: HHash, V: SkyMapValue + Send + Sync + AddAssign> ImplicitSkyMapArray<H, V> {
   pub fn par_add(mut self, rhs: Self) -> Self {
     self
       .values

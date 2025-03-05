@@ -1771,44 +1771,44 @@ impl Layer {
       let overflow_e = overflow_se && overflow_ne;
 
       if overflow_s {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, S)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, S) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_sw {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, SW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, SW) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_w {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, W)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, W) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_nw {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, NW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, NW) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_n {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, N)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, N) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_ne {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, NE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, NE) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_e {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, E)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, E) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_se {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, SE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, SE) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       partial_compute(nside, d0h, i, j, k, result);
     }
