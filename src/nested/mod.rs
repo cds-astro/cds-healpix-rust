@@ -1729,7 +1729,7 @@ impl Layer {
 
       // In this method, both i and j can be < 0 or >= nside
       let partial_compute =
-        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
+        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| {
           let xfrom = i - k;
           let xto = i + k;
           let yfrom = j - k;
@@ -1741,19 +1741,19 @@ impl Layer {
             }
           }
           // W (inclusive) to N (exclusive)
-          if (0..nside as i32).contains(&yto) {
+          if (0..nside).contains(&yto) {
             for x in xfrom.max(0)..xto.min(nside) {
               res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
             }
           }
           // N (inslusive) to E (exclusive)
-          if (0..nside as i32).contains(&xto) {
+          if (0..nside).contains(&xto) {
             for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
               res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
             }
           }
           // E (inclusive) to S (exclusive)
-          if (0..nside as i32).contains(&yfrom) {
+          if (0..nside).contains(&yfrom) {
             for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
               res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
             }
@@ -5900,9 +5900,7 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     // to_aladin_moc(&actual_res_exact);
     for h in actual_res_exact.flat_iter() {
-      if h == 4806091 || h == 4806094 {
-        assert!(false, "Contains 10/4806091 or 10/4806094")
-      }
+      assert!(h != 4806091 || h != 4806094, "Contains 10/4806091 or 10/4806094");
     }
   }
 
@@ -6964,9 +6962,9 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     to_aladin_moc(&actual_res_exact);
     let mut s = String::new();
-    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+    for coo in vertices.iter().flat_map(|(a, b)| [*a, *b]) {
       s.push(',');
-      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+      s.push_str(&coo.to_degrees().to_string());
     }
     println!("draw polygon({})", &s.as_str()[1..]);
 
@@ -6988,9 +6986,9 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     to_aladin_moc(&actual_res_exact);
     let mut s = String::new();
-    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+    for coo in vertices.iter().flat_map(|(a, b)| [*a, *b]) {
       s.push(',');
-      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+      s.push_str(&coo.to_degrees().to_string());
     }
     println!("draw polygon({})", &s.as_str()[1..]);
   }

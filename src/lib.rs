@@ -1436,11 +1436,7 @@ fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
 
 #[inline]
 fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
-  if *lon > 1.0 {
-    *lon = 1.0;
-  } else if *lon < -1.0 {
-    *lon = -1.0;
-  }
+  *lon = lon.clamp(-1.0, 1.0);
 }
 
 // Shift x by the given offset and apply lon and lat signs to x and y respectively

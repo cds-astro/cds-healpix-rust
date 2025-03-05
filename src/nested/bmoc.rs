@@ -559,7 +559,7 @@ impl BMOC {
     // Worst case: only 1 sub-cell by cell in the MOC (+11 for depth 0)
     let mut builder = BMOCBuilderUnsafe::new(self.depth_max, 3 * self.entries.len() + 12);
     // Empty MOC, easy
-    if self.entries.len() == 0 {
+    if self.entries.is_empty() {
       for h in 0..12_u64 {
         builder.push(0_u8, h, true);
       }

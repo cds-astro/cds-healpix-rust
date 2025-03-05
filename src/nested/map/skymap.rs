@@ -211,10 +211,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.values)
       .enumerate()
       .map(move |(h, v)| (H::from_usize(h), v))
   }
@@ -328,7 +325,7 @@ impl SkyMapEnum {
     match self {
       Self::ImplicitU64I32(skymap) => {
         Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, unsafe {
-          std::mem::transmute(skymap.values)
+          std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values)
         })))
       }
       _ => Err(String::from("Unable to convert to coutn map.")),
@@ -339,7 +336,7 @@ impl SkyMapEnum {
     match self {
       Self::ImplicitU64I32(skymap) => Ok(CountMapU32(ImplicitSkyMapArray::new(
         skymap.depth,
-        unsafe { std::mem::transmute(skymap.values) },
+        unsafe { std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values) },
       ))),
       _ => Err(String::from("Unable to convert to coutn map.")),
     }
@@ -679,11 +676,7 @@ impl<'a> SkyMap<'a> for CountMap {
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .into_implicit_skymap_array()
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.into_implicit_skymap_array().values)
       .enumerate()
       .map(move |(h, v)| (u64::from_usize(h), v))
   }
@@ -1006,11 +999,7 @@ impl<'a> SkyMap<'a> for CountMapU32 {
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .into_implicit_skymap_array()
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.into_implicit_skymap_array().values) // a normal into_iter() calls the slice impl
       .enumerate()
       .map(move |(h, v)| (u32::from_usize(h), v))
   }

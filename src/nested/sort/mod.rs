@@ -223,7 +223,7 @@ impl SimpleExtSortParams {
     Self {
       tmp_dir,
       n_elems_per_chunk: info.n_elems_per_chunk,
-      n_threads: info.n_threads.clone(),
+      n_threads: info.n_threads,
       clean: info.clean,
     }
   }

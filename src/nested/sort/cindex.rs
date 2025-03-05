@@ -25,7 +25,6 @@ use std::{
   ptr::slice_from_raw_parts,
   str,
   time::SystemTime,
-  u32,
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -245,7 +244,7 @@ pub trait HCIndex {
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
     let indexed_file_last_modif_date =
-      indexed_file_last_modif_date.map(|st| DateTime::<Utc>::from(st));
+      indexed_file_last_modif_date.map(DateTime::<Utc>::from);
     let n_values = n_hash(self.depth()) + 1;
     // Perpare the header
     let mut header_block = [b' '; 2880];
@@ -436,7 +435,7 @@ fn write_all_values<T: HCIndexValue, W: Write>(
   values: &[T],
   mut writer: W,
 ) -> Result<usize, IoError> {
-  let len = values.len() * size_of::<T>();
+  let len = size_of_val(values);
   let ptr = values.as_ptr();
   let offset = ptr.align_offset(align_of::<u8>());
   // I suppose that align with u8 is never a problem, but we test the assumption just in case...
@@ -587,7 +586,7 @@ impl FITSCIndex {
         .map(&file)
         .map_err(FitsError::Io)?
     };
-    match datatype.as_ref().map(|v| v.as_str()) {
+    match datatype.as_deref() {
       Some(u32::FITS_DATATYPE) => Ok(FITSCIndex::U32(FitsMMappedCIndex::new(
         date,
         indexed_file_name,
@@ -698,7 +697,7 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
     self.indexed_file_name.as_ref()
   }
   pub fn get_indexed_file_len(&self) -> Option<u64> {
-    self.indexed_file_len.clone()
+    self.indexed_file_len
   }
   pub fn get_indexed_file_md5(&self) -> Option<&String> {
     self.indexed_file_md5.as_ref()
@@ -737,7 +736,7 @@ mod tests {
     let path = "cindex.fits";
     let depth = 10;
     let n = n_hash(depth);
-    let values: Vec<u32> = (0..=n as u32).into_iter().collect();
+    let values: Vec<u32> = (0..=n as u32).collect();
     let cindex = OwnedCIndex::new_unchecked(depth, values.into_boxed_slice());
     let mut indexex_file_md5 = [0_u8; 32];
     indexex_file_md5.copy_from_slice("0123456789ABCDEF0123456789ABCDEF".as_bytes());
@@ -787,11 +786,11 @@ mod tests {
       }
       Ok(a) => {
         println!("{:?}", &a);
-        assert!(false)
+        panic!()
       }
       Err(e) => {
         println!("Err: {:?}", &e);
-        assert!(false)
+        panic!()
       }
     }
   }

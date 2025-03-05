@@ -609,7 +609,7 @@ mod tests {
         )
           .unwrap();
       }
-      _ => assert!(false)
+      _ => panic!()
     }
   }
 }

@@ -79,7 +79,7 @@ mod tests {
         println!("n_comp = {}", n_comp);
         assert_eq!(n_comp, fits_mom.get_mom().len())
       }
-      _ => assert!(false),
+      _ => panic!(),
     }
   }
 
@@ -198,7 +198,7 @@ mod tests {
         println!("n_comp = {}", n_comp);
         assert_eq!(n_comp, fits_mom.get_mom().len())
       }
-      _ => assert!(false),
+      _ => panic!(),
     }
 
     /// Order 11
@@ -247,7 +247,7 @@ mod tests {
         )
         .unwrap();
       }
-      _ => assert!(false),
+      _ => panic!(),
     }
   }*/
 }

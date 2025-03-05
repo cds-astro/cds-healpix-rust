@@ -161,8 +161,8 @@ impl FITSMom {
         .map_err(FitsError::Io)?
     };
     match (
-      datatype_z.as_ref().map(|v| v.as_str()),
-      datatype_v.as_ref().map(|v| v.as_str()),
+      datatype_z.as_deref(),
+      datatype_v.as_deref(),
     ) {
       (Some(<u32 as ZUniqHashT>::FITS_DATATYPE), Some(<u32 as SkyMapValue>::FITS_DATATYPE)) => {
         Ok(FITSMom::U32U32(FitsMMappedCIndex::new(
@@ -317,7 +317,7 @@ where
     )
   }
 
-  fn get_entries(&self, range: Range<usize>) -> Map<ChunksExact<u8>, fn(&[u8]) -> (Z, V)> {
+  fn get_entries(&self, range: Range<usize>) -> <Self as Mom<'b>>::OverlappedEntriesCopy {
     let range = range.start * <Self as Mom>::ZV_SIZE..range.end * <Self as Mom>::ZV_SIZE;
     self.bytes[range]
       .chunks_exact(<Self as Mom>::ZV_SIZE)
