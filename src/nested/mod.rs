@@ -6941,6 +6941,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::excessive_precision)]
   fn testok_polygone_exact_mt_pb_with_java_lib() {
     // In Aladin:
     // draw polygon(...)

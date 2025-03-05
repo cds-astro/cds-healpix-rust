@@ -1831,6 +1831,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::excessive_precision)]
   fn testok_largest_center_to_vertex_distance() {
     let depth = 8;
     let d1_mas = largest_center_to_vertex_distance(depth, 0.0, 0.0).to_degrees() * 3600.0;
