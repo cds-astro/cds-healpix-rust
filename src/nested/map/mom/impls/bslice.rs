@@ -1,22 +1,3 @@
-use std::{
-  array::TryFromSliceError,
-  cmp::Ordering,
-  convert::{TryFrom, TryInto},
-  fs::File,
-  iter::{Empty, Map},
-  marker::PhantomData,
-  ops::Range,
-  path::Path,
-  slice::{from_raw_parts, ChunksExact},
-  str,
-  time::SystemTime,
-};
-
-use chrono::{DateTime, Utc};
-use log::debug;
-use memmap2::{Mmap, MmapOptions};
-use num_traits::{FromBytes, ToBytes};
-
 use super::super::{
   super::{
     fits::{
@@ -29,6 +10,25 @@ use super::super::{
     skymap::{SkyMap, SkyMapValue},
   },
   LhsRhsBoth, Mom, ZUniqHashT,
+};
+use crate::nested::map::mom::WritableMom;
+use chrono::{DateTime, Utc};
+use log::debug;
+use memmap2::{Mmap, MmapOptions};
+use num_traits::{FromBytes, ToBytes};
+use std::io::{BufWriter, Write};
+use std::{
+  array::TryFromSliceError,
+  cmp::Ordering,
+  convert::{TryFrom, TryInto},
+  fs::File,
+  iter::{Empty, Map},
+  marker::PhantomData,
+  ops::Range,
+  path::Path,
+  slice::{from_raw_parts, ChunksExact},
+  str,
+  time::SystemTime,
 };
 
 /// Defines the type of ZUniq Hash values that can be read/write from/to FITS files.
@@ -70,6 +70,8 @@ pub enum FITSMom {
   U64F64(FitsMMappedCIndex<u64, f64>),
 }
 impl FITSMom {
+  // TODO: make a method loading everything from a reader a aking a zvec object!
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
     let mut file = File::open(path)?;
     let mut raw_header = [b' '; 2880];
@@ -203,6 +205,24 @@ impl FITSMom {
         "FITS card ZUNIQ_DT or VALUE_DT is missing",
       ))),
     }
+  }
+
+  pub fn to_fits_bintable<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    match &self {
+      FITSMom::U32U32(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+      FITSMom::U32F32(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+      FITSMom::U32F64(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+      FITSMom::U64U32(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+      FITSMom::U64F32(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+      FITSMom::U64F64(e) => e.get_mom().to_fits_bintable(writer, &e.value_name),
+    }
+  }
+
+  #[cfg(not(target_arch = "wasm32"))]
+  pub fn to_fits_bintable_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(FitsError::Io)
+      .and_then(|file| self.to_fits_bintable(BufWriter::new(file)))
   }
 }
 

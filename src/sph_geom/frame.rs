@@ -9,7 +9,7 @@ use crate::TWICE_PI;
 /// * `r33 =  cos(lat)`
 /// * `r13 =  sin(lat)`
 #[derive(Debug)]
-pub(crate) struct RefToLocalRotMatrix {
+pub struct RefToLocalRotMatrix {
   r11: f64,
   r12: f64,
   r13: f64,
@@ -23,7 +23,7 @@ pub(crate) struct RefToLocalRotMatrix {
 
 impl RefToLocalRotMatrix {
   /// Compute the reference to local rotation matrix from a projection center
-  pub(crate) fn from_center(lon: f64, lat: f64) -> RefToLocalRotMatrix {
+  pub fn from_center(lon: f64, lat: f64) -> RefToLocalRotMatrix {
     let (sa, ca) = lon.sin_cos(); // ca, sa stands for cos(alpha), sin(alpha)
     let (sd, cd) = lat.sin_cos(); // cd, sd stands for cos(delta), sin(delta)
     RefToLocalRotMatrix {
@@ -41,7 +41,7 @@ impl RefToLocalRotMatrix {
 
   /// Transform local to global (or reference) coordinates, by
   /// rotating the input (local) vector using the transpose of the rotation matrix.
-  pub(crate) fn to_global_xyz(&self, x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+  pub fn to_global_xyz(&self, x: f64, y: f64, z: f64) -> (f64, f64, f64) {
     (
       self.r11 * x + self.r21 * y + self.r31 * z,
       self.r12 * x + self.r22 * y + self.r32 * z,
@@ -51,13 +51,13 @@ impl RefToLocalRotMatrix {
 
   /// Transform local to global (or reference) coordinates, by
   /// rotating the input (local) vector using the transpose of the rotation matrix.
-  pub(crate) fn to_global_coo(&self, x: f64, y: f64, z: f64) -> (f64, f64) {
+  pub fn to_global_coo(&self, x: f64, y: f64, z: f64) -> (f64, f64) {
     let (x, y, z) = self.to_global_xyz(x, y, z);
     xyz_to_lonlat(x, y, z)
   }
 }
 
-pub(crate) fn xyz_to_lonlat(x: f64, y: f64, z: f64) -> (f64, f64) {
+fn xyz_to_lonlat(x: f64, y: f64, z: f64) -> (f64, f64) {
   // Length of the projection on the xy plane
   let r2 = x * x + y * y;
   // Latitude in [-pi/2, pi/2] (ok, since cos always positive here)

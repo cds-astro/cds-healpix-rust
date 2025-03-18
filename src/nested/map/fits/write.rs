@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Error as IoError, Write};
 
 use num_traits::ToBytes;
 
@@ -67,14 +67,19 @@ where
 /// Possible add blanks at the end of the FITS file to complete the last
 /// 2880 bytes block.
 pub(crate) fn write_final_padding<R: Write>(
-  mut writer: R,
+  writer: R,
   n_bytes_already_written: usize,
 ) -> Result<(), FitsError> {
+  write_final_padding_ioerr(writer, n_bytes_already_written).map_err(FitsError::Io)
+}
+
+pub(crate) fn write_final_padding_ioerr<R: Write>(
+  mut writer: R,
+  n_bytes_already_written: usize,
+) -> Result<(), IoError> {
   let mod2880 = n_bytes_already_written % 2880;
   if mod2880 != 0 {
-    writer
-      .write_all(&vec![0_u8; 2880 - mod2880])
-      .map_err(FitsError::Io)
+    writer.write_all(&vec![0_u8; 2880 - mod2880])
   } else {
     Ok(())
   }
@@ -123,13 +128,16 @@ pub(crate) fn write_str_mandatory_keyword_record(dest: &mut [u8], keyword: &[u8;
 }
 
 pub(crate) fn write_primary_hdu<R: Write>(writer: &mut R) -> Result<(), FitsError> {
+  write_primary_hdu_ioerr(writer).map_err(FitsError::Io)
+}
+pub(crate) fn write_primary_hdu_ioerr<R: Write>(writer: &mut R) -> Result<(), IoError> {
   let mut header_block = [b' '; 2880];
   header_block[0..30].copy_from_slice(b"SIMPLE  =                    T");
   header_block[80..110].copy_from_slice(b"BITPIX  =                    8");
   header_block[160..190].copy_from_slice(b"NAXIS   =                    0");
   header_block[240..270].copy_from_slice(b"EXTEND  =                    T");
   header_block[320..323].copy_from_slice(b"END");
-  writer.write_all(&header_block[..]).map_err(FitsError::Io)
+  writer.write_all(&header_block[..])
 }
 
 fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
@@ -162,7 +170,17 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells - 1);
   it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
   it.next().unwrap()[0..20].copy_from_slice(b"OBJECT  = 'FULLSKY '");
-  it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
+  // it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
+  write_keyword_record(
+    it.next().unwrap(),
+    b"CREATOR ",
+    format!(
+      "'Rust crate {} {}'",
+      env!("CARGO_PKG_NAME"),
+      env!("CARGO_PKG_VERSION")
+    )
+    .as_str(),
+  );
   it.next().unwrap()[0..3].copy_from_slice(b"END");
   // Do write the header
   writer.write_all(&header_block[..]).map_err(FitsError::Io)

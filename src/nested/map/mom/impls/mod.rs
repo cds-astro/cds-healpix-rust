@@ -6,19 +6,18 @@ pub mod zvec;
 
 #[cfg(test)]
 mod tests {
-  use itertools::Itertools;
   use std::f64::consts::PI;
+
+  use itertools::Itertools;
 
   use mapproj::pseudocyl::mol::Mol;
 
-  use crate::nested::map::img::to_skymap_png_file;
-  use crate::nested::map::mom::Mom;
   use crate::nested::{
     map::{
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
       mom::{
         impls::{bslice::FITSMom, zvec::MomVecImpl},
-        WritableMom, ZUniqHashT,
+        Mom, WritableMom, ZUniqHashT,
       },
       skymap::SkyMapEnum,
     },
@@ -37,7 +36,7 @@ mod tests {
       .to_count_map_u32()
       .unwrap();
     // Chi2 merge to MOM
-    let count_mom = count_map.to_chi2_mom();
+    let count_mom = count_map.to_chi2_mom(16.266);
     // Count MOM to Dens MOM
     let dens_mom = MomVecImpl::<u32, f64>::from_map(count_mom, |z, count| {
       let one_over_area = (n_hash(u32::depth_from_zuniq(z)) >> 2) as f64 / PI;

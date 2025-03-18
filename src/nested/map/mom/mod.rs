@@ -4,25 +4,35 @@
 
 use std::{
   cmp::Ordering,
+  error::Error,
   fmt::{Debug, Display},
-  ops::AddAssign,
-  io::{Write, BufWriter},
   fs::File,
-  path::Path
+  io::{BufWriter, Write},
+  ops::{AddAssign, RangeInclusive},
+  path::Path,
 };
 
-use byteorder::WriteBytesExt;
 use chrono::{SecondsFormat, Utc};
+use colorous::Gradient;
+use mapproj::CanonicalProjection;
 use num::PrimInt;
 use num_traits::ToBytes;
 
-use crate::nested::map::fits::{
-  error::FitsError,
-  write::{write_primary_hdu, write_final_padding, write_keyword_record, write_str_keyword_record, write_uint_mandatory_keyword_record, write_str_mandatory_keyword_record}
-};
+#[cfg(not(target_arch = "wasm32"))]
+use super::img::to_mom_png_file;
 use super::{
+  skymap::{SkyMap, SkyMapValue},
   HHash,
-  skymap::{SkyMap, SkyMapValue}
+};
+use crate::nested::map::{
+  fits::{
+    error::FitsError,
+    write::{
+      write_final_padding, write_keyword_record, write_primary_hdu, write_str_keyword_record,
+      write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
+    },
+  },
+  img::{to_mom_png, ColorMapFunctionType, PosConversion, Val},
 };
 
 pub mod impls;
@@ -53,7 +63,7 @@ pub trait ZUniqHashT:
   const FITS_DATATYPE: &'static str;
   /// The TFORM compliant FITS keyword value.
   const FITS_TFORM: &'static str;
-  
+
   /// Must return 2.
   fn two() -> Self;
   /// Must return 3.
@@ -73,7 +83,7 @@ pub trait ZUniqHashT:
   fn shift_from_depth_max(depth: u8) -> u8 {
     Self::shift(Self::delta_with_depth_max(depth))
   }
-  
+
   /// Returns the `depth` and `hash value` this `zuniq` contains.
   fn from_zuniq(zuniq: Self) -> (u8, Self) {
     let n_trailing_zero = zuniq.trailing_zeros() as u8;
@@ -100,15 +110,14 @@ pub trait ZUniqHashT:
     let (depth_r, hash_r) = Self::from_zuniq(zuniq_r);
     Self::are_overlapping_cells(depth_l, hash_l, depth_r, hash_r)
   }
-  
+
   fn are_overlapping_cells(depth_l: u8, hash_l: Self, depth_r: u8, hash_r: Self) -> bool {
     match depth_l.cmp(&depth_r) {
-      Ordering::Equal   => hash_l == hash_r,
-      Ordering::Less    => hash_l == hash_r.unsigned_shr(((depth_r - depth_l) << 1) as u32),
+      Ordering::Equal => hash_l == hash_r,
+      Ordering::Less => hash_l == hash_r.unsigned_shr(((depth_r - depth_l) << 1) as u32),
       Ordering::Greater => hash_r == hash_l.unsigned_shr(((depth_l - depth_r) << 1) as u32),
     }
   }
-
 }
 
 impl ZUniqHashT for u32 {
@@ -135,7 +144,7 @@ impl ZUniqHashT for u64 {
 }
 
 /// Enum defining the 3 possibilities whe merging two nullable inputs:
-/// * Left: non-null LHS, null RHS 
+/// * Left: non-null LHS, null RHS
 /// * Right: null LHS, non-null RHS
 /// * Both: non-null LHS, non-null RHS
 pub enum LhsRhsBoth<V> {
@@ -145,13 +154,13 @@ pub enum LhsRhsBoth<V> {
 }
 
 /// `MOM` stands for **M**ulti **O**rder healpix **M**aps.
-/// Here, it consists in a list of HEALPix cells (hash) at various depth (HEALPixordes) 
+/// Here, it consists in a list of HEALPix cells (hash) at various depth (HEALPixordes)
 /// with a value attached to each cell.
 /// All cells in a given MOM:
-/// * must be non-overlapping, 
+/// * must be non-overlapping,
 /// * have the same type of value attached to them
 /// * are sorted following the z-order curve order.
-/// 
+///
 /// This last property allow for streaming processing and operations.
 /// In practice, we use the `zuniq` index: it encodes both the depth and the cell hash value
 /// and is built in such a way that the natural order follow the z-order curve order.  
@@ -191,37 +200,50 @@ pub trait Mom<'a>: Sized {
 
   /// Returns the number of elements in the `mom`.
   fn len(&self) -> usize;
-  
+
   /// Returns the entry, if any, containing the given HEALPix cell hash computed at the `Mom`
   /// maximum depth.
-  fn get_cell_containing(&'a self, zuniq_at_depth_max: Self::ZUniqHType) -> Result<Option<(Self::ZUniqHType, &'a Self::ValueType)>, String> {
-    self.check_zuniq_depth_is_depth_max(zuniq_at_depth_max)
+  fn get_cell_containing(
+    &'a self,
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Result<Option<(Self::ZUniqHType, &'a Self::ValueType)>, String> {
+    self
+      .check_zuniq_depth_is_depth_max(zuniq_at_depth_max)
       .map(|_| self.get_cell_containing_unsafe(zuniq_at_depth_max))
   }
 
   /// Returns the entry, if any, containing the given HEALPix cell hash computed at the `Mom`
   /// maximum depth, and making a copy of the value.
-  fn get_copy_of_cell_containing(&'a self, zuniq_at_depth_max: Self::ZUniqHType) -> Result<Option<(Self::ZUniqHType, Self::ValueType)>, String> {
-    self.check_zuniq_depth_is_depth_max(zuniq_at_depth_max)
+  fn get_copy_of_cell_containing(
+    &'a self,
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Result<Option<(Self::ZUniqHType, Self::ValueType)>, String> {
+    self
+      .check_zuniq_depth_is_depth_max(zuniq_at_depth_max)
       .map(|_| self.get_copy_of_cell_containing_unsafe(zuniq_at_depth_max))
   }
 
   /// Same as `get_cell_containing` without checking that `zuniq_at_depth_max` depth is the MOM
   /// maximum depth.
-  fn get_cell_containing_unsafe(&'a self, zuniq_at_depth_max: Self::ZUniqHType) -> Option<(Self::ZUniqHType, &'a Self::ValueType)>;
+  fn get_cell_containing_unsafe(
+    &'a self,
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Option<(Self::ZUniqHType, &'a Self::ValueType)>;
 
   /// Same as `get_copy_of_cell_containing` without checking that `zuniq_at_depth_max` depth is the MOM
   /// maximum depth.
-  fn get_copy_of_cell_containing_unsafe(&'a self, zuniq_at_depth_max: Self::ZUniqHType) -> Option<(Self::ZUniqHType, Self::ValueType)>;
-
+  fn get_copy_of_cell_containing_unsafe(
+    &'a self,
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Option<(Self::ZUniqHType, Self::ValueType)>;
 
   /// Returns all entries, in the z-order curve order, overlapped by the HEALPix cell of given `zuniq` hash value.
   fn get_overlapped_cells(&'a self, zuniq: Self::ZUniqHType) -> Self::OverlappedEntries;
 
   /// Returns all entries, in the z-order curve order, overlapped by the HEALPix cell of given `zuniq` hash value,
   /// making a copy of the value.
-  fn get_copy_of_overlapped_cells(&'a self, zuniq: Self::ZUniqHType) -> Self::OverlappedEntriesCopy;
-
+  fn get_copy_of_overlapped_cells(&'a self, zuniq: Self::ZUniqHType)
+    -> Self::OverlappedEntriesCopy;
 
   /// Returns all HEALPix zuniq hash, ordered following the z-order curve.
   fn zuniqs(&'a self) -> Self::ZuniqIt;
@@ -238,17 +260,25 @@ pub trait Mom<'a>: Sized {
 
   /// Returns a copy of all entries, i.e. HEALPix zuniq hash / value tuples, ordered following the z-order curve.
   fn entries_copy(&'a self) -> Self::EntriesCopyIt;
-  
+
   /// Returns owned entries, i.e. HEALPix zuniq hash / value tuples, ordered following the z-order curve.
   fn owned_entries(self) -> Self::OwnedEntriesIt;
 
   /// Check if the given `zuniq` depth is the MOM maximum depth.
-  fn check_zuniq_depth_is_depth_max(&self, zuniq_at_depth_max: Self::ZUniqHType) -> Result<(), String> {
+  fn check_zuniq_depth_is_depth_max(
+    &self,
+    zuniq_at_depth_max: Self::ZUniqHType,
+  ) -> Result<(), String> {
     let depth = Self::ZUniqHType::depth_from_zuniq(zuniq_at_depth_max);
     if depth == self.depth_max() {
       Ok(())
     } else {
-      Err(format!("Wrong depth for zuniq {}. Expected: {}. Actual: {}", zuniq_at_depth_max, self.depth_max(), depth))
+      Err(format!(
+        "Wrong depth for zuniq {}. Expected: {}. Actual: {}",
+        zuniq_at_depth_max,
+        self.depth_max(),
+        depth
+      ))
     }
   }
 
@@ -263,7 +293,7 @@ pub trait Mom<'a>: Sized {
         if depth_l < self.depth_max() {
           return Err(format!("Element has a larger depth than MOM maximum depth. Elem: {}; Depth: {}; Mom max depth: {}", l, depth_l, self.depth_max()));
         }
-        let (depth_r, hash_r) =  Self::ZUniqHType::from_zuniq(r);
+        let (depth_r, hash_r) = Self::ZUniqHType::from_zuniq(r);
         if l >= r {
           return Err(format!("The MOM is not ordered: {} >= {}", l, r));
         } else if Self::ZUniqHType::are_overlapping_cells(depth_l, hash_l, depth_r, hash_r) {
@@ -283,19 +313,23 @@ pub trait Mom<'a>: Sized {
   ///   The function decide whether value are merge (and how they are merged) or not returning
   ///   either `Some` or `None`.
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
-    where
-      S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      M: Fn(u8, Self::ZUniqHType, [&Self::ValueType; 4]) -> Option<Self::ValueType>,
-      Self::ValueType: 's;
+  where
+    S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
+    M: Fn(u8, Self::ZUniqHType, [&Self::ValueType; 4]) -> Option<Self::ValueType>,
+    Self::ValueType: 's;
 
   /// # Params
   /// * `M`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
   fn from_skymap<'s, S, M>(skymap: S, merger: M) -> Self
-    where
-      S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      M: Fn(u8, Self::ZUniqHType, [Self::ValueType; 4]) -> Result<Self::ValueType, [Self::ValueType; 4]>,
-      Self::ValueType: 's;
-  
+  where
+    S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
+    Self::ValueType: 's;
+
   /// Merge two input MOMs to produce an output MOM.
   /// # Params
   /// * `lhs`: the Left Hand Side MOM
@@ -309,26 +343,100 @@ pub trait Mom<'a>: Sized {
   /// * `merge`: possibly performs a post-merge operation, considering the (four) siblings of the join operation.
   ///     + the depth and hash value of the parent cell (if cells are merged) are provided in input,
   ///     + together with the 4 values to be possibly merged in the parent cell.
-  ///     + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if 
+  ///     + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if
   ///       the merge does not occurs.
   /// * `L`: type of the left MOM
   /// * `R`: type of the right MOM
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
-    where
-      L: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      R: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
-      S: Fn(u8, Self::ZUniqHType, Self::ValueType) -> [Self::ValueType; 4],
-      O: Fn(LhsRhsBoth<Self::ValueType>) -> Option<Self::ValueType>,
-      M: Fn(u8, Self::ZUniqHType, [Self::ValueType; 4]) -> Result<Self::ValueType, [Self::ValueType; 4]>;
-
+  where
+    L: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
+    R: Mom<'s, ZUniqHType = Self::ZUniqHType, ValueType = Self::ValueType>,
+    S: Fn(u8, Self::ZUniqHType, Self::ValueType) -> [Self::ValueType; 4],
+    O: Fn(LhsRhsBoth<Self::ValueType>) -> Option<Self::ValueType>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
 }
 
-pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapValue + ToBytes + 'a  {
+pub trait ViewableMom<'a>: Mom<'a>
+where
+  <Self as Mom<'a>>::ValueType: SkyMapValue + Val + 'a,
+{
+  /// # Params
+  /// * `size`: the `(X, Y)` number of pixels in the image;
+  /// * `proj`: a projection, if different from Mollweide;
+  /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
+  ///                      if different from `(0, 0)`;
+  /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
+  ///                  which depends on the projection. For unbounded projections, de default value
+  ///                  is `(-PI..PI, -PI..PI)`.
+  /// * `path`: the path of th PNG file to be written.
+  /// * `view`: set to true to visualize the saved image.
+  #[cfg(not(target_arch = "wasm32"))]
+  fn to_mom_png_file<P: CanonicalProjection, W: AsRef<Path>>(
+    &'a self,
+    img_size: (u16, u16),
+    proj: Option<P>,
+    proj_center: Option<(f64, f64)>,
+    proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+    pos_convert: Option<PosConversion>,
+    color_map: Option<Gradient>,
+    color_map_func_type: Option<ColorMapFunctionType>,
+    path: W,
+    view: bool,
+  ) -> Result<(), Box<dyn Error>> {
+    to_mom_png_file(
+      self,
+      img_size,
+      proj,
+      proj_center,
+      proj_bounds,
+      pos_convert,
+      color_map,
+      color_map_func_type,
+      path,
+      view,
+    )
+  }
 
+  fn to_mom_png<P: CanonicalProjection, W: Write>(
+    &'a self,
+    img_size: (u16, u16),
+    proj: Option<P>,
+    proj_center: Option<(f64, f64)>,
+    proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
+    pos_convert: Option<PosConversion>,
+    color_map: Option<Gradient>,
+    color_map_func_type: Option<ColorMapFunctionType>,
+    writer: W,
+  ) -> Result<(), Box<dyn Error>> {
+    to_mom_png(
+      self,
+      img_size,
+      proj,
+      proj_center,
+      proj_bounds,
+      pos_convert,
+      color_map,
+      color_map_func_type,
+      writer,
+    )
+  }
+}
+/// Implement `ViewableMom` for all `Mom` having a `ValueType` implementing `Val`.
+impl<'a, V: SkyMapValue + Val + 'a, M: Mom<'a, ValueType = V>> ViewableMom<'a> for M {}
 
+pub trait WritableMom<'a>: Mom<'a>
+where
+  <Self as Mom<'a>>::ValueType: SkyMapValue + ToBytes + 'a,
+{
   fn write_all_entries<W: Write>(&'a self, mut writer: W) -> Result<usize, FitsError> {
-    for (z, v) in self.entries() {
-      writer.write_all(z.to_le_bytes().as_ref())
+    // TODO: make a method trying first 'entries', adn 'entries_copy' only if 'entries' no implemented
+    for (z, v) in self.entries_copy() {
+      writer
+        .write_all(z.to_le_bytes().as_ref())
         .and_then(|()| writer.write_all(v.to_le_bytes().as_ref()))
         .map_err(FitsError::Io)?;
     }
@@ -336,22 +444,29 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
   }
 
   fn write_all_bintable_entries<W: Write>(&'a self, mut writer: W) -> Result<usize, FitsError> {
-    for (z, v) in self.entries() {
-      let (d, h) = Self::ZUniqHType::from_zuniq(z);
-      writer.write_u8(d)
-        .and_then(|()| writer.write_all(h.to_be_bytes().as_ref()))
+    // TODO: make a method trying first 'entries', adn 'entries_copy' only if 'entries' no implemented
+    for (z, v) in self.entries_copy() {
+      // let (d, h) = Self::ZUniqHType::from_zuniq(z);
+      writer
+        // .write_u8(d)
+        .write_all(z.to_be_bytes().as_ref())
         .and_then(|()| writer.write_all(v.to_be_bytes().as_ref()))
         .map_err(FitsError::Io)?;
     }
-    Ok(self.len() * (1 + Self::ZV_SIZE))
+    Ok(self.len() * Self::ZV_SIZE)
   }
 
-  fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(&'a self, path: P, value_name: T) -> Result<(), FitsError> {
+  #[cfg(not(target_arch = "wasm32"))]
+  fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(
+    &'a self,
+    path: P,
+    value_name: T,
+  ) -> Result<(), FitsError> {
     File::create(path)
       .map_err(FitsError::Io)
       .and_then(|file| self.to_fits(BufWriter::new(file), value_name))
   }
-  
+
   /// # Params
   /// * `value_name`: the name of the value so we know the king of quantity this map stores.
   fn to_fits<T: AsRef<str>, W: Write>(
@@ -359,23 +474,27 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
     mut writer: W,
     value_name: T,
   ) -> Result<(), FitsError> {
-    // Perpare the header
+    // Prepare the header
     let mut header_block = [b' '; 2880];
     let mut it = header_block.chunks_mut(80);
     it.next().unwrap()[0..30].copy_from_slice(b"SIMPLE  =                    T"); // Conform to FITS standard
     it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8"); // We work on bytes, i.e. 8 bits
     it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2"); // Number of data axis
-    write_uint_mandatory_keyword_record(
-      it.next().unwrap(),
-      b"NAXIS1  ",
-      Self::ZV_SIZE as u64,
-    ); // Len of data axis 1 = number of bytes in zuniq + in values
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", Self::ZV_SIZE as u64); // Len of data axis 1 = number of bytes in zuniq + in values
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.len() as u64); // Len of data axis 2 = n_hash(depth)+1
     it.next().unwrap()[0..30].copy_from_slice(b"EXTEND  =                    F"); // No extension allowed
     it.next().unwrap()[0..35].copy_from_slice(b"PRODTYPE= 'HEALPIX MULTI ORDER MAP'"); // Product type
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"HPXORDER", self.depth_max() as u64);
-    write_str_keyword_record(it.next().unwrap(), b"ZUNIQ_DT", Self::ZUniqHType::FITS_DATATYPE); 
-    write_str_keyword_record(it.next().unwrap(), b"VALUE_DT", Self::ValueType::FITS_DATATYPE);
+    write_str_keyword_record(
+      it.next().unwrap(),
+      b"ZUNIQ_DT",
+      Self::ZUniqHType::FITS_DATATYPE,
+    );
+    write_str_keyword_record(
+      it.next().unwrap(),
+      b"VALUE_DT",
+      Self::ValueType::FITS_DATATYPE,
+    );
     write_str_keyword_record(it.next().unwrap(), b"VAL_NAME", value_name.as_ref());
     it.next().unwrap()[0..20].copy_from_slice(b"DTENDIAN= 'LITTLE  '");
     write_keyword_record(
@@ -385,7 +504,7 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
         "'{}'",
         Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
       )
-        .as_str(),
+      .as_str(),
     );
     write_keyword_record(
       it.next().unwrap(),
@@ -395,7 +514,7 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION")
       )
-        .as_str(),
+      .as_str(),
     );
     it.next().unwrap()[0..3].copy_from_slice(b"END");
     // Do write the header
@@ -406,17 +525,22 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
       .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
   }
 
-  fn to_fits_bintable_file<P: AsRef<Path>, T: AsRef<str>>(&'a self, path: P, value_name: T) -> Result<(), FitsError> {
+  #[cfg(not(target_arch = "wasm32"))]
+  fn to_fits_bintable_file<P: AsRef<Path>, T: AsRef<str>>(
+    &'a self,
+    path: P,
+    value_name: T,
+  ) -> Result<(), FitsError> {
     File::create(path)
       .map_err(FitsError::Io)
       .and_then(|file| self.to_fits_bintable(BufWriter::new(file), value_name))
   }
-  
+
   /// Write the MOM in a bintable with 3 columns:
   /// * healpix order (depth)
   /// * healpix cell number (hash value)
   /// * the associated value
-  /// This is supposedly less efficient to work with (to be tested), and required extra space 
+  /// This is supposedly less efficient to work with (to be tested), and required extra space
   /// (`depth` coded on a `u8` instead of a sentinel bit in the cell number, useless ITS PRimary header
   /// of 2880 bytes), but has a broder compatibility since it can be read from a all tools supporting
   /// FITS BINTABLE reading.
@@ -429,10 +553,11 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
     write_primary_hdu(&mut writer)
       .and_then(|()| self.write_bintable_fits_header(&mut writer, value_colname))
       .and_then(|()| self.write_all_bintable_entries(&mut writer))
-      .and_then(|n_data_bytes|  write_final_padding(&mut writer, n_data_bytes))
+      .and_then(|n_data_bytes| write_final_padding(&mut writer, n_data_bytes))
   }
-  
-  fn write_bintable_fits_header<T: AsRef<str>, W: Write>(&'a self,
+
+  fn write_bintable_fits_header<T: AsRef<str>, W: Write>(
+    &'a self,
     mut writer: W,
     value_colname: T,
   ) -> Result<(), FitsError> {
@@ -443,45 +568,59 @@ pub trait WritableMom<'a>: Mom<'a> where <Self as Mom<'a>>::ValueType: SkyMapVal
     it.next().unwrap()[0..20].copy_from_slice(b"XTENSION= 'BINTABLE'");
     it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8");
     it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2");
-    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", (1 + Self::ZV_SIZE) as u64);
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", Self::ZV_SIZE as u64);
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.len() as u64);
     it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
     it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
-    it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    3");
-    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'ORDER   '");
-    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", u8::FITS_TFORM);
-    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE2  = 'IPIX    '");
-    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM2  ", Self::ZUniqHType::FITS_TFORM);
-    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE3  = 'VALUE   '");
-    write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM3  ", Self::ValueType::FITS_TFORM);
+    it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    2");
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'ZUNIQ   '");
+    write_str_mandatory_keyword_record(
+      it.next().unwrap(),
+      b"TFORM1  ",
+      Self::ZUniqHType::FITS_TFORM,
+    );
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE2  = 'VALUE   '");
+    write_str_mandatory_keyword_record(
+      it.next().unwrap(),
+      b"TFORM2  ",
+      Self::ValueType::FITS_TFORM,
+    );
     it.next().unwrap()[0..23].copy_from_slice(b"PRODTYPE= 'HEALPIX MOM'");
     it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
     it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"MAXORDER", self.depth_max() as u64);
     write_str_mandatory_keyword_record(it.next().unwrap(), b"VALNAME ", value_colname.as_ref());
-    it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
+    write_keyword_record(
+      it.next().unwrap(),
+      b"CREATOR ",
+      format!(
+        "'Rust crate {} {}'",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+      )
+      .as_str(),
+    );
     it.next().unwrap()[0..3].copy_from_slice(b"END");
     // Do write the header
     writer.write_all(&header_block[..]).map_err(FitsError::Io)
   }
 }
 /// Implement `WritableMom` for all `Mom` having a `ValueType` implementing `ToBytes`.
-impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType=V>> WritableMom<'a> for M {}
-
+impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'a> for M {}
 
 #[cfg(test)]
 mod tests {
-  use mapproj::pseudocyl::mol::Mol;
   use crate::nested::map::img::to_mom_png_file;
   use crate::nested::map::mom::LhsRhsBoth;
+  use mapproj::pseudocyl::mol::Mol;
 
   use super::{
-    Mom,
-    impls::zvec::MomVecImpl,
     super::{
       img::{ColorMapFunctionType, PosConversion},
       skymap::SkyMapEnum,
-    }
+    },
+    impls::zvec::MomVecImpl,
+    Mom,
   };
 
   #[test]
@@ -541,7 +680,7 @@ mod tests {
           "test/resources/skymap/mom_2mass.png",
           false,
         )
-          .unwrap();
+        .unwrap();
         to_mom_png_file::<'_, _, Mol, _>(
           &mom_gaia,
           (1600, 800),
@@ -554,9 +693,8 @@ mod tests {
           "test/resources/skymap/mom_gaia.png",
           false,
         )
-          .unwrap();
-        
-        
+        .unwrap();
+
         /*let split= |n: i32| {
           let n_div_4 = n >> 2;
           // Preserve the total value by possibly adding 1 to the 3 last cells
@@ -577,12 +715,10 @@ mod tests {
           let pdf_div_4 = pdf / 4.0;
           [pdf_div_4, pdf_div_4, pdf_div_4, pdf_div_4]
         };
-        let op = |lrb: LhsRhsBoth<f64>| {
-          match lrb {
-            LhsRhsBoth::Left(l) => Some(l),
-            LhsRhsBoth::Right(r) => Some(r),
-            LhsRhsBoth::Both(l, r) => Some(l - r),
-          }
+        let op = |lrb: LhsRhsBoth<f64>| match lrb {
+          LhsRhsBoth::Left(l) => Some(l),
+          LhsRhsBoth::Right(r) => Some(r),
+          LhsRhsBoth::Both(l, r) => Some(l - r),
         };
         let merge = |_depth: u8, _hash: u64, [v1, v2, v3, v4]: [f64; 4]| {
           let sum = v1 + v2 + v3 + v4;
@@ -605,9 +741,9 @@ mod tests {
           "test/resources/skymap/mreged_mom.png",
           false,
         )
-          .unwrap();
+        .unwrap();
       }
-      _ => assert!(false)
+      _ => assert!(false),
     }
   }
 }
