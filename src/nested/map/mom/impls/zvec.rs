@@ -7,6 +7,8 @@ use std::{
 
 use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
 
+use crate::nested::n_hash;
+
 use super::{
   super::{
     super::skymap::{SkyMap, SkyMapValue},
@@ -14,7 +16,6 @@ use super::{
   },
   bslice::{MomSliceImpl, V4FITS, Z4FITS},
 };
-use crate::nested::n_hash;
 
 /// Implementation of a MOM in an ordered vector of `(zuniq, values)` tuples.
 #[derive(Debug)]
@@ -644,11 +645,46 @@ where
   }
 }
 
+/*
+impl<Z, V> MomVecImpl<Z, V>
+  where
+    Z: ZUniqHashT,
+    V: SkyMapValue + Integer + FromPrimitive,
+{
+  pub fn to_dens_f32(&self, ) -> {
+
+  }
+
+  pub fn to_dens_f64() {
+
+  }
+}*/
+
 impl<Z, V> MomVecImpl<Z, V>
 where
   Z: ZUniqHashT,
   V: SkyMapValue + Float + FloatConst + FromPrimitive,
 {
+  pub fn from_counts_to_densities<'s, I, T>(count_mom: &'s T) -> Self
+  where
+    I: SkyMapValue + PrimInt,
+    T: Mom<'s, ZUniqHType = Z, ValueType = I> + 's,
+  {
+    const FOUR_PI: f64 = 4_f64 * std::f64::consts::PI;
+    let depth = count_mom.depth_max();
+    let entries: Vec<(Z, V)> = count_mom
+      .entries_copy()
+      .map(|(z, v)| {
+        (
+          z,
+          V::from_f64(v.to_f64().unwrap() / (FOUR_PI / (n_hash(Z::depth_from_zuniq(z))) as f64))
+            .unwrap(),
+        )
+      })
+      .collect();
+    MomVecImpl::new(depth, entries)
+  }
+
   /// Performs a `multiplication` (time) operation between both input MOMs and multiply each result
   /// cell by the given input constant.
   /// The quantities in both input `lhs` and `rhs` MOMs are assumed to be densities. So if a cell
@@ -663,18 +699,29 @@ where
   ///   (assuming a Poissonian distribution of sources in each cell).
   ///   Warning: due to border effects, cells in the MOM may be empty while the xmatch do contains
   ///   associations (take the weighted mean of neighbour cells in such a case?!).
-  pub fn lhs_time_rhs_time_cte_and_chi2merge_assuming_densities<'s, L, R, S, O, M>(
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  /// * Completeness = 90.0% =>  6.251
+  /// * Completeness = 95.0% =>  7.815
+  /// * Completeness = 97.5% =>  9.348
+  /// * Completeness = 99.0% => 11.345
+  /// * Completeness = 99.9% => 16.266
+  pub fn lhs_time_rhs_time_cte_and_chi2merge_assuming_densities<'s, L, R>(
     lhs: L,
     rhs: R,
     cte: V,
+    chi2_of_3dof_threshold: f64,
   ) -> Self
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
     R: Mom<'s, ZUniqHType = Z, ValueType = V>,
-    S: Fn(u8, Z, V) -> [V; 4],
-    O: Fn(LhsRhsBoth<V>) -> Option<V>,
-    M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
   {
+    let threshold = V::from_f64(chi2_of_3dof_threshold).unwrap();
+    let four = V::from_f64(4.0).unwrap();
+
     let split = |_depth: u8, _hash: Z, val: V| -> [V; 4] { [val; 4] };
     let op = |lrb: LhsRhsBoth<V>| -> Option<V> {
       match lrb {
@@ -696,7 +743,7 @@ where
       // V_e^{-1} = s * sum_{1=1}^4 1/mu_i
       // Applying Pineau et al. 2017:
       // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
-      let four = V::from_f64(4.0).unwrap();
+      // let four = V::from_f64(4.0).unwrap();
 
       let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shl(2)).unwrap() / V::PI();
 
@@ -719,7 +766,7 @@ where
       // 97.5% =>  9.348
       // 99.0% => 11.345
       // 99.9% => 16.266
-      if chi2_of_3dof < V::from_f64(16.266_f64).unwrap() {
+      if chi2_of_3dof < threshold {
         Ok(sum / four)
       } else {
         Err(values)

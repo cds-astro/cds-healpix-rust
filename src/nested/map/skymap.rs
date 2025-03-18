@@ -2,7 +2,7 @@ use std::{
   error::Error,
   f64::consts::PI,
   fs::File,
-  io::{BufRead, BufReader, BufWriter, Error as IoError, Read, Seek, Write},
+  io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Read, Seek, Write},
   iter::{Enumerate, Map},
   marker::PhantomData,
   ops::{Add, AddAssign, Deref, RangeInclusive},
@@ -13,7 +13,6 @@ use std::{
 
 use colorous::Gradient;
 use itertools::Itertools;
-use mapproj::CanonicalProjection;
 use num_traits::ToBytes;
 use rayon::{
   prelude::{
@@ -22,6 +21,8 @@ use rayon::{
   },
   ThreadPool,
 };
+
+use mapproj::CanonicalProjection;
 
 use crate::{
   n_hash,
@@ -328,7 +329,7 @@ impl SkyMapEnum {
           std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values)
         })))
       }
-      _ => Err(String::from("Unable to convert to coutn map.")),
+      _ => Err(String::from("Unable to convert to count map.")),
     }
   }
 
@@ -338,7 +339,28 @@ impl SkyMapEnum {
         skymap.depth,
         unsafe { std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values) },
       ))),
-      _ => Err(String::from("Unable to convert to coutn map.")),
+      _ => Err(String::from("Unable to convert to count map.")),
+    }
+  }
+
+  pub fn to_dens_map(self) -> Result<DensityMap, String> {
+    match self {
+      Self::ImplicitU64F64(skymap) => Ok(DensityMap(ImplicitSkyMapArray::new(
+        skymap.depth,
+        skymap.values,
+      ))),
+      _ => Err(String::from("Unable to convert to count map.")),
+    }
+  }
+
+  pub fn par_add(self, rhs: Self) -> Result<Self, FitsError> {
+    match (self, rhs) {
+      (Self::ImplicitU64I32(l), Self::ImplicitU64I32(r)) => Ok(Self::ImplicitU64I32(l.par_add(r))),
+      (Self::ImplicitU64F32(l), Self::ImplicitU64F32(r)) => Ok(Self::ImplicitU64F32(l.par_add(r))),
+      (Self::ImplicitU64F64(l), Self::ImplicitU64F64(r)) => Ok(Self::ImplicitU64F64(l.par_add(r))),
+      _ => Err(FitsError::Custom {
+        msg: format!("Skymap type not supported or not the same in 'add' operation"),
+      }),
     }
   }
 
@@ -553,6 +575,7 @@ impl CountMap {
     ))
   }
 
+  /// For custom thread pool, use `thread_pool.install(|| to_dens_map_par())`
   pub fn to_dens_map_par(&self) -> DensityMap {
     let depth = self.depth();
     let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
@@ -578,7 +601,17 @@ impl CountMap {
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
-  pub fn to_chi2_mom(&self) -> MomVecImpl<u64, f64> {
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  /// * Completeness = 90.0% =>  6.251
+  /// * Completeness = 95.0% =>  7.815
+  /// * Completeness = 97.5% =>  9.348
+  /// * Completeness = 99.0% => 11.345
+  /// * Completeness = 99.9% => 16.266
+  pub fn to_chi2_mom(&self, chi2_of_3dof_threshold: f64) -> MomVecImpl<u64, f64> {
     let chi2_merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
       // With Poisson distribution:
       // * mu_i = source density in cell i
@@ -609,7 +642,7 @@ impl CountMap {
       // 97.5% =>  9.348
       // 99.0% => 11.345
       // 99.9% => 16.266
-      if chi2_of_3dof < 16.266 {
+      if chi2_of_3dof < chi2_of_3dof_threshold {
         Some(*n0 + *n1 + *n2 + *n3)
       } else {
         None
@@ -731,9 +764,26 @@ impl CountMapU32 {
     Self(ImplicitSkyMapArray::new(depth, counts))
   }
 
-  /*pub fn from_csv_par() -> Result<Self, Box<dyn Error>> {
-
-  }*/
+  pub fn from_csv_stdin_par(
+    ilon: usize,
+    ilat: usize,
+    separator: Option<char>,
+    has_header: bool,
+    depth: u8,
+    chunk_size: usize,
+    thread_pool: &ThreadPool,
+  ) -> Result<Self, IoError> {
+    Self::from_csv_gen_par(
+      BufReader::new(stdin()),
+      ilon,
+      ilat,
+      separator,
+      has_header,
+      depth,
+      chunk_size,
+      thread_pool,
+    )
+  }
 
   pub fn from_csv_file_par<P: AsRef<Path>>(
     path: P,
@@ -745,7 +795,43 @@ impl CountMapU32 {
     chunk_size: usize,
     thread_pool: &ThreadPool,
   ) -> Result<Self, IoError> {
-    let mut it = BufReader::new(File::open(&path)?).lines().peekable();
+    /*let mut it = BufReader::new(File::open(&path)?).lines().peekable();
+    // Handle starting comments
+    while let Some(Ok(_)) = it.next_if(|res| {
+      res
+        .as_ref()
+        .map(|line| line.starts_with('#'))
+        .unwrap_or(false)
+    }) {}
+    // Handle header line
+    if has_header {
+      it.next().transpose()?;
+    }
+    // Ok, go!
+    Self::from_csv_it_par(it, ilon, ilat, separator, depth, chunk_size, thread_pool)*/
+    Self::from_csv_gen_par(
+      BufReader::new(File::open(&path)?),
+      ilon,
+      ilat,
+      separator,
+      has_header,
+      depth,
+      chunk_size,
+      thread_pool,
+    )
+  }
+
+  pub fn from_csv_gen_par<R: BufRead + Send>(
+    bufr: R,
+    ilon: usize,
+    ilat: usize,
+    separator: Option<char>,
+    has_header: bool,
+    depth: u8,
+    chunk_size: usize,
+    thread_pool: &ThreadPool,
+  ) -> Result<Self, IoError> {
+    let mut it = bufr.lines().peekable();
     // Handle starting comments
     while let Some(Ok(_)) = it.next_if(|res| {
       res
@@ -764,8 +850,8 @@ impl CountMapU32 {
   /// Compute the count map from an iterator iterating on raw CSV rows.
   /// # Params
   /// * `it` the iterator an rows
-  /// * `ilon` index of the column containing the longitude
-  /// * `ilat` index of the column containing the latitude
+  /// * `ilon` index of the column containing the longitude, starting at 0
+  /// * `ilat` index of the column containing the latitude, starting at 0
   /// * `separator` file separator (',' if None)
   /// * `depth` HEALPix depth (or order) of the map
   /// * `chunk_size` number of rows to be processed in parallel (the memory will hold twice this number
@@ -872,14 +958,14 @@ impl CountMapU32 {
 
   pub fn to_dens_map(&self) -> DensityMap {
     let depth = self.depth();
-    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
     DensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
         .values
         .iter()
-        .map(|count| *count as f64 * on_over_area)
+        .map(|count| *count as f64 * one_over_area)
         .collect::<Vec<f64>>()
         .into_boxed_slice(),
     ))
@@ -887,20 +973,30 @@ impl CountMapU32 {
 
   pub fn to_dens_map_par(&self) -> DensityMap {
     let depth = self.depth();
-    let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
+    let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
     DensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
         .values
         .par_iter()
-        .map(|count| *count as f64 * on_over_area)
+        .map(|count| *count as f64 * one_over_area)
         .collect::<Vec<f64>>()
         .into_boxed_slice(),
     ))
   }
 
-  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, u32> {
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  /// * Completeness = 90.0% =>  6.251
+  /// * Completeness = 95.0% =>  7.815
+  /// * Completeness = 97.5% =>  9.348
+  /// * Completeness = 99.0% => 11.345
+  /// * Completeness = 99.9% => 16.266
+  pub fn to_chi2_mom(&self, chi2_of_3dof_threshold: f64) -> MomVecImpl<u32, u32> {
     let chi2_merger = |_depth: u8, _hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
       // With Poisson distribution:
       // * mu_i = source density in cell i
@@ -931,7 +1027,7 @@ impl CountMapU32 {
       // 97.5% =>  9.348
       // 99.0% => 11.345
       // 99.9% => 16.266
-      if chi2_of_3dof < 16.266 {
+      if chi2_of_3dof < chi2_of_3dof_threshold {
         Some(*n0 + *n1 + *n2 + *n3)
       } else {
         None
@@ -1036,7 +1132,17 @@ impl DensityMap {
     Self(ImplicitSkyMapArray::new(depth, densities))
   }
 
-  pub fn to_chi2_mom(&self) -> MomVecImpl<u32, f64> {
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  /// * Completeness = 90.0% =>  6.251
+  /// * Completeness = 95.0% =>  7.815
+  /// * Completeness = 97.5% =>  9.348
+  /// * Completeness = 99.0% => 11.345
+  /// * Completeness = 99.9% => 16.266
+  pub fn to_chi2_mom(&self, chi2_of_3dof_threshold: f64) -> MomVecImpl<u32, f64> {
     let chi2_merger = |depth: u8, _hash: u32, [n0, n1, n2, n3]: [&f64; 4]| -> Option<f64> {
       // With Poisson distribution:
       // * s_i = Surface of cell i = s (all cell have the same surface at a given depth)
@@ -1070,7 +1176,7 @@ impl DensityMap {
       // 97.5% =>  9.348
       // 99.0% => 11.345
       // 99.9% => 16.266
-      if chi2_of_3dof < 16.266 {
+      if chi2_of_3dof < chi2_of_3dof_threshold {
         Some(0.25 * sum)
       } else {
         None
@@ -1094,16 +1200,6 @@ impl DensityMap {
 
 #[cfg(test)]
 mod tests {
-  use std::{fs::read_to_string, time::SystemTime};
-
-  use log::debug;
-
-  use mapproj::pseudocyl::mol::Mol;
-
-  use crate::nested::map::{
-    img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
-    skymap::{CountMap, CountMapU32, DensityMap},
-  };
 
   fn init_logger() {
     let log_level = log::LevelFilter::max();
@@ -1122,6 +1218,14 @@ mod tests {
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
   fn test_xmm_slew_dens() {
+    use std::{fs::read_to_string, time::SystemTime};
+    use log::debug;
+    use mapproj::pseudocyl::mol::Mol;
+    use crate::nested::map::{
+      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
+      skymap::{CountMap, CountMapU32, DensityMap},
+    };
+
     let path = "local_resources/xmmsl3_241122_posonly.csv";
     let content = read_to_string(path).unwrap();
     let img_size = (1366, 768);
@@ -1170,6 +1274,14 @@ mod tests {
   #[test]
   #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
   fn test_xmm_slew_count() {
+    use std::{fs::read_to_string, time::SystemTime};
+    use log::debug;
+    use mapproj::pseudocyl::mol::Mol;
+    use crate::nested::map::{
+      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
+      skymap::{CountMap, CountMapU32, DensityMap},
+    };
+
     let path = "local_resources/xmmsl3_241122_posonly.csv";
     let content = read_to_string(path).unwrap();
     let img_size = (1366, 768);
@@ -1219,6 +1331,14 @@ mod tests {
   #[test]
   #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
   fn test_countmap_par() {
+    use std::{fs::read_to_string, time::SystemTime};
+    use log::debug;
+    use mapproj::pseudocyl::mol::Mol;
+    use crate::nested::map::{
+      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
+      skymap::{CountMap, CountMapU32, DensityMap},
+    };
+
     let n_threads = Some(4);
     let path = "./local_resources/input11.csv"; // 3.5 GB file, depth=4 chunk_size=2M => total time = 8.57 s, i.e 400 MB/s
     let depth = 6; // Test also with 10

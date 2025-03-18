@@ -1067,7 +1067,7 @@ pub fn hpx_external_sort_csv_stdin_gen<W: Write, P: AsRef<Path>>(
   // Handle header line
   if has_header {
     if let Some(header) = line_res_it.next().transpose()? {
-      writer.write_all(header.as_bytes())?;
+      write!(&mut writer, "{}\n", header)?;
     }
   }
   // Get the sorted iterator
@@ -1221,7 +1221,7 @@ pub fn hpx_external_sort_csv_file_gen<IN: AsRef<Path>, W: Write, P: AsRef<Path>>
   // Handle header line
   if has_header {
     if let Some(header) = line_res_it.next().transpose()? {
-      writer.write_all(header.as_bytes())?;
+      write!(&mut writer, "{}\n", header)?;
     }
   }
   let sort_params = sort_params.unwrap_or_default();
@@ -1313,12 +1313,16 @@ pub fn get_hpx(
   move |line: &String| {
     let mut field_it = line.as_str().split(separator);
     let coos = [
-      field_it
-        .nth(index_first_col)
-        .and_then(|s| s.parse::<f64>().ok()),
-      field_it
-        .nth(offset_to_second_col)
-        .and_then(|s| s.parse::<f64>().ok()),
+      field_it.nth(index_first_col).and_then(|s| {
+        s.parse::<f64>()
+          .map_err(|e| error!("Error parsing 1st coo: '{}': {:?}", s, e))
+          .ok()
+      }),
+      field_it.nth(offset_to_second_col).and_then(|s| {
+        s.parse::<f64>()
+          .map_err(|e| error!("Error parsing 2nd coo: '{}': {:?}", s, e))
+          .ok()
+      }),
     ];
     match (coos[ilon], coos[ilat]) {
       (Some(lon), Some(lat)) => layer.hash(lon.to_radians(), lat.to_radians()),
@@ -1351,19 +1355,23 @@ pub fn get_hpx_opt(
   move |line: &String| {
     let mut field_it = line.as_str().split(separator);
     let coos = [
-      field_it
-        .nth(index_first_col)
-        .and_then(|s| s.parse::<f64>().ok()),
-      field_it
-        .nth(offset_to_second_col)
-        .and_then(|s| s.parse::<f64>().ok()),
+      field_it.nth(index_first_col).and_then(|s| {
+        s.parse::<f64>()
+          .map_err(|e| error!("Error parsing 1st coo: '{}': {:?}", s, e))
+          .ok()
+      }),
+      field_it.nth(offset_to_second_col).and_then(|s| {
+        s.parse::<f64>()
+          .map_err(|e| error!("Error parsing 2nd coo: '{}': {:?}", s, e))
+          .ok()
+      }),
     ];
     match (coos[ilon], coos[ilat]) {
       (Some(lon), Some(lat)) => Some(layer.hash(lon.to_radians(), lat.to_radians())),
       _ => {
         error!(
-          "Error parsing coordinates at line: {}. Hash set to 0.",
-          line
+          "Error parsing coordinates at line: {}. Lon: {:?}. Lat: {:?}. Hash set to 0.",
+          line, coos[ilon], coos[ilat]
         );
         None
       }

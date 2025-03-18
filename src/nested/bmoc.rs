@@ -4,15 +4,40 @@
 //! So far, all BMOC logical operations (not, and, or, xor) are made from the BMOC representation.
 //! It is probably simpler and faster to work on ranges (but we have to handle the flag).
 
-use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
-
 use std::{
   cmp::{max, Ordering},
+  fs::File,
+  io::{BufRead, BufReader, Error as IoError, Write},
+  path::Path,
   slice::Iter,
+  str,
+  time::SystemTime,
   vec::IntoIter,
 };
 
-use super::{super::nside_square_unsafe, hash, to_range};
+use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use chrono::{DateTime, SecondsFormat, Utc};
+use log::debug;
+
+use crate::{
+  nested::{
+    hash,
+    map::fits::{
+      error::FitsError,
+      read::{
+        check_keyword_and_parse_uint_val, check_keyword_and_str_val, check_keyword_and_val,
+        get_str_val_no_quote, next_36_chunks_of_80_bytes, parse_uint_val,
+      },
+      write::{
+        write_final_padding_ioerr, write_keyword_record, write_primary_hdu_ioerr,
+        write_str_keyword_record, write_uint_mandatory_keyword_record,
+      },
+    },
+    to_range,
+  },
+  nside_square_unsafe,
+};
 
 /// A very basic and simple BMOC Builder: we push elements in it assuming that we provide them
 /// in the write order, without duplicates and small cells included in larger cells.
@@ -1386,6 +1411,261 @@ impl BMOC {
     }
     b.to_compressed_moc()
   }
+
+  /// FITS serialization aiming at been the most efficient (in space and read speed) and made first
+  /// of all for internal usage.
+  pub fn to_fits<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
+    self
+      .write_fits_header(&mut writer)
+      .and_then(|()| self.write_fits_data(&mut writer))
+      .and_then(|n_bytes_written| write_final_padding_ioerr(writer, n_bytes_written))
+  }
+
+  fn write_fits_header<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
+    // Prepare the header
+    let mut header_block = [b' '; 2880];
+    let mut it = header_block.chunks_mut(80);
+    it.next().unwrap()[0..30].copy_from_slice(b"SIMPLE  =                    T"); // Conform to FITS standard
+    it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8"); // We work on bytes, i.e. 8 bits
+    it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2"); // Number of data axis
+    if self.depth_max <= 13 {
+      // Number of bytes in a u32 value
+      it.next().unwrap()[0..30].copy_from_slice(b"NAXIS1  =                    4");
+    } else {
+      // Number of bytes in a u64 value
+      it.next().unwrap()[0..30].copy_from_slice(b"NAXIS1  =                    8");
+    }
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.entries.len() as u64); // Len of data axis 2 = n_hash(depth)+1
+    it.next().unwrap()[0..30].copy_from_slice(b"EXTEND  =                    F"); // No extension allowed
+    it.next().unwrap()[0..35].copy_from_slice(b"PRODTYPE= 'BMOC'"); // Product type
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"HPXORDER", self.depth_max as u64);
+    write_str_keyword_record(it.next().unwrap(), b"VAL_NAME", "FLAGGED_ZUNIQ");
+    it.next().unwrap()[0..20].copy_from_slice(b"DTENDIAN= 'LITTLE  '");
+    write_keyword_record(
+      it.next().unwrap(),
+      b"DATE    ",
+      format!(
+        "'{}'",
+        Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+      )
+      .as_str(),
+    );
+    write_keyword_record(
+      it.next().unwrap(),
+      b"CREATOR ",
+      format!(
+        "'Rust crate {} {}'",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+      )
+      .as_str(),
+    );
+    it.next().unwrap()[0..3].copy_from_slice(b"END");
+    // Do write the header
+    writer.write_all(&header_block[..])
+  }
+  /// Returns the number of bytes written.
+  fn write_fits_data<W: Write>(&self, mut writer: W) -> Result<usize, IoError> {
+    let elem_byte_size = if self.depth_max <= 13 {
+      for fzuniq in &self.entries {
+        writer.write_all(((*fzuniq) as u32).to_le_bytes().as_ref())?;
+      }
+      size_of::<u32>()
+    } else {
+      for fzuniq in &self.entries {
+        writer.write_all(fzuniq.to_le_bytes().as_ref())?;
+      }
+      size_of::<u64>()
+    };
+    Ok(self.entries.len() * elem_byte_size)
+  }
+
+  pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
+    File::open(path)
+      .map_err(FitsError::Io)
+      .and_then(|file| Self::from_fits(BufReader::new(file)))
+  }
+
+  pub fn from_fits<R: BufRead>(mut reader: R) -> Result<Self, FitsError> {
+    let mut raw_header = [b' '; 2880];
+    // Parse header
+    let mut raw_cards_it = next_36_chunks_of_80_bytes(&mut reader, &mut raw_header)?;
+    // Parse mandatory, well ordered keywords
+    let (zuniq_n_bytes, n_rows) =
+      check_keyword_and_val(raw_cards_it.next().unwrap(), b"SIMPLE ", b"T")
+        .and_then(|()| check_keyword_and_val(raw_cards_it.next().unwrap(), b"BITPIX ", b"8"))
+        .and_then(|()| check_keyword_and_val(raw_cards_it.next().unwrap(), b"NAXIS  ", b"2"))
+        .and_then(|()| {
+          check_keyword_and_parse_uint_val::<u64>(raw_cards_it.next().unwrap(), b"NAXIS1  ")
+        })
+        .and_then(|n_bytes| {
+          check_keyword_and_parse_uint_val::<u64>(raw_cards_it.next().unwrap(), b"NAXIS2  ")
+            .map(move |n_rows| (n_bytes, n_rows))
+        })?;
+    // Parse other keywords
+    let mut end_found = false;
+    let mut prodtype_found = false;
+    let mut dtendian_found = false;
+    let mut hpxoder: Option<u8> = None;
+    let mut date: Option<SystemTime> = None;
+    for kw_record in &mut raw_cards_it {
+      match &kw_record[0..8] {
+        b"EXTEND  " => check_keyword_and_val(kw_record, b"EXTEND  ", b"F"),
+        b"PRODTYPE" => {
+          check_keyword_and_str_val(kw_record, b"PRODTYPE", b"BMOC").map(|()| prodtype_found = true)
+        }
+        b"HPXORDER" => parse_uint_val::<u8>(kw_record).map(|v| hpxoder = Some(v)),
+        b"DTENDIAN" => check_keyword_and_str_val(kw_record, b"DTENDIAN", b"LITTLE")
+          .map(|()| dtendian_found = true),
+        b"DATE    " => get_str_val_no_quote(kw_record).map(|v| {
+          date = unsafe { str::from_utf8_unchecked(v) }
+            .parse::<DateTime<Utc>>()
+            .ok()
+            .map(|dt| dt.into())
+        }),
+        b"CREATOR " => continue,
+        b"END     " => {
+          end_found = true;
+          break;
+        }
+        _ => {
+          debug!("Ignored FITS card: {}", unsafe {
+            str::from_utf8_unchecked(kw_record)
+          });
+          continue;
+        }
+      }?;
+    }
+    // Check keywords
+    if !end_found {
+      return Err(FitsError::new_custom(String::from(
+        "'END' keyword not found in the first 36 primary header cards.",
+      )));
+    }
+    if !(prodtype_found & dtendian_found) {
+      return Err(FitsError::new_custom(String::from(
+        "One of the BMOC mandatory cards is missing in the FITS header!",
+      )));
+    }
+    let depth = hpxoder.ok_or_else(|| {
+      FitsError::new_custom(String::from(
+        "'HPXORDER' keyword not found in the primary header cards.",
+      ))
+    })?;
+    match zuniq_n_bytes {
+      4 => (0..n_rows)
+        .into_iter()
+        .map(|_| reader.read_u32::<BigEndian>().map(|v| v as u64))
+        .collect::<Result<Vec<u64>, IoError>>()
+        .map_err(FitsError::Io),
+      8 => {
+        // We could have mmapped the data to handle large BMOCs... let's do it another day
+        // (or make an iterator and perform operation from iterators, like in MOCs...).
+        (0..n_rows)
+          .into_iter()
+          .map(|_| reader.read_u64::<BigEndian>())
+          .collect::<Result<Vec<u64>, IoError>>()
+          .map_err(FitsError::Io)
+      }
+      _ => Err(FitsError::new_custom(format!(
+        "Wrong 'NAXIS1'. Expected: 4 or 8. Actual: {}",
+        zuniq_n_bytes
+      ))),
+    }
+    .map(|entries| BMOC::create_unsafe(depth, entries.into_boxed_slice()))
+  }
+
+  /// FITS serialization aiming at been more inter-operable than its alternative.
+  /// # Remark about generalization
+  /// * could be the same as a ZUNIQ MOC with a extra boolean column
+  /// * MOM could be the same with either:
+  ///     + any primitive type column
+  ///     + a column of pointer pointing to the FITS HEAP for variable size content (e.g CSV, gzipped CSV, VOTable, ...)
+  /// * Very similar to EXPLICIT skymaps by at various orders?!!
+  pub fn to_bintable_fits<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
+    self
+      .write_bintable_fits_header(&mut writer)
+      .and_then(|()| self.write_bintable_fits_data(&mut writer))
+      .and_then(|n_bytes_written| write_final_padding_ioerr(writer, n_bytes_written))
+  }
+  fn write_bintable_fits_header<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
+    write_primary_hdu_ioerr(&mut writer)?;
+    let mut header_block = [b' '; 2880];
+    let mut it = header_block.chunks_mut(80);
+    // Write BINTABLE specific keywords in the buffer
+    it.next().unwrap()[0..20].copy_from_slice(b"XTENSION= 'BINTABLE'");
+    it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8");
+    it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2");
+    it.next().unwrap()[0..30].copy_from_slice(b"NAXIS1  =                    9"); // 8 bytes for u64 + 1 byte for boolean
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.entries.len() as u64);
+    it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
+    it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
+    it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    2");
+    it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'ZUNIQ   '");
+    it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'K       '");
+    it.next().unwrap()[0..25].copy_from_slice(b"TTYPE2  = 'FULLY_COVERED'");
+    it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'L       '");
+    it.next().unwrap()[0..23].copy_from_slice(b"PRODTYPE= 'BMOC'");
+    it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
+    it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"MAXORDER", self.depth_max as u64);
+    write_keyword_record(
+      it.next().unwrap(),
+      b"DATE    ",
+      format!(
+        "'{}'",
+        Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+      )
+      .as_str(),
+    );
+    write_keyword_record(
+      it.next().unwrap(),
+      b"CREATOR ",
+      format!(
+        "'Rust crate {} {}'",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+      )
+      .as_str(),
+    );
+    it.next().unwrap()[0..3].copy_from_slice(b"END");
+    // Do write the header
+    writer.write_all(&header_block[..])
+  }
+  /// Returns the number of bytes written.
+  fn write_bintable_fits_data<W: Write>(&self, mut writer: W) -> Result<usize, IoError> {
+    let mut n = 0_usize;
+    for fzuniq in self.entries.iter().cloned() {
+      let is_full = fzuniq as u8 & 1_u8;
+      let zuniq = fzuniq >> 1;
+      writer
+        .write_all(zuniq.to_le_bytes().as_ref())
+        .and_then(|()| writer.write_u8(is_full))?;
+      n += 1;
+    }
+    Ok(n * (size_of::<u64>() + size_of::<u8>()))
+  }
+
+  pub fn to_csv<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
+    write!(
+      &mut writer,
+      "# BMOC order max: {}; File sorted by ZUNIQ(order, ipix).\n",
+      self.depth_max
+    )?;
+    write!(&mut writer, "order,ipix,is_fully_covered_flag\n")?;
+    for fzuniq in self.entries.iter().cloned() {
+      let is_full = fzuniq as u8 & 1_u8;
+      let zuniq = fzuniq >> 1; // Remove flag bit
+      let n_trailing_zero = zuniq.trailing_zeros(); // must be even
+      let hash = zuniq >> (1 | n_trailing_zero); // remove trailing zero plus sentinel bit
+      let depth = self.depth_max - (n_trailing_zero as u8 >> 1);
+      write!(&mut writer, "{},{},{}\n", depth, hash, is_full)?;
+    }
+    Ok(())
+  }
+
+  // to_json
+  // to_ascii => pack by depth and Full/Partial ?
 }
 
 #[inline]

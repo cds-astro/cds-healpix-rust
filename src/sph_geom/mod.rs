@@ -4,7 +4,7 @@
 pub(super) mod cone;
 pub mod coo3d; // made public for polygon query et webasembly
 pub(super) mod elliptical_cone;
-pub(super) mod frame;
+pub mod frame;
 pub(super) mod proj;
 pub(super) mod zone;
 
