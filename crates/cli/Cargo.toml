@@ -1,0 +1,36 @@
+[package]
+name = "hpx-cli"
+version = "0.1.1"
+authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
+description = "Command-line tool to play with HEALPix"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+categories = ["command-line-utilities", "science", "data-structures", "algorithms"]
+keywords = ["healpix", "skymap"]
+documentation = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
+homepage = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
+repository = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
+edition = "2021"
+
+[[bin]]
+path = "src/main.rs"
+name = "hpx"
+bench = false
+test = false
+
+[dependencies]
+hpxlib = { package = "cdshealpix", path = "../.." }
+log = { workspace = true }
+rayon = { workspace = true }
+mapproj = { workspace = true }
+memmap2 = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+env_logger = "0.11"
+# For STC-S
+stc-s = "0.1"
+nom = "7.1.3"
+thiserror = "1.0"
+
+
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1.43"
