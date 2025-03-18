@@ -25,7 +25,6 @@ use std::{
   ptr::slice_from_raw_parts,
   str,
   time::SystemTime,
-  u32,
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -213,17 +212,17 @@ pub trait HCIndex {
   /// Regular softwares will thus not load "wrong" integer values but array of bytes, and
   /// cumulative-index-aware softwares (recognizing so from FITS cards) will know how to interpret
   /// those arrays.
-  ///  * if `NAXIS1=4`, the stored type may be either a `u32` or a `f32`, in little-endian.
-  ///  * if `NAXIS1=8`, the stored type may be either a `u64` or a `f64`, in little-endian.
-  /// Here the list of card htat must appear, in this order:
+  /// * if `NAXIS1=4`, the stored type may be either a `u32` or a `f32`, in little-endian.
+  /// * if `NAXIS1=8`, the stored type may be either a `u64` or a `f64`, in little-endian.
+  ///   Here the list of card htat must appear, in this order:
   /// * `PRODTYPE`, mandatory: **must** equal `HEALPIX CUMUL INDEX`
   /// * `ORDERING`, mandatory: **must** equal `NESTED`
   /// * `INDXSCHM`, mandatory: so far only `IMPLICIT` is supported. An `EXPLICIT` would rely on
-  ///               an ordered ZINDEX followed by the CVALUE.
+  ///   an ordered ZINDEX followed by the CVALUE.
   /// * `INDXCOV`, mandatory if `INDXSCHM = IMPLICIT`: so far only `FULLSKY` is supported, but we
-  ///              may support `PARTIAL` with 2 additional FITS cards providing the starting and ending HEALPix indices.
-  ///              It may be usefull, e.g. to index a file containing data located in a given (large) HEALPix cell,
-  ///              e.g. individual HATS parquet files.
+  ///   may support `PARTIAL` with 2 additional FITS cards providing the starting and ending HEALPix indices.
+  ///   It may be usefull, e.g. to index a file containing data located in a given (large) HEALPix cell,
+  ///   e.g. individual HATS parquet files.
   /// * `HPXORDER`, mandatory: provide the depth (order) of the cumulative MAP.
   /// * `DATATYPE`, mandatory: **must** be one of `u32`, `u64`, `f32`, `f64`.
   /// * `DTENDIAN`, mandatory: **must** equal `LITTLE`, made to provide information so human readers can understand/guess the data structure.
@@ -233,6 +232,7 @@ pub trait HCIndex {
   /// * `IDXF_LMD`, optional: last modification date of the indexed file if the HCI is a file row index.
   /// * `IDXC_LON`, optional: name, in the indexed file, of the column containing the longitudes used to compute HEALPix index.
   /// * `IDXC_LAT`, optional: name, in the indexed file, of the column containing the latitudes used to compute HEALPix index.
+  #[allow(clippy::too_many_arguments)]
   fn to_fits<W: Write>(
     &self,
     mut writer: W,
@@ -244,7 +244,7 @@ pub trait HCIndex {
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
     let indexed_file_last_modif_date =
-      indexed_file_last_modif_date.map(|st| DateTime::<Utc>::from(st));
+      indexed_file_last_modif_date.map(DateTime::<Utc>::from);
     let n_values = n_hash(self.depth()) + 1;
     // Perpare the header
     let mut header_block = [b' '; 2880];
@@ -325,6 +325,7 @@ pub trait HCIndex {
       .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn to_fits_file<P: AsRef<Path>>(
     &self,
     path: P,
@@ -405,7 +406,7 @@ pub struct BorrowedCIndex<'a, T: HCIndexValue> {
   depth: u8,
   values: &'a [T],
 }
-impl<'a, T: HCIndexValue> HCIndex for BorrowedCIndex<'a, T> {
+impl<T: HCIndexValue> HCIndex for BorrowedCIndex<'_, T> {
   type V = T;
   fn depth(&self) -> u8 {
     self.depth
@@ -434,7 +435,7 @@ fn write_all_values<T: HCIndexValue, W: Write>(
   values: &[T],
   mut writer: W,
 ) -> Result<usize, IoError> {
-  let len = values.len() * size_of::<T>();
+  let len = size_of_val(values);
   let ptr = values.as_ptr();
   let offset = ptr.align_offset(align_of::<u8>());
   // I suppose that align with u8 is never a problem, but we test the assumption just in case...
@@ -585,7 +586,7 @@ impl FITSCIndex {
         .map(&file)
         .map_err(FitsError::Io)?
     };
-    match datatype.as_ref().map(|v| v.as_str()) {
+    match datatype.as_deref() {
       Some(u32::FITS_DATATYPE) => Ok(FITSCIndex::U32(FitsMMappedCIndex::new(
         date,
         indexed_file_name,
@@ -659,6 +660,7 @@ pub struct FitsMMappedCIndex<T: HCIndexValue> {
 }
 impl<T: HCIndexValue> FitsMMappedCIndex<T> {
   /// Private, only meant to be called from FITS reader.
+  #[allow(clippy::too_many_arguments)]
   fn new(
     fits_creation_date: Option<SystemTime>,
     indexed_file_name: Option<String>,
@@ -695,7 +697,7 @@ impl<T: HCIndexValue> FitsMMappedCIndex<T> {
     self.indexed_file_name.as_ref()
   }
   pub fn get_indexed_file_len(&self) -> Option<u64> {
-    self.indexed_file_len.clone()
+    self.indexed_file_len
   }
   pub fn get_indexed_file_md5(&self) -> Option<&String> {
     self.indexed_file_md5.as_ref()
@@ -734,7 +736,7 @@ mod tests {
     let path = "cindex.fits";
     let depth = 10;
     let n = n_hash(depth);
-    let values: Vec<u32> = (0..=n as u32).into_iter().collect();
+    let values: Vec<u32> = (0..=n as u32).collect();
     let cindex = OwnedCIndex::new_unchecked(depth, values.into_boxed_slice());
     let mut indexex_file_md5 = [0_u8; 32];
     indexex_file_md5.copy_from_slice("0123456789ABCDEF0123456789ABCDEF".as_bytes());
@@ -784,11 +786,11 @@ mod tests {
       }
       Ok(a) => {
         println!("{:?}", &a);
-        assert!(false)
+        panic!()
       }
       Err(e) => {
         println!("Err: {:?}", &e);
-        assert!(false)
+        panic!()
       }
     }
   }

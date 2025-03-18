@@ -95,6 +95,7 @@ impl Zone {
   /// * if the small circle does not cross the primary meridian, the input must satisfy `lon_left` < `lon_right`
   /// * else (if `lon_left` > `lon_right`), we consider that the small circle crosses the primary meridian.
   // We already consider case with a vertex inside
+  #[allow(clippy::collapsible_else_if)]
   pub fn crossed_horizontally(&self, lon_left: f64, lon_right: f64, lat: f64) -> bool {
     let small_arc_circle_crosses_prim_meridian = lon_right < lon_left;
     let is_lat_compatible = (self.lat_min..self.lat_max).contains(&lat);

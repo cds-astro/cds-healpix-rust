@@ -843,7 +843,7 @@ mod tests {
         )
         .unwrap();
       }
-      _ => assert!(false),
+      _ => panic!(),
     }
   }
 
@@ -922,7 +922,7 @@ mod tests {
         )
         .unwrap();
       }
-      _ => assert!(false),
+      _ => panic!(),
     }
   }
 }

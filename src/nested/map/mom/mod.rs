@@ -164,6 +164,7 @@ pub enum LhsRhsBoth<V> {
 /// This last property allow for streaming processing and operations.
 /// In practice, we use the `zuniq` index: it encodes both the depth and the cell hash value
 /// and is built in such a way that the natural order follow the z-order curve order.  
+#[allow(clippy::len_without_is_empty, clippy::type_complexity)]
 pub trait Mom<'a>: Sized {
   /// Byte size, in memory, of the zuniq type.
   const Z_SIZE: usize = size_of::<Self::ZUniqHType>();
@@ -335,16 +336,16 @@ pub trait Mom<'a>: Sized {
   /// * `lhs`: the Left Hand Side MOM
   /// * `rhs`: the right Hand side MOM
   /// * `split`: the operator splitting a lhs or rhs cell into its four direct siblings
-  ///     + the depth and hash value of the parent cell are provided in input.
-  ///     + together with the value of the cell to be split
+  ///   + the depth and hash value of the parent cell are provided in input.
+  ///   + together with the value of the cell to be split
   /// * `op`: merge/mixe/join the values of a same cell from both input MOMs (or decide what to do
-  ///         when one of the MOM cell has a value and the other does not).
-  ///     + it allows for various types of JOIN (inner, left, right, full).
+  ///   when one of the MOM cell has a value and the other does not).
+  ///   + it allows for various types of JOIN (inner, left, right, full).
   /// * `merge`: possibly performs a post-merge operation, considering the (four) siblings of the join operation.
-  ///     + the depth and hash value of the parent cell (if cells are merged) are provided in input,
-  ///     + together with the 4 values to be possibly merged in the parent cell.
-  ///     + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if
-  ///       the merge does not occurs.
+  ///   + the depth and hash value of the parent cell (if cells are merged) are provided in input,
+  ///   + together with the 4 values to be possibly merged in the parent cell.
+  ///   + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if 
+  ///     the merge does not occurs.
   /// * `L`: type of the left MOM
   /// * `R`: type of the right MOM
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
@@ -540,7 +541,8 @@ where
   /// * healpix order (depth)
   /// * healpix cell number (hash value)
   /// * the associated value
-  /// This is supposedly less efficient to work with (to be tested), and required extra space
+  /// 
+  /// This is supposedly less efficient to work with (to be tested), and required extra space 
   /// (`depth` coded on a `u8` instead of a sentinel bit in the cell number, useless ITS PRimary header
   /// of 2880 bytes), but has a broder compatibility since it can be read from a all tools supporting
   /// FITS BINTABLE reading.
@@ -743,7 +745,7 @@ mod tests {
         )
         .unwrap();
       }
-      _ => assert!(false),
+      _ => panic!()
     }
   }
 }

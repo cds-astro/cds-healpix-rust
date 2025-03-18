@@ -512,7 +512,7 @@ mod tests {
 
     let m33 = M3x3::from_zyz_euler_intrinsic(z1, y2, z3);
     println!("{:?}", m33);
-    println!("");
+    println!();
     let mz1 = M3x3::from_rotz(z1);
     let my2 = M3x3::from_roty(y2);
     let mz3 = M3x3::from_rotz(z3);
@@ -544,16 +544,16 @@ mod tests {
     let y2 = 62.87175_f64.to_radians(); // (90_f64 - (27.0 + 7.0 / 60.0 + 41.704/3600.0)).to_radians(); = 62.87175
     let z3 = 57.06808_f64.to_radians(); // 90.0 - 32.93192
 
-    println!("");
+    println!();
     println!("{:?}", z1.sin_cos());
     println!("{:?}", y2.sin_cos());
     println!("{:?}", z3.sin_cos());
-    println!("");
+    println!();
     println!("{}", z1.cos() * y2.cos() * z3.cos() - z1.sin() * z3.sin());
 
     let m33 = M3x3::from_zyz_euler_intrinsic(z1, y2, z3);
     println!("{:?}", m33);
-    println!("");
+    println!();
     let mz1 = M3x3::from_rotz(z1);
     let my2 = M3x3::from_roty(y2);
     let mz3 = M3x3::from_rotz(z3);

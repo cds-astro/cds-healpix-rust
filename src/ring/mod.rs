@@ -155,8 +155,8 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
 /// # Inputs
 /// - `nside`: the NSIDE of the RING scheme
 /// - `lon`: longitude in radians, support reasonably large positive and negative values
-///          producing accurate results with a naive range reduction like modulo 2*pi
-///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+///   producing accurate results with a naive range reduction like modulo 2*pi
+///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
 /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
 /// # Output
 /// - the cell number (hash value) associated with the given position on the unit sphere,
@@ -208,8 +208,8 @@ pub fn hash(nside: u32, lon: f64, lat: f64) -> u64 {
 /// # Inputs
 /// - `nside`: the NSIDE of the RING scheme
 /// - `lon`: longitude in radians, support reasonably large positive and negative values
-///          producing accurate results with a naive range reduction like modulo 2*pi
-///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+///   producing accurate results with a naive range reduction like modulo 2*pi
+///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
 /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
 /// # Output
 /// - the cell number (hash value) associated with the given position on the unit sphere,

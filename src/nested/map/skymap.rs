@@ -97,6 +97,7 @@ impl SkyMapValue for f64 {
 //
 // And implement SkyMap on it.
 
+#[allow(clippy::len_without_is_empty)]
 pub trait SkyMap<'a> {
   /// Type of the HEALPix hash value (mainly `u32` or `u64`).
   type HashType: HHash;
@@ -145,7 +146,7 @@ pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
   values: Box<[V]>,
   _htype: PhantomData<H>,
 }
-impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
+impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
   /// WARNING: we assume that the coherency between the depth and the number of elements in the
   ///array has already been tested.
   pub fn new(depth: u8, values: Box<[V]>) -> Self {
@@ -163,7 +164,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArray<H, V> {
     }
   }
 }
-impl<'a, H: HHash, V: SkyMapValue + Send + Sync + AddAssign + 'a> ImplicitSkyMapArray<H, V> {
+impl<H: HHash, V: SkyMapValue + Send + Sync + AddAssign> ImplicitSkyMapArray<H, V> {
   pub fn par_add(mut self, rhs: Self) -> Self {
     self
       .values
@@ -211,10 +212,7 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.values)
       .enumerate()
       .map(move |(h, v)| (H::from_usize(h), v))
   }
@@ -328,7 +326,7 @@ impl SkyMapEnum {
     match self {
       Self::ImplicitU64I32(skymap) => {
         Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, unsafe {
-          std::mem::transmute(skymap.values)
+          std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values)
         })))
       }
       _ => Err(String::from("Unable to convert to count map.")),
@@ -339,7 +337,7 @@ impl SkyMapEnum {
     match self {
       Self::ImplicitU64I32(skymap) => Ok(CountMapU32(ImplicitSkyMapArray::new(
         skymap.depth,
-        unsafe { std::mem::transmute(skymap.values) },
+        unsafe { std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values) },
       ))),
       _ => Err(String::from("Unable to convert to count map.")),
     }
@@ -711,11 +709,7 @@ impl<'a> SkyMap<'a> for CountMap {
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .into_implicit_skymap_array()
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.into_implicit_skymap_array().values)
       .enumerate()
       .map(move |(h, v)| (u64::from_usize(h), v))
   }
@@ -1101,11 +1095,7 @@ impl<'a> SkyMap<'a> for CountMapU32 {
   }
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
-    self
-      .into_implicit_skymap_array()
-      .values
-      .to_vec()
-      .into_iter()
+    Box::into_iter(self.into_implicit_skymap_array().values) // a normal into_iter() calls the slice impl
       .enumerate()
       .map(move |(h, v)| (u32::from_usize(h), v))
   }

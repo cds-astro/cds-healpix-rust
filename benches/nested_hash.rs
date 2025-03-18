@@ -178,7 +178,6 @@ fn gen_rand_lonlat(n: usize) -> Vec<(f64, f64)> {
   // let v: Vec<f64, f64> = Vec::with_capacity(n);
   let mut rng = rand::thread_rng();
   (0..n)
-    .into_iter()
     .map(|_| {
       (
         rng.gen::<f64>() * TWICE_PI,

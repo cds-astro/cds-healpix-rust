@@ -342,10 +342,10 @@ impl ColorMapFunction {
 /// * `skymap`: the skymap to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 pub fn to_skymap_img_default<'a, S>(
   skymap: &'a S,
   img_size: (u16, u16),
@@ -381,10 +381,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
@@ -504,10 +504,10 @@ where
 /// * `mom`: the MOM to be print;
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 pub fn to_mom_img_default<'a, M>(
   mom: &'a M,
   img_size: (u16, u16),
@@ -543,10 +543,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
@@ -670,10 +670,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `writer`: the writer in which the image is going to be written
 pub fn to_skymap_png<'a, P, S, W>(
   skymap: &'a S,
@@ -730,10 +730,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]
@@ -782,10 +782,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `writer`: the writer in which the image is going to be written
 pub fn to_mom_png<'a, P, M, W>(
   mom: &'a M,
@@ -842,10 +842,10 @@ where
 /// * `size`: the `(X, Y)` number of pixels in the image;
 /// * `proj`: a projection, if different from Mollweide;
 /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-///                      if different from `(0, 0)`;
+///   if different from `(0, 0)`;
 /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-///                  which depends on the projection. For unbounded projections, de default value
-///                  is `(-PI..PI, -PI..PI)`.
+///   which depends on the projection. For unbounded projections, de default value
+///   is `(-PI..PI, -PI..PI)`.
 /// * `path`: the path of th PNG file to be written.
 /// * `view`: set to true to visualize the saved image.
 #[cfg(not(target_arch = "wasm32"))]

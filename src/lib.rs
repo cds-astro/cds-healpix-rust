@@ -1045,7 +1045,7 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 {
 ///
 /// # Output
 /// - `(x, y)` the projected planar Euclidean coordinates of the point
-///    of given coordinates `(lon, lat)` on the unit sphere
+///   of given coordinates `(lon, lat)` on the unit sphere
 ///     - `lon` &le; `0` => `x in [-8, 0]`
 ///     - `lon` &ge; `0` => `x in [0, 8]`
 ///     - `y in [-2, 2]`
@@ -1204,9 +1204,9 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 ///  - output `lat` always in `[-pi/2, pi/2]`
 ///
 /// # Inputs
-///  - `x` the projected coordinate along the x-axis, supports positive and negative reasonably
-///        large values with a naive approach (no Cody-Waite nor Payne Hanek range reduction).
-///  - `y` the projected coordinate along te x-axis, must be in `[-2, 2]`
+/// - `x` the projected coordinate along the x-axis, supports positive and negative reasonably
+///   large values with a naive approach (no Cody-Waite nor Payne Hanek range reduction).
+/// - `y` the projected coordinate along te x-axis, must be in `[-2, 2]`
 ///
 /// # Output
 /// -  `(lon, lat)` in radians, the position on the unit sphere whose projected coordinates are
@@ -1436,11 +1436,7 @@ fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
 
 #[inline]
 fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
-  if *lon > 1.0 {
-    *lon = 1.0;
-  } else if *lon < -1.0 {
-    *lon = -1.0;
-  }
+  *lon = lon.clamp(-1.0, 1.0);
 }
 
 // Shift x by the given offset and apply lon and lat signs to x and y respectively
@@ -1522,7 +1518,7 @@ fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
 ///   neighbour in the given `neighbour_direction`
 /// - `inner_direction` the direction of the sub-cell in the edge of the given base cell
 /// - `neighbour_direction` direction of the neighbour of the sub-cell from which we are looking
-///    at the direction of the sub-cell
+///   at the direction of the sub-cell
 ///   
 pub fn edge_cell_direction_from_neighbour(
   base_cell: u8,
@@ -1817,6 +1813,7 @@ mod tests {
 
   #[test]
   #[should_panic]
+  #[allow(clippy::approx_constant)]
   fn testpanic_proj_2() {
     proj(3.14159, -1.58);
   }
@@ -1830,6 +1827,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::excessive_precision)]
   fn testok_largest_center_to_vertex_distance() {
     let depth = 8;
     let d1_mas = largest_center_to_vertex_distance(depth, 0.0, 0.0).to_degrees() * 3600.0;

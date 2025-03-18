@@ -23,9 +23,9 @@
 //!
 //! ### Algorithm overview
 //! 1. Tree builder consumes an iterator over the leaf states. Some of the leaves could be missing,
-//!   but the iterator must be sorted by strictly increasing index. If the children group is
-//!   complete, the builder tries to merge the states into the parent node. If the group is
-//!   incomplete or the merge state is invalid the states are inserted into the tree as is.
+//!    but the iterator must be sorted by strictly increasing index. If the children group is
+//!    complete, the builder tries to merge the states into the parent node. If the group is
+//!    incomplete or the merge state is invalid the states are inserted into the tree as is.
 //! 2. If the merge is successful, the builder adds the merged state to the parent node.
 //! 3. Check if the parent node is a last child of the grandparent node. For example, for the sketch
 //!    above, the middle level nodes 1 and 3 are last children of the root nodes 0 and 1. If we have

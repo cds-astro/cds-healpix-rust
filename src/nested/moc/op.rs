@@ -932,7 +932,6 @@ mod tests {
       let mut empty_it = not_unchecked(LazyMOCIter::new(
         depth,
         (0..12_u64)
-          .into_iter()
           .map(|hash| HpxCell { depth: 0, hash }),
       ));
       assert_eq!(empty_it.next(), None);
@@ -943,11 +942,9 @@ mod tests {
   pub fn test_and_full_full() {
     for depth in 0..30 {
       let full_1: Vec<HpxCell<u64>> = (0..12_u64)
-        .into_iter()
         .map(|hash| HpxCell { depth: 0, hash })
         .collect();
       let full_2: Vec<HpxCell<u64>> = (0..12_u64)
-        .into_iter()
         .map(|hash| HpxCell { depth: 0, hash })
         .collect();
       let mut full_it = and_unchecked(
@@ -966,7 +963,6 @@ mod tests {
     for depth in 0..30 {
       let empty_it = std::iter::empty::<HpxCell<u64>>();
       let full: Vec<HpxCell<u64>> = (0..12_u64)
-        .into_iter()
         .map(|hash| HpxCell { depth: 0, hash })
         .collect();
       let mut emtpy_res = and_unchecked(
@@ -982,7 +978,6 @@ mod tests {
     for depth in 0..30 {
       let empty_it = std::iter::empty::<HpxCell<u64>>();
       let full: Vec<HpxCell<u64>> = (0..12_u64)
-        .into_iter()
         .map(|hash| HpxCell { depth: 0, hash })
         .collect();
       let mut full_it = or_unchecked(

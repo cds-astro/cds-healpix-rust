@@ -566,8 +566,8 @@ impl Layer {
   /// Returns the cell number (hash value) associated with the given position on the unit sphere
   /// # Inputs
   /// - `lon`: longitude in radians, support reasonably large positive and negative values
-  ///          producing accurate results with a naive range reduction like modulo 2*pi
-  ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+  ///   producing accurate results with a naive range reduction like modulo 2*pi
+  ///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
   /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
   /// # Output
   /// - the cell number (hash value) associated with the given position on the unit sphere,
@@ -714,8 +714,8 @@ impl Layer {
   /// respect to the origin of the cell (South vertex).
   /// # Inputs
   /// - `lon`: longitude in radians, support reasonably large positive and negative values
-  ///          producing accurate results with a naive range reduction like modulo 2*pi
-  ///          (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+  ///   producing accurate results with a naive range reduction like modulo 2*pi
+  ///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
   /// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
   /// # Output
   /// - the cell number (hash value) associated with the given position on the unit sphere,
@@ -1378,8 +1378,8 @@ impl Layer {
   /// - `from_vertex`: direction (from the cell center) of the path starting vertex
   /// - `to_vertex`: direction (from the cell center) of the path ending vertex
   /// - `include_to_vertex`: if set to *false*, the result contains `n_segments` points and do
-  ///                        not include the ending vertex.
-  ///                        Else the result contains `n_segments + 1` points.
+  ///   not include the ending vertex.
+  ///   Else the result contains `n_segments + 1` points.
   /// - `n_segments`: number of segments in the path from the starting vertex to the ending vertex
   ///
   /// # Output
@@ -1449,7 +1449,7 @@ impl Layer {
   /// - `starting_vertex`: direction (from the cell center) of the path starting vertex
   /// - `clockwise_direction`: tells if the path is in the clockwise or anti-clockwise direction
   /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of
-  ///                         points in the path equals *4 x n_segments_by_side*.
+  ///   points in the path equals *4 x n_segments_by_side*.
   /// # Output
   /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
   ///
@@ -1514,7 +1514,7 @@ impl Layer {
   /// # Input
   /// - `hash`: the hash value of the cell we look for the grid on the unit sphere.
   /// - `n_segments_by_side`: number of segments in each each side. Hence, the total number of
-  ///                         points in the path equals *(n_segments_by_side + 1)^2*.
+  ///   points in the path equals *(n_segments_by_side + 1)^2*.
   /// # Output
   /// - the list of positions on the given side of the given HEALPix cell on the unit sphere.
   ///
@@ -1729,7 +1729,7 @@ impl Layer {
 
       // In this method, both i and j can be < 0 or >= nside
       let partial_compute =
-        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| -> () {
+        move |nside: i32, d0h: u8, i: i32, j: i32, k: i32, res: &mut Vec<u64>| {
           let xfrom = i - k;
           let xto = i + k;
           let yfrom = j - k;
@@ -1741,19 +1741,19 @@ impl Layer {
             }
           }
           // W (inclusive) to N (exclusive)
-          if (0..nside as i32).contains(&yto) {
+          if (0..nside).contains(&yto) {
             for x in xfrom.max(0)..xto.min(nside) {
               res.push(self.build_hash_from_parts(d0h, x as u32, yto as u32));
             }
           }
           // N (inslusive) to E (exclusive)
-          if (0..nside as i32).contains(&xto) {
+          if (0..nside).contains(&xto) {
             for y in ((yfrom + 1).max(0)..=yto.min(nside - 1)).rev() {
               res.push(self.build_hash_from_parts(d0h, xto as u32, y as u32));
             }
           }
           // E (inclusive) to S (exclusive)
-          if (0..nside as i32).contains(&yfrom) {
+          if (0..nside).contains(&yfrom) {
             for x in ((xfrom + 1).max(0)..=xto.min(nside - 1)).rev() {
               res.push(self.build_hash_from_parts(d0h, x as u32, yfrom as u32));
             }
@@ -1771,44 +1771,44 @@ impl Layer {
       let overflow_e = overflow_se && overflow_ne;
 
       if overflow_s {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, S)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, S) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_sw {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, SW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, SW) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_w {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, W)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, W) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_nw {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, NW)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, NW) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_n {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, N)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, N) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_ne {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, NE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, NE) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_e {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, E)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, E) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       if overflow_se {
-        self
-          .to_neighbour_base_cell_coo(d0h, i, j, SE)
-          .map(|(d0h, i, j)| partial_compute(nside, d0h, i, j, k, result));
+        if let Some((d0h, i, j)) = self.to_neighbour_base_cell_coo(d0h, i, j, SE) {
+          partial_compute(nside, d0h, i, j, k, result);
+        }
       }
       partial_compute(nside, d0h, i, j, k, result);
     }
@@ -2370,8 +2370,8 @@ impl Layer {
   /// * origin: South vertex of the input base cell
   /// * x-axis: South vertex to East vertex of the input base cell
   /// * y-axis: South vertex to West vertex of the input base cell
-  /// into coordinates in the frame attached to the neighbour cell of given direction (with respect to
-  /// the input base cell).
+  ///   into coordinates in the frame attached to the neighbour cell of given direction (with respect to
+  ///   the input base cell).
   /// # Params:
   /// * `new_base_cell_dir`: direction of the base cell in which we want the new coordinates, with
   ///   respect to the given `d0h` base cell.
@@ -2554,7 +2554,7 @@ impl Layer {
   /// with a weight of 0.  
   /// # Output
   /// - `[(cell, weigth), (cell, weigth), (cell, weigth), (cell, weigth)]` the cell number
-  ///    together with their weight
+  ///   together with their weight
   /// # Panics
   ///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
   pub fn bilinear_interpolation(&self, lon: f64, lat: f64) -> [(u64, f64); 4] {
@@ -2925,6 +2925,7 @@ impl Layer {
   }
 
   // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_fullin_recur
+  #[allow(clippy::too_many_arguments)]
   fn cone_coverage_centers_recur<F>(
     &self,
     depth: u8,                            // cell depth
@@ -3108,6 +3109,7 @@ impl Layer {
   }
 
   // TODO: make a generic function with cone_coverage_approx_recur or at least cone_coverage_centers_recur
+  #[allow(clippy::too_many_arguments)]
   fn cone_coverage_fullin_recur<F>(
     &self,
     depth: u8,                            // cell depth
@@ -3392,6 +3394,7 @@ impl Layer {
     }
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn ring_coverage_approx_recur<F>(
     &self,
     depth: u8,                // cell depth
@@ -4138,7 +4141,7 @@ impl Layer {
   ///
   /// # Input
   /// - `vertices` the list of vertices (in a slice) coordinates, in radians
-  ///              `[(lon, lat), (lon, lat), ..., (lon, lat)]`
+  ///   `[(lon, lat), (lon, lat), ..., (lon, lat)]`
   /// - `exact_solution` if set
   ///
   /// # Output
@@ -4832,6 +4835,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn testok_hash_2() {
     let layer = get(0);
     // ra = 179.99999999999998633839 deg
@@ -4848,6 +4852,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn testok_hash_3() {
     let layer = get(0);
     // ra = 89.99999999999999889877 deg
@@ -5895,9 +5900,7 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     // to_aladin_moc(&actual_res_exact);
     for h in actual_res_exact.flat_iter() {
-      if h == 4806091 || h == 4806094 {
-        assert!(false, "Contains 10/4806091 or 10/4806094")
-      }
+      assert!(h != 4806091 || h != 4806094, "Contains 10/4806091 or 10/4806094");
     }
   }
 
@@ -6936,6 +6939,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::excessive_precision)]
   fn testok_polygone_exact_mt_pb_with_java_lib() {
     // In Aladin:
     // draw polygon(...)
@@ -6958,9 +6962,9 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     to_aladin_moc(&actual_res_exact);
     let mut s = String::new();
-    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+    for coo in vertices.iter().flat_map(|(a, b)| [*a, *b]) {
       s.push(',');
-      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+      s.push_str(&coo.to_degrees().to_string());
     }
     println!("draw polygon({})", &s.as_str()[1..]);
 
@@ -6982,9 +6986,9 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     to_aladin_moc(&actual_res_exact);
     let mut s = String::new();
-    for coo in vertices.iter().map(|(a, b)| [*a, *b]).flatten() {
+    for coo in vertices.iter().flat_map(|(a, b)| [*a, *b]) {
       s.push(',');
-      s.push_str(&format!("{}", (coo as f64).to_degrees()));
+      s.push_str(&coo.to_degrees().to_string());
     }
     println!("draw polygon({})", &s.as_str()[1..]);
   }
@@ -7686,6 +7690,7 @@ mod tests {
   }
 
   #[test]
+  #[allow(clippy::approx_constant)]
   fn test_bilinear_interpolation_3() {
     let lon_rad = [0.17453293_f64, 0.43633231_f64, 0.0_f64];
     let lat_rad = [0.08726646_f64, 0.17453293_f64, 0.78539816_f64];

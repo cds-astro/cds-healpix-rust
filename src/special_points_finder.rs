@@ -12,11 +12,11 @@ use super::{Customf64, ONE_OVER_TRANSITION_Z, TRANSITION_Z};
 /// - `p1` first point of the great-circle arc
 /// - `p2` second point of the great_-circle arc
 /// - `z_eps_max` the target precision on z (used to stop the Newton-Raphson method),
-///               a reasonable choice may be `|p2.z - p1.z|/ 1000`.
-///               Internally, the value can't be higher than `|z2 - z1| / 50`
-///               nor lower than `1e-15`.
+///   a reasonable choice may be `|p2.z - p1.z|/ 1000`.
+///   Internally, the value can't be higher than `|z2 - z1| / 50`
+///   nor lower than `1e-15`.
 /// - `n_iter_max` upper limit on the number of iteration to be used in the Newton-Raphson method
-///               a reasonable choice may be 20.
+///   a reasonable choice may be 20.
 pub fn arc_special_points<'a>(
   mut p1: &'a Coo3D,
   mut p2: &'a Coo3D,
@@ -121,14 +121,14 @@ pub fn arc_special_points<'a>(
 ///   - `true`  if you look for `z` > `z_cone_centre` (i.e. equations Y = -X + b, north part of the cone)  
 ///   - `false` if you look for `z` < `z_cone_centre` (i.e. equations Y =  X + b, south part of the cone)
 /// - `z_eps_max` the target precision on z (used to stop the Newton-Raphson method),
-///               a reasonable choice may be `eucl_cone_radius / 1000`.
-///               Internally, the value can't be higher than `eucl_cone_radius / 50`
-///               nor lower than `1e-15`.
+///   a reasonable choice may be `eucl_cone_radius / 1000`.
+///   Internally, the value can't be higher than `eucl_cone_radius / 50`
+///   nor lower than `1e-15`.
 /// - `n_iter_max` upper limit on the number of iteration to be used in the Newton-Raphson method
-///               a reasonable choice may be 20.
+///   a reasonable choice may be 20.
 /// # Output
 /// - `Some(z)` the sine of the latitude of the point such that the tangent line to the cone
-///       on the projection plane has a slope equals to `+-1`.
+///   on the projection plane has a slope equals to `+-1`.
 /// - `None` if the computed latitude is out of the Equatorial Region
 #[allow(dead_code)]
 pub fn cone_special_point_in_eqr(
@@ -178,11 +178,11 @@ pub fn cone_special_point_in_eqr(
 ///   parameter since it is already computed when working on polygons, the cross product can be
 ///   indifferently `p1 x p2` or `p2 x p1`)
 /// - `z_eps_max` the target precision on z (used to stop the Newton-Raphson method),
-///               a reasonable choice may be `|p2.z - p1.z|/ 1000`.
-///               Internally, the value can't be higher than `|z2 - z1| / 50`
-///               nor lower than `1e-15`.
+///   a reasonable choice may be `|p2.z - p1.z|/ 1000`.
+///   Internally, the value can't be higher than `|z2 - z1| / 50`
+///   nor lower than `1e-15`.
 /// - `n_iter_max` upper limit on the number of iteration to be used in the Newton-Raphson method
-///               a reasonable choice may be 20.
+///   a reasonable choice may be 20.
 /// # Output
 /// - `Some(z)` the sine of the latitude of the point such that the tangent line to great-circle
 ///   arc (if it exists) has a slope equals to `+-1`.
@@ -283,14 +283,14 @@ fn f_over_df_eqr(z: f64, z0: f64, w0: f64, cte: f64, r: f64) -> f64 {
 ///   - `true`  if you look for `z` < `z_cone_centre` (i.e. equations Y =  X + b, south part of the cone)
 ///   - `false` if you look for `z` > `z_cone_centre` (i.e. equations Y = -X + b, north part of the cone)
 /// - `z_eps_max` the target precision on z (used to stop the Newton-Raphson method),
-///               a reasonable choice may be `cone_radius_rad / 1000`.
-///               Internally, the value can't be higher than `eucl_cone_radius / 50`
-///               nor lower than `1e-15`.
+///   a reasonable choice may be `cone_radius_rad / 1000`.
+///   Internally, the value can't be higher than `eucl_cone_radius / 50`
+///   nor lower than `1e-15`.
 /// - `n_iter_max` upper limit on the number of iteration to be used in the Newton-Raphson method
 ///
 /// # Output
 /// - `Some(z)` the sine of the latitude of the point such that the tangent line to the cone
-///       on the projection plane has a slope equals to `+-1`.
+///   on the projection plane has a slope equals to `+-1`.
 /// - `None` if the computed latitude is out of the North Polar Cap
 ///
 ///
