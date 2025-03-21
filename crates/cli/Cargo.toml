@@ -1,6 +1,5 @@
 [package]
 name = "hpx-cli"
-version = "0.1.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 description = "Command-line tool to play with HEALPix"
 license = "MIT OR Apache-2.0"
@@ -21,16 +20,41 @@ test = false
 [dependencies]
 hpxlib = { package = "cdshealpix", path = "../.." }
 log = { workspace = true }
-rayon = { workspace = true }
 mapproj = { workspace = true }
 memmap2 = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+# Specific to hpx-cli
 clap = { version = "4.5", features = ["derive"] }
 env_logger = "0.11"
-# For STC-S
+# - for STC-S
 stc-s = "0.1"
 nom = "7.1.3"
-thiserror = "1.0"
-
 
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0.1.43"
+
+
+[package.metadata.deb]
+maintainer = "F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"
+depends = "$auto"
+section = "utility"
+priority = "optional"
+assets = [
+    ["target/release/hpx", "usr/bin/hpx-cli", "755"],
+    ["COPYING", "usr/share/doc/hpx-cli/", "644"],
+    ["LICENSE-MIT", "usr/share/doc/hpx-cli/", "644"],
+    ["LICENSE-APACHE", "usr/share/doc/hpx-cli/", "644"],
+    ["CHANGELOG.md", "usr/share/doc/hpx-cli/CHANGELOG", "644"],
+    ["README.md", "usr/share/doc/hpx-cli/README", "644"],
+    #["FAQ.md", "usr/share/doc/hpx/FAQ", "644"],
+    ["doc/hpx.1", "usr/share/man/man1/hpx-cli.1", "644"],
+    # Similarly for shell completions.
+    #["deployment/deb/hpx.bash", "usr/share/bash-completion/completions/hpx", "644"],
+    #["deployment/deb/hpx.fish", "usr/share/fish/vendor_completions.d/hpx.fish", "644"],
+    #["deployment/deb/_hpx", "usr/share/zsh/vendor-completions/", "644"],
+]
+extended-description = """\
+hpx-cli is a command-line to perform HEALPix related operations like
+add a column of index to a CSV file, index and query a CVS file, build density maps, and more.
+"""

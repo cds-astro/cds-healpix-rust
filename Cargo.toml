@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.7.3"
+version = "0.8.0"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2021"
 rust-version = "1.81"
@@ -40,20 +40,21 @@ log = "0.4"
 rayon = "1.10"
 mapproj = "0.4"
 memmap2 = "0.9"
+thiserror = "2.0"
 
 [dependencies]
 log = { workspace = true }
-rayon = { workspace = true }   # Parallelism (sort)
-mapproj = { workspace = true } # Projection to wiew skymaps/MOMs
-memmap2 = { workspace = true } # Skymaps/MOMs
+mapproj = { workspace = true }  # Projection to wiew skymaps/MOMs
+memmap2 = { workspace = true }  # Skymaps/MOMs
+rayon = { workspace = true }    # Parallelism (sort)
+thiserror = { workspace = true } # Error handling
 katex-doc = "0.1.0"
 # MOC specific
-base64 = "0.21"     # Added for Compressed MOC
+base64 = "0.22"     # Added for Compressed MOC
 num = "0.4"         # Added for MOC
 num-traits = "0.2"  # Added for MOC
 # Skymaps
 byteorder = "1.5"
-thiserror = "1.0"
 colorous = "1.0"
 png = "0.17"
 # Compression/decompression
@@ -63,7 +64,7 @@ serde = { version = "1.0", features = ["derive"] } # MOM serialization/deseriali
 bincode = "1.3.3"
 toml = "0.8"
 # MOM specific
-itertools = "0.13"
+itertools = "0.14"
 # For date in FITS written files
 chrono = "0.4"
 

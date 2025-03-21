@@ -1,5 +1,31 @@
 # `cdshealpix` Change Log
 
+## 0.8.0
+
+Released 2025-03-20
+
+### Changed
+
+* MOM bintable serialization: columns `depth` and `ipix` replaced by `zuniq` to visually see that
+  the MOM is ordered according to the `zuniq` insigned integer natural ordering. 
+
+### Added
+
+* External sort
+    + methods `hpx_external_sort_csv_stdin_stdout`, `hpx_external_sort_csv_stdin_gen`
+    + methods `hpx_external_sort_csv_file`, `hpx_external_sort_csv_file_gen`
+* Add cumulative index (+its FITS ser/deserialization) to index HEALPix sorted files
+* BMOC serialization and deserialisation in FITS
+* MOM  serialization and deserialisation in FITS
+* Nested `kth_neighbours` and `kth_neighbourhood` methods
+* Add DensityMap and CountMap and CoutnMapU32
+    + plus parallelisation to CountMap from CSV
+
+### Fixed
+
+* Fix an issue in MOM from Skymap
+
+
 ## 0.7.3
 
 Released 2024-11-19
@@ -12,7 +38,6 @@ Released 2024-11-19
     + improve the `zone_coverage` algorithm to 1- solve issues
       on very wide zones and 2- remove spurious cells when a 
       zone vertex is on the edge of an HEALPix cell
-
 
 
 ## 0.7.2
