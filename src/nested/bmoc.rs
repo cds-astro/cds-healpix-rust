@@ -16,7 +16,7 @@ use std::{
 };
 
 use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, SecondsFormat, Utc};
 use log::debug;
 
@@ -1555,7 +1555,7 @@ impl BMOC {
     match zuniq_n_bytes {
       4 => (0..n_rows)
         .into_iter()
-        .map(|_| reader.read_u32::<BigEndian>().map(|v| v as u64))
+        .map(|_| reader.read_u32::<LittleEndian>().map(|v| v as u64))
         .collect::<Result<Vec<u64>, IoError>>()
         .map_err(FitsError::Io),
       8 => {
@@ -1563,7 +1563,7 @@ impl BMOC {
         // (or make an iterator and perform operation from iterators, like in MOCs...).
         (0..n_rows)
           .into_iter()
-          .map(|_| reader.read_u64::<BigEndian>())
+          .map(|_| reader.read_u64::<LittleEndian>())
           .collect::<Result<Vec<u64>, IoError>>()
           .map_err(FitsError::Io)
       }
