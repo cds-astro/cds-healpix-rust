@@ -86,7 +86,7 @@ jobs:
           Get-Item ./target/*
           Get-Item ./target/${{ matrix.config.target }}/*
           Get-Item ./target/${{ matrix.config.target }}/release/*
-          compress-archive ./target/${{ matrix.config.target }}/release/hpx.exe moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip
+          compress-archive ./target/${{ matrix.config.target }}/release/hpx.exe hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip
       - name: Upload compressed binary asset
         if: matrix.config.os != 'windows-latest'
         uses: actions/upload-release-asset@v1
@@ -94,8 +94,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-github-release.outputs.upload_url }}
-          asset_path: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
-          asset_name: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
+          asset_path: "hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
+          asset_name: "hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
           asset_content_type: application/gzip
       - name: Upload compressed binary asset
         if: matrix.config.os == 'windows-latest'
@@ -104,7 +104,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-github-release.outputs.upload_url }}
-          asset_path: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
-          asset_name: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
+          asset_path: "hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
+          asset_name: "hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
           asset_content_type: application/gzip
 
