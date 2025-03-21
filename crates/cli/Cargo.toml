@@ -32,9 +32,8 @@ env_logger = "0.11"
 stc-s = "0.1"
 nom = "7.1.3"
 
-[target.'cfg(target_env = "musl")'.dependencies]
+[target.'cfg(all(target_env = "musl", target_arch = "x86_64"))'.dependencies]
 mimalloc = "0.1.43"
-
 
 [package.metadata.deb]
 maintainer = "F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"
