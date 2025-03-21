@@ -84,23 +84,23 @@ hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits hipmain.sorted.csv
 
 hpx qhcidx hipmain.sorted.hci.fits cell 0 1
 
-# Creates a first density maps from a generated sequence of points...
+echo "Creates a first density maps from a generated sequence of points..."
 for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
   | hpx nested center 1 list \
   | hpx map count 2 count.d2.l.fits list
-# ... and view it.
+echo "... and view it."
 hpx map view --silent --color-map-fn linear count.d2.l.fits count.d2.l.png allsky 200
 
-# Add the two maps...
+echo "Add the two maps..."
 hpx map op add count.d2.l.fits count.d2.r.fits count.d2.m.fits
-# ... and view the result.
+echo "... and view the result."
 hpx map view --silent --color-map-fn linear count.d2.m.fits count.d2.m.png allsky 200
 
-# Build a MOM from the density map...
+echo "Build a MOM from the density map..."
 hpx map convert --parallel 2 hip.d5.dens.fits hip.d5.dens.mom.fits dens2chi2mom
-# ... and view it.
+echo "... and view it."
 hpx mom view --silent --color-map-fn linear hip.d5.dens.mom.fits hip.d5.dens.mom.png allsky 200
-# Convert the MOM into in a BINTABLE MOM (check you can read it in, e.g.,  TOPCAT)
+echo "Convert the MOM into in a BINTABLE MOM (check you can read it in, e.g.,  TOPCAT)"
 hpx mom convert hip.d5.dens.mom.fits hip.d5.dens.mom.bintable.fits bintable
 
 hpx cov 10 cone --delta-depth 3 123.456789 +12.3456789 0.2
