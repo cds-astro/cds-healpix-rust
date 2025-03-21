@@ -85,6 +85,7 @@ jobs:
         MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN_FXP }}
        run: |
          rustup target add aarch64-apple-darwin
+         rustup target add x86_64-apple-darwin
          pip install maturin
          cd crates/cli
          maturin publish --interpreter python${{matrix.python_version}} --no-sdist --target universal2-apple-darwin --skip-existing
