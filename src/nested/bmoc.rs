@@ -1437,7 +1437,7 @@ impl BMOC {
     }
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", self.entries.len() as u64); // Len of data axis 2 = n_hash(depth)+1
     it.next().unwrap()[0..30].copy_from_slice(b"EXTEND  =                    F"); // No extension allowed
-    it.next().unwrap()[0..35].copy_from_slice(b"PRODTYPE= 'BMOC'"); // Product type
+    it.next().unwrap()[0..16].copy_from_slice(b"PRODTYPE= 'BMOC'"); // Product type
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"HPXORDER", self.depth_max as u64);
     write_str_keyword_record(it.next().unwrap(), b"VAL_NAME", "FLAGGED_ZUNIQ");
     it.next().unwrap()[0..20].copy_from_slice(b"DTENDIAN= 'LITTLE  '");
@@ -1605,7 +1605,7 @@ impl BMOC {
     it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'K       '");
     it.next().unwrap()[0..25].copy_from_slice(b"TTYPE2  = 'FULLY_COVERED'");
     it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'L       '");
-    it.next().unwrap()[0..23].copy_from_slice(b"PRODTYPE= 'BMOC'");
+    it.next().unwrap()[0..16].copy_from_slice(b"PRODTYPE= 'BMOC'");
     it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
     it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"MAXORDER", self.depth_max as u64);
