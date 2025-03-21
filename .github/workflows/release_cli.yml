@@ -1,0 +1,110 @@
+# Inspired from both:
+# - https://github.com/BurntSushi/ripgrep/blob/master/.github/workflows/release.yml
+# - https://github.com/input-output-hk/chain-wallet-libs/blob/master/.github/workflows/release.yaml
+name: Release Cli
+
+on:
+  push:
+    tags:
+      - 'cli-[0-9]+.*' # push events to matching releases
+
+jobs:
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}    
+    steps:
+    - name: Create release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Get the release version from the tag
+      id: get_version
+      run: echo ::set-output name=version::``${GITHUB_REF#refs/tags/}``
+
+  build-cli-releases:
+    name: Release CLI assets
+    needs: create-github-release
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          # Linux
+          #- { os: ubuntu-latest, cross: true,  toolchain: stable, target: aarch64-unknown-linux-gnu }
+          #- { os: ubuntu-latest, cross: true,  toolchain: stable, target: arm-unknown-linux-gnueabi }
+          #- { os: ubuntu-latest, cross: true,  toolchain: stable, target: i686-unknown-linux-musl }
+          - { os: ubuntu-latest, cross: true,  toolchain: stable, target: x86_64-unknown-linux-musl }
+          # Android
+          #- { os: ubuntu-latest, cross: true, toolchain: stable, target: aarch64-linux-android }
+          #- { os: ubuntu-latest, cross: true, toolchain: stable, target: arm-linux-androideabi }
+          #- { os: ubuntu-latest, cross: true, toolchain: stable, target: armv7-linux-androideabi }
+          #- { os: ubuntu-latest, cross: true, toolchain: stable, target: i686-linux-android }
+          #- { os: ubuntu-latest, cross: true, toolchain: stable, target: x86_64-linux-android }   
+          # Macos
+          - { os: macos-latest, cross: false, toolchain: stable, target: x86_64-apple-darwin }
+          - { os: macos-latest, cross: false, toolchain: stable, target: aarch64-apple-darwin }
+          # iOS
+          #- { os: macos-latest, cross: false, toolchain: stable, target: aarch64-apple-ios }
+          #- { os: macos-latest, cross: false, toolchain: stable, target: x86_64-apple-ios }
+          # Windows
+          - { os: windows-latest, cross: false, toolchain: stable-x86_64-pc-windows-gnu, target: x86_64-pc-windows-gnu }
+          - { os: windows-latest, cross: false, toolchain: stable-x86_64-pc-windows-msvc, target: x86_64-pc-windows-msvc }      
+    steps:
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.config.toolchain }}
+          target: ${{ matrix.config.target }}
+          override: true
+          default: true        
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Build library
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.config.cross }}
+          command: build
+          args: --release --target ${{ matrix.config.target }} -p hpx-cli
+      - name: Create tar (Not Windows)
+        if: matrix.config.os != 'windows-latest'     
+        run: tar czfv hpx-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz -C target/${{ matrix.config.target }}/release/ hpx
+      - name: Create ZIP (Windows)
+        if: matrix.config.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-Item *
+          Get-Item ./target/*
+          Get-Item ./target/${{ matrix.config.target }}/*
+          Get-Item ./target/${{ matrix.config.target }}/release/*
+          compress-archive ./target/${{ matrix.config.target }}/release/hpx.exe moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip
+      - name: Upload compressed binary asset
+        if: matrix.config.os != 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-github-release.outputs.upload_url }}
+          asset_path: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
+          asset_name: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.tar.gz"
+          asset_content_type: application/gzip
+      - name: Upload compressed binary asset
+        if: matrix.config.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-github-release.outputs.upload_url }}
+          asset_path: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
+          asset_name: "moc-${{ needs.create-github-release.outputs.version }}-${{ matrix.config.target }}.zip"
+          asset_content_type: application/gzip
+

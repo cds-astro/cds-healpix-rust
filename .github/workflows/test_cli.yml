@@ -1,0 +1,23 @@
+name: TestCli
+
+on: [push]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Unit cli tests
+      run: cargo test --package hpx-cli
+    - name: Install cli
+      run:  cargo install --path crates/cli
+    - name: Integration cli tests
+      run: |
+        cd crates/cli/test
+        ./test.bash
+

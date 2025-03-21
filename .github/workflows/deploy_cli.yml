@@ -1,0 +1,92 @@
+name: publish-wheels
+on:
+  push:
+    tags:
+       - 'cli-[0-9]+.*' # push events to matching releases
+  # Allows to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # Linux is specific: because of manylinux, we have to use a docker file 
+  build-linux64-wheels:
+    runs-on: ubuntu-latest
+    # CentOS 7 64 bits Docker Hub image that 'build-linux-wheels' executes in.
+    # See https://github.com/pypa/manylinux for this particular container:
+    # * CPython 3.5, 3.6, 3.7, 3.8, 3.9 and 3.10, installed in /opt/python/<python tag>-<abi tag>
+    #container: quay.io/pypa/manylinux2014_x86_64
+    container: quay.io/pypa/manylinux_2_28_x86_64:latest
+    steps:
+     - name: "Checkout the full project"
+       uses: actions/checkout@v1
+     - name: "Install Rust"
+       run: |
+         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+     - name: "Build and publish wheels"
+       shell: bash
+       env:
+        MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN_FXP }}
+       run: |
+         source $HOME/.cargo/env
+         cd crates/cli
+         for PYBIN in /opt/python/cp39*/bin; do
+           "${PYBIN}/pip" install maturin
+           "${PYBIN}/maturin" publish -i "${PYBIN}/python" --no-sdist --skip-existing --compatibility manylinux_2_28
+         done
+
+  # Deploy for Windows 64 bits.
+  # If Windows 32 bits neede, check e.g. https://github.com/marketplace/actions/setup-msys2
+  build-windows-wheels:      
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Run all matrix jobs even if one is failling (default behaviour is to stop all jobs)
+      # To be changed when option --skip-existing will be available in maturin
+      fail-fast: false      
+      matrix:
+        os: [windows-latest]
+        python-version: ['3.9']
+    steps:
+     - uses: actions/checkout@v2
+     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+       uses: actions/setup-python@v2
+       with:
+         python-version: ${{ matrix.python-version }}
+     - name: Build and publish wheel for Python ${{ matrix.python-version }} on ${{ matrix.os }}
+       # We do not use environement variable for user, because it seems that the way of providing it in the command
+       # line is not the same for macos and for windows. We should create 2 different actions (see 
+       # https://docs.github.com/en/actions/reference/encrypted-secrets )
+       env:
+        MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN_FXP }}
+       run: |
+         pip install maturin
+         cd crates/cli
+         maturin publish --interpreter python${{matrix.python_version}} --no-sdist --skip-existing 
+
+  # Deploy for MocOS 64 bits (also support M1 archi).
+  build-macos-wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Run all matrix jobs even if one is failling (default behaviour is to stop all jobs)
+      # To be changed when option --skip-existing will be available in maturin
+      fail-fast: false
+      matrix:
+        os: [macOS-latest]
+        python-version: ['3.8']
+    steps:
+     - uses: actions/checkout@v2
+     - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
+       uses: actions/setup-python@v2
+       with:
+         python-version: ${{ matrix.python-version }}
+     - name: Build and publish wheel for Python ${{ matrix.python-version }} on ${{ matrix.os }}
+       # We do not use environement variable for user, because it seems that the way of providing it in the command
+       # line is not the same for macos and for windows. We should create 2 different actions (see 
+       # https://docs.github.com/en/actions/reference/encrypted-secrets )
+       env:
+        MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN_FXP }}
+       run: |
+         rustup target add aarch64-apple-darwin
+         pip install maturin
+         cd crates/cli
+         maturin publish --interpreter python${{matrix.python_version}} --no-sdist --target universal2-apple-darwin --skip-existing
+
+
