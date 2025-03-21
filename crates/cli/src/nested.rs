@@ -16,10 +16,7 @@ use hpxlib::{
   DEPTH_MAX,
 };
 
-use crate::{
-  coverage::Coverage,
-  input::{depthash::DepthHashInput, hash::HashInput, pos::PosInput},
-};
+use crate::input::{depthash::DepthHashInput, hash::HashInput, pos::PosInput};
 
 #[derive(Debug, Subcommand)]
 pub enum Nested {

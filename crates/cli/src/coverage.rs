@@ -199,6 +199,15 @@ pub enum CoverageType {
     /// Path of the file containing the STC-S region
     file_path: PathBuf,
   },
+  #[clap(name = "convert")]
+  /// From reading a regular FITS encoded BMOC
+  Convert {
+    #[clap(value_name = "FITS_INPUT")]
+    /// Path of the regular (not bintable) FITS file containing the BMOC
+    file_path: PathBuf,
+  },
+  // TODO: convert a BMOC into a COUNT MOM (and add several MOM to get e.g. the number of observation of a given sky area
+  // given a list of footprints (STC−S or Polygons))
 }
 
 impl CoverageType {
@@ -336,6 +345,21 @@ impl CoverageType {
           .map_err(|e| format!("Error reading file '{:?}': {:?}", file_path, e))
           .and_then(|stcs| stcs2stcsquery(stcs.as_str()).map_err(|e| e.to_string()))?;
         Ok(stcs_query.to_bmoc(depth))
+      }
+      Self::Convert { file_path } => {
+        let bmoc = BMOC::from_fits_file(file_path)?;
+        if bmoc.get_depth_max() != depth {
+          Err(
+            format!(
+              "Input depth {} different from loaded MOC depth {}.",
+              depth,
+              bmoc.get_depth_max()
+            )
+            .into(),
+          )
+        } else {
+          Ok(bmoc)
+        }
       }
     }
     .and_then(|bmoc| {

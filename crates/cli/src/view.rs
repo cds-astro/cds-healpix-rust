@@ -35,12 +35,17 @@ pub enum Mode {
     #[clap(short = 'l', long = "lon", default_value = "0.0")]
     center_lon: f64,
     /// Latitude of the center of the projection, in degrees
-    #[clap(short = 'b', long = "lat", default_value = "0.0")]
+    #[clap(
+      allow_negative_numbers = true,
+      short = 'b',
+      long = "lat",
+      default_value = "0.0"
+    )]
     center_lat: f64,
-    /// Bounds, in the projection plane, matching both image edges along the the x-axis
+    /// Bounds, in the projection plane, matching both image edges along the the x-axis. E.g. [-0.2..0.2].
     #[clap(long = "x-bounds")]
     proj_bounds_x: Option<Bound>,
-    /// Bounds, in the projection plane, matching both image edges along the the y-axis
+    /// Bounds, in the projection plane, matching both image edges along the the y-axis. E.g. [-0.2..0.2].
     #[clap(long = "y-bounds")]
     proj_bounds_y: Option<Bound>,
   },
@@ -52,8 +57,16 @@ impl FromStr for Bound {
   type Err = String;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    s.split_once("..")
-      .ok_or_else(|| format!("'..' separator not found in '{}'", s))
+    s.strip_prefix('[')
+      .ok_or_else(|| format!("Invalid bound: {}. Must start with '['", s))
+      .and_then(|s| {
+        s.strip_suffix(']')
+          .ok_or_else(|| format!("Invalid bound: {}. Must start with '['", s))
+      })
+      .and_then(|s| {
+        s.split_once("..")
+          .ok_or_else(|| format!("'..' separator not found in '{}'", s))
+      })
       .and_then(|(l, r)| {
         l.parse::<f64>().map_err(|e| e.to_string()).and_then(|l| {
           r.parse::<f64>()

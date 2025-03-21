@@ -461,3 +461,11 @@ test_cov_stcs(){
 }
 gtest "test_cov_stcs" "STC-S BMOCs"
 
+test_cov_fits(){
+  hpx cov 9 --out-type fits --output-file cone.bmoc.fits cone 080.8942 -69.7561 0.2
+  # Also compute center to check we do are aroudn the center of the cone
+  hpx cov 9 --out-type csv convert cone.bmoc.fits \
+    | tail -n +2 | hpx nested center 9 csv -d , -f 2 --header --paste --paste-header "lon,lat"
+}
+gtest "test_cov_fits" "Make a FITS BMOC and convert it into CSV"
+
