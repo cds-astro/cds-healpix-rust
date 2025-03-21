@@ -17,7 +17,22 @@ see [moc-cli](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/cli).
 
 ## Install
 
-### Compile from source code
+### From pypi for Python users
+
+hpx-cli is available in [pypi](https://pypi.org/project/hpx-cli),
+you can thus install the `hpx` executable using `pip`:
+
+```bash
+pip install -U hpx-cli
+moc --help
+```
+
+### Pre-compile binaries for MacOS, Linux and Windows, and .deb packages
+
+See the [github release page](https://github.com/cds-astro/cds-moc-rust/releases),
+simply download, unpack and exec the binary file.
+
+### From source code (Rust compiler needed)
 
 [Install rust](https://www.rust-lang.org/tools/install)
 (and check that `~/.cargo/bin/` is in your path),
@@ -105,6 +120,7 @@ Commands:
   polygon   Polygon coverage
   stcs      STC-S region coverage
   stcsfile  STC-S region provided in a file coverage
+  convert   From reading a regular FITS encoded BMOC
   help      Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -135,7 +151,7 @@ Tip: you can use `--help` inside sub-commands, sub-sub-commands, ... to get cont
 ## Examples
 
 You may find a quite extensive set of examples it
-the test script [cli_test.bash](esource/cli_test.bash).
+the test script [test.bash](test/test.bash).
 
 But here a few additional examples.
 
@@ -144,7 +160,7 @@ But here a few additional examples.
 The file `gaia_edr3_dist.csv` is a 165 GB file containing 1\,467\,744\,819 rows and 10 columns:
 
 ```bash
-> head -2 gaia_edr3_dist.csv
+> head -10 gaia_edr3_dist.csv
 source_id,RA_ICRS,DE_ICRS,r_med_geo,r_lo_geo,r_hi_geo,r_med_photogeo,r_lo_photogeo,r_hi_photogeo,flag
 1000000057322000000,104.87975539563,55.95486459306,784.559143,476.918579,1348.18896,2343.54736,1892.65027,2683.65625,20033
 1000000121746472704,104.85627575018,55.96825004364,1875.9657,1396.88684,2913.11401,1552.66638,1330.32129,1744.04968,10033
@@ -153,8 +169,8 @@ source_id,RA_ICRS,DE_ICRS,r_med_geo,r_lo_geo,r_hi_geo,r_med_photogeo,r_lo_photog
 ...
 ```
 
-We want to build and view the density map of the file, at an HEALPix depth = 11.
-First build the density map.
+We want to build and view the density map of the file at an HEALPix depth = 11.  
+First build the density map:
 
 ```bash
 > time hpx map dens 11 gaia_edr3_dist.dens.fits csv -d , -l 2 -b 3 --header --chunk-size 100000000 --parallel 32 gaia_edr3_dist.csv
@@ -175,7 +191,7 @@ user	11m7,242s
 sys	3m40,669s
 ```
 
-The outut file size is 385 MB (quite large!): 50331648 cells containing a double precision
+The outut file size is 385 MB (quite large!): 50\,331\,648 cells containing a double precision
 float do lead to $\frac{50331648 \times 8}{1024^2} = 384\,\mathrm{MB}$.  
 We can transform it into a 400x800 pixels PNG file to visualize it:
 
@@ -187,12 +203,12 @@ user	0m19,246s
 sys	0m0,492s
 ```
 
-Here the result:
+Here the result (a default ICRS to GALACTIC transformation is applied):
 ![](img/gaia_edr3_dist.dens.png)
 
 Both to reduce its size, and to remove the white noise, we can make a `Chi2 MOM`, i.e.
-a multi-resolution map obtained by merging sibling pixels having densities possibly comming from a same common density
-according to a chi-square criteria (the conversion is quite fast, 1s):
+a multi-resolution map obtained by merging sibling cells having densities possibly coming from a same common density
+according to a chi-square criterion (the conversion is quite fast, 1s):
 
 ```bash
 > time hpx map convert gaia_edr3_dist.dens.fits gaia_edr3_dist.dens.mom.fits dens2chi2mom
@@ -202,8 +218,8 @@ user	0m0,661s
 sys	0m0,317s
 ```
 
-The result file is only 13 MB large (a **x30 compression factor, while removing noise**!).
-We can also convert this MOM into a image:
+The result file is now 13 MB large (a **x30 compression factor, while removing noise**!).
+We can visualize this MOM content, also transforming it into a 400x800 pixels PNG file:
 
 ```bash
 time hpx mom view --silent gaia_edr3_dist.dens.mom.fits gaia_edr3_dist.dens.mom.png allsky 400
@@ -241,12 +257,17 @@ sys	0m0,010s
 ![](img/gaia_edr3_dist.dens.lmc.png)
 ![](img/gaia_edr3_dist.dens.mom.lmc.png)
 
+#### Remark:
+
+For mote details on the available projections in the `view` command,
+see [mapproj](https://github.com/cds-astro/cds-mapproj-rust).
+
 ### Indexation of a large CSV file
 
-Like in the previous example, we are working with 165 GB large file `gaia_edr3_dist.csv`
-(1\,467\,744\,819 rows, 10 columns).
+Like in the previous example, we are working with the 165 GB large file `gaia_edr3_dist.csv`
+(1\,467\,744\,819 rows, 10 columns), which is larger that the available RAM on the test machine.
 
-We can first sort this file according the order 29 HEALPix index:
+We can first sort this file according the order 29 HEALPix indices:
 
 ```bash
 time hpx sort --header -d , -o gaia_edr3_dist.sorted.csv -l 2 -b 3 gaia_edr3_dist.csv
@@ -256,7 +277,7 @@ user  184m9.269s
 sys 23m21,342s
 ```
 
-Then, we index the sorted file at an HEALPix level equals to 9:
+Then, we index the sorted file at an HEALPix level equals to 9 (to limit the size of the index file):
 
 ```bash
 time hpx hcidx --header -d , --depth 9 -o gaia_edr3_dist.sorted.hci.fits -l 2 -b 3 gaia_edr3_dist.sorted.csv
@@ -266,10 +287,10 @@ user	4m51,979s
 sys	1m30,032s
 ```
 
-the size of the resulting index file `gaia_edr3_dist.sorted.hci.fits` is 25 MB, to index cells of size about 7 arcmin by
-7 arcmin.
+the size of the resulting index file `gaia_edr3_dist.sorted.hci.fits` is 25 MB.  
+At order 9, HEALPix cells size is about 7 arcmin by 7 arcmin.
 
-Now, let compute the BMOC of a cone aroudn the LMC:
+Now, let compute the BMOC of a cone around the LMC:
 
 ```bash
 time hpx cov 9 --out-type fits --output-file cone.bmoc.fits cone 080.8942 -69.7561 0.2
@@ -321,9 +342,9 @@ sys	0m0,076s
 ```
 
 So, 240\,021 rows (including the header line), out of 1.4 billion, have been retrieved in 0.2s with a cold cache (0.034s
-with a hot cache) and let the user take care of applying a post-filter!
+with a hot cache). We let the user take care of applying a post-filter fitting the original cone.
 
-#### Remark:
+#### Remarks:
 
 * For a static binary-search index on a CSV column, see the possible usage of
   the [cds-bstree-file-readonly-rust](https://github.com/cds-astro/cds-bstree-file-readonly-rust) repository.

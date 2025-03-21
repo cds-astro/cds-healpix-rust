@@ -2,7 +2,7 @@
 
 ## 0.8.0
 
-Released 2025-03-20
+Released 2025-03-21
 
 ### Changed
 

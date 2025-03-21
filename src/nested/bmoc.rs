@@ -16,7 +16,7 @@ use std::{
 };
 
 use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, SecondsFormat, Utc};
 use log::debug;
 
