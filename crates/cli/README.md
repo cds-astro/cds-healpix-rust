@@ -155,7 +155,7 @@ the test script [test.bash](test/test.bash).
 
 But here a few additional examples.
 
-### Compute a density map and a density MOM a 1.4 billion sources
+### Compute both the density map and the density MOM of 1.4 billion sources
 
 The file `gaia_edr3_dist.csv` is a 165 GB file containing 1\,467\,744\,819 rows and 10 columns:
 
@@ -290,7 +290,7 @@ sys	1m30,032s
 the size of the resulting index file `gaia_edr3_dist.sorted.hci.fits` is 25 MB.  
 At order 9, HEALPix cells size is about 7 arcmin by 7 arcmin.
 
-Now, let compute the BMOC of a cone around the LMC:
+Now, let compute the BMOC of a cone of 0.2 degrees around the LMC:
 
 ```bash
 time hpx cov 9 --out-type fits --output-file cone.bmoc.fits cone 080.8942 -69.7561 0.2
@@ -300,7 +300,7 @@ user	0m0,001s
 sys	0m0,005s
 ```
 
-Is is a 'small' BMOC containing only a few cells. We can visualize (and compute the center of the cells):
+It is a 'small' BMOC containing only a few cells. We can visualize (and compute the center of the cells):
 
 ```bash
 time hpx cov 9 convert cone.bmoc.fits | tail -n +2 | hpx nested center 9 csv -d , -f 2 --header --paste --paste-header "center_lon,center_lat"
@@ -330,7 +330,7 @@ user	0m0,005s
 sys	0m0,013s
 ```
 
-And now, let's retrieve and count the number of sources the 160 GB files contains in those cells:
+And now, let's retrieve and count the number of sources the 165 GB files contains in those cells:
 
 ```bash
 time hpx qhcidx gaia_edr3_dist.sorted.hci.fits bmoc cone.bmoc.fits | wc -l
@@ -341,21 +341,22 @@ user	0m0,000s
 sys	0m0,076s
 ```
 
-So, 240\,021 rows (including the header line), out of 1.4 billion, have been retrieved in 0.2s with a cold cache (0.034s
+Thus, **240\,021 rows (including the header line), out of 1.4 billion, have been retrieved in 0.2s** with a cold cache (
+0.034s
 with a hot cache). We let the user take care of applying a post-filter fitting the original cone.
 
 #### Remarks:
 
-* For a static binary-search index on a CSV column, see the possible usage of
-  the [cds-bstree-file-readonly-rust](https://github.com/cds-astro/cds-bstree-file-readonly-rust) repository.
 * In [QAT2S](https://pretalx.com/adass2023/talk/3MTUUL/), we do have the code to post-filter the result to keep only
   sources in the original area (a cone here). We so
   far do not plan to add this in hpx-cli, but to add CSV files indexation in QAT2S.
+* For a static binary-search index on a CSV column, see the possible usage of
+  the [cds-bstree-file-readonly-rust](https://github.com/cds-astro/cds-bstree-file-readonly-rust) repository.
 
 ## To-do list
 
-* [ ] Add more methods to merge Skymaps
-* [ ] Add more methods to merge MOMs
+* [ ] Add more methods to merge Skymaps (diff, mult, ...)
+* [ ] Add more methods to merge MOMs (add, diff, mult, ...)
 * [ ] Add `path_along_cell_edge` method?
 * [ ] Create an implicit density map covering only the cells in a BMOC?
 * [ ] ...
