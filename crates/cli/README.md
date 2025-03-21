@@ -269,13 +269,74 @@ sys	1m30,032s
 the size of the resulting index file `gaia_edr3_dist.sorted.hci.fits` is 25 MB, to index cells of size about 7 arcmin by
 7 arcmin.
 
-TODO: here we miss the possibility to create an implicit density map covering only the cells in the BMOC.
+Now, let compute the BMOC of a cone aroudn the LMC:
+
+```bash
+time hpx cov 9 --out-type fits --output-file cone.bmoc.fits cone 080.8942 -69.7561 0.2
+
+real	0m0,006s
+user	0m0,001s
+sys	0m0,005s
+```
+
+Is is a 'small' BMOC containing only a few cells. We can visualize (and compute the center of the cells):
+
+```bash
+time hpx cov 9 convert cone.bmoc.fits | tail -n +2 | hpx nested center 9 csv -d , -f 2 --header --paste --paste-header "center_lon,center_lat"
+order,ipix,is_fully_covered_flag,center_lon,center_lat
+9,2118189,0,080.7110091743119,-69.9794867201383
+9,2118191,0,080.3424657534247,-69.8866968891410
+9,2118194,0,081.1238532110092,-69.9794867201383
+9,2118195,0,081.1643835616438,-69.8866968891410
+9,2118196,0,081.5753424657534,-69.8866968891410
+9,2118197,0,081.6136363636364,-69.7938937311056
+9,2118198,0,081.2045454545455,-69.7938937311056
+9,2118199,0,081.2443438914027,-69.7010771793946
+9,2118200,0,080.7534246575343,-69.8866968891410
+9,2118201,1,080.7954545454545,-69.7938937311056
+9,2118202,0,080.3863636363636,-69.7938937311056
+9,2118203,0,080.4298642533936,-69.7010771793946
+9,2118204,1,080.8371040723982,-69.7010771793946
+9,2118205,0,080.8783783783784,-69.6082471672874
+9,2118206,0,080.4729729729730,-69.6082471672874
+9,2118207,0,080.5156950672646,-69.5154036279795
+9,2118240,0,081.6515837104072,-69.7010771793946
+9,2118242,0,081.2837837837838,-69.6082471672874
+9,2118248,0,080.9192825112108,-69.5154036279795
+
+real	0m0,008s
+user	0m0,005s
+sys	0m0,013s
+```
+
+And now, let's retrieve and count the number of sources the 160 GB files contains in those cells:
+
+```bash
+time hpx qhcidx gaia_edr3_dist.sorted.hci.fits bmoc cone.bmoc.fits | wc -l
+240021
+
+real	0m0,207s (0m0.034s with a hot cache)
+user	0m0,000s
+sys	0m0,076s
+```
+
+So, 240\,021 rows (including the header line), out of 1.4 billion, have been retrieved in 0.2s with a cold cache (0.034s
+with a hot cache) and let the user take care of applying a post-filter!
+
+#### Remark:
+
+* For a static binary-search index on a CSV column, see the possible usage of
+  the [cds-bstree-file-readonly-rust](https://github.com/cds-astro/cds-bstree-file-readonly-rust) repository.
+* In [QAT2S](https://pretalx.com/adass2023/talk/3MTUUL/), we do have the code to post-filter the result to keep only
+  sources in the original area (a cone here). We so
+  far do not plan to add this in hpx-cli, but to add CSV files indexation in QAT2S.
 
 ## To-do list
 
 * [ ] Add more methods to merge Skymaps
 * [ ] Add more methods to merge MOMs
 * [ ] Add `path_along_cell_edge` method?
+* [ ] Create an implicit density map covering only the cells in a BMOC?
 * [ ] ...
 
 ## Disclaimer
