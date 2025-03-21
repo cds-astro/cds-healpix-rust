@@ -350,6 +350,8 @@ with a hot cache). We let the user take care of applying a post-filter fitting t
 * In [QAT2S](https://pretalx.com/adass2023/talk/3MTUUL/), we do have the code to post-filter the result to keep only
   sources in the original area (a cone here). We so
   far do not plan to add this in hpx-cli, but to add CSV files indexation in QAT2S.
+* You can find the similar functionalities (sort, index, query) for VOTables
+  in [vot-cli](https://github.com/cds-astro/cds-votable-rust/tree/main/crates/cli)
 * For a static binary-search index on a CSV column, see the possible usage of
   the [cds-bstree-file-readonly-rust](https://github.com/cds-astro/cds-bstree-file-readonly-rust) repository.
 

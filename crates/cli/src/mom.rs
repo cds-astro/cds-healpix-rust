@@ -20,7 +20,7 @@ use hpxlib::nested::map::{
   skymap::SkyMapValue,
 };
 
-/// Create and manipulate HEALPix count and density maps.
+/// Create and manipulate HEALPix count and density MOMs.
 #[derive(Debug, Subcommand)]
 pub enum Mom {
   //From(MomFrom),    // HATS,  ProbDens (threshold merge), CountMap, DensMap (chi2merge, threshold merge), Sorted iterator of pos (to interpret has counts)
@@ -57,7 +57,7 @@ pub enum Conversion {
 /// Map conversion (counts -> density, ...).
 #[derive(Debug, Args)]
 pub struct Convert {
-  /// Convert from a map type to another map type
+  /// Convert from a MOM type to another MOM type
   #[clap(subcommand)]
   conversion: Conversion,
   /// Path of the input map FITS file.
