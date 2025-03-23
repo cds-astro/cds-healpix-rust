@@ -1,10 +1,12 @@
 use crate::nested::map::mom::impls::ported_from_mom_builder::state::merge_states::MergeStates;
 use super::value_state::ValueState;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 /// Merges leaf states if values are exactly equal.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ExactlyEqualMerger<T> {
     phantom: PhantomData<T>,
 }

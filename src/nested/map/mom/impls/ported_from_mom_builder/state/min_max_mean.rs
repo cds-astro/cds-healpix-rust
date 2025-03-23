@@ -1,5 +1,6 @@
 use super::merge_is_valid::MergeIsValid;
 use super::merge_states::MergeStates;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use num_traits::Float;
 
@@ -7,7 +8,8 @@ use num_traits::Float;
 ///
 /// It implements [Into] trait for [f32] and [f64], so it can be converted to its mean value.
 /// [From] trait for `T` which just assigns the given value to all three fields.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MinMaxMeanState<T> {
     /// Minimum value.
     pub min: T,
@@ -54,7 +56,8 @@ where
 }
 
 /// Merges leaf states by taking minimum and maximum of the states and calculating the mean value.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Merger<V> {
     pub validator: V,
 }
@@ -106,7 +109,8 @@ where
 /// Checks if the relative difference between minimum and maximum is less than a given threshold.
 ///
 /// Basically it checks if `abs(max - min) / max <= threshold`, but with some edge-case handling.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RelativeToleranceValidator<T> {
     threshold: T,
 }
