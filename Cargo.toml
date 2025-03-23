@@ -83,6 +83,8 @@ name = "zordercurve"
 harness = false
 
 [features]
+default = ["base64", "memmap", "serde", "skymap", "sort"]
+
 base64 = ["dep:base64"]
 memmap = ["dep:memmap2"]
 skymap = ["dep:colorous", "dep:mapproj", "dep:png"]
