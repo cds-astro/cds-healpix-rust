@@ -4,6 +4,7 @@ use num_traits::{AsPrimitive, PrimInt};
 
 pub mod astrometry;
 pub mod fits;
+#[cfg(feature = "skymap")]
 pub mod img;
 pub mod mom;
 pub mod skymap;
@@ -41,7 +42,7 @@ impl HHash for u64 {
   }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "skymap"))]
 mod tests {
   use super::{
     img::{ColorMapFunctionType, PosConversion},

@@ -29,6 +29,7 @@ use crate::nested::{
   n_hash, Layer,
 };
 
+#[cfg(feature = "memmap")]
 pub mod cindex;
 
 /// Type defining a row that can be sorted internally.

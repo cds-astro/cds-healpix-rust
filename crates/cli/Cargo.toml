@@ -19,7 +19,7 @@ bench = false
 test = false
 
 [dependencies]
-hpxlib = { package = "cdshealpix", path = "../.." }
+hpxlib = { package = "cdshealpix", path = "../..", features = ["memmap", "skymap"] }
 log = { workspace = true }
 mapproj = { workspace = true }
 memmap2 = { workspace = true }

@@ -44,18 +44,18 @@ thiserror = "2.0"
 
 [dependencies]
 log = { workspace = true }
-mapproj = { workspace = true }  # Projection to wiew skymaps/MOMs
-memmap2 = { workspace = true }  # Skymaps/MOMs
+mapproj = { workspace = true, optional = true }  # Projection to wiew skymaps/MOMs
+memmap2 = { workspace = true, optional = true }  # Skymaps/MOMs
 rayon = { workspace = true }    # Parallelism (sort)
 thiserror = { workspace = true } # Error handling
 katex-doc = "0.1.0"
+byteorder = "1.5"
 # MOC specific
 base64 = { version = "0.22", optional = true }     # Added for Compressed MOC
 num-traits = "0.2"  # Added for MOC
 # Skymaps
-byteorder = "1.5"
-colorous = "1.0"
-png = "0.17"
+colorous = { version = "1.0", optional = true }
+png = { version = "0.17", optional = true }
 # Compression/decompression
 flate2 = "1.0"
 # Serialization/Deserialization
@@ -84,7 +84,8 @@ harness = false
 
 [features]
 base64 = ["dep:base64"]
-moc = ["base64"]
+skymap = ["dep:colorous", "dep:mapproj", "dep:png"]
+memmap = ["dep:memmap2"]
 
 # See opti here: https://github.com/johnthagen/min-sized-rust
 [profile.release]

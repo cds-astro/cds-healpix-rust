@@ -29,6 +29,7 @@ use std::{
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use log::debug;
+#[cfg(feature = "memmap")]
 use memmap2::{Mmap, MmapOptions};
 use num_traits::{ToBytes, Zero};
 
