@@ -50,8 +50,7 @@ rayon = { workspace = true }    # Parallelism (sort)
 thiserror = { workspace = true } # Error handling
 katex-doc = "0.1.0"
 # MOC specific
-base64 = "0.22"     # Added for Compressed MOC
-num = "0.4"         # Added for MOC
+base64 = { version = "0.22", optional = true }     # Added for Compressed MOC
 num-traits = "0.2"  # Added for MOC
 # Skymaps
 byteorder = "1.5"
@@ -84,6 +83,8 @@ name = "zordercurve"
 harness = false
 
 [features]
+base64 = ["dep:base64"]
+moc = ["base64"]
 
 # See opti here: https://github.com/johnthagen/min-sized-rust
 [profile.release]

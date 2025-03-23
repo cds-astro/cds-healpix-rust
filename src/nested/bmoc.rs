@@ -15,6 +15,7 @@ use std::{
   vec::IntoIter,
 };
 
+#[cfg(feature = "base64")]
 use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -2247,10 +2248,12 @@ impl CompressedMOC {
     self.moc.len()
   }
 
+  #[cfg(feature = "base64")]
   pub fn to_b64(&self) -> String {
     STANDARD.encode(&self.moc)
   }
 
+  #[cfg(feature = "base64")]
   pub fn from_b64(b64_encoded: String) -> Result<CompressedMOC, DecodeError> {
     let decoded = STANDARD.decode(b64_encoded)?;
     let depth_max = decoded[0];
@@ -2333,6 +2336,7 @@ mod tests {
     }
   }
 
+  #[cfg(feature = "base64")]
   #[test]
   fn testok_compressed_moc_empty_d0() {
     let compressed = build_compressed_moc_empty(0);
@@ -2348,6 +2352,7 @@ mod tests {
     );
   }
 
+  #[cfg(feature = "base64")]
   #[test]
   fn testok_compressed_moc_empty_d1() {
     let compressed = build_compressed_moc_empty(1);
@@ -2366,6 +2371,7 @@ mod tests {
     );
   }
 
+  #[cfg(feature = "base64")]
   #[test]
   fn testok_compressed_moc_full_d0() {
     let compressed = build_compressed_moc_full(0);
@@ -2382,6 +2388,7 @@ mod tests {
     );
   }
 
+  #[cfg(feature = "base64")]
   #[test]
   fn testok_compressed_moc_full_d1() {
     let compressed = build_compressed_moc_full(1);

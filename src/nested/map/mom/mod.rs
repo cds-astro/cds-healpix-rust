@@ -15,8 +15,7 @@ use std::{
 use chrono::{SecondsFormat, Utc};
 use colorous::Gradient;
 use mapproj::CanonicalProjection;
-use num::PrimInt;
-use num_traits::ToBytes;
+use num_traits::{PrimInt, ToBytes};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::to_mom_png_file;
