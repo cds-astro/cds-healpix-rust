@@ -4,7 +4,7 @@ Perform HEALPix related operations from the command line.
 
 ## About
 
-This **C**ommand **Line** **I**nterface (CLI) is made from the
+This **C**ommand **L**ine **I**nterface (CLI) is made from the
 [CDS HEALPix Rust library](https://github.com/cds-astro/cds-healpix-rust).
 It allows to perform HEALPix related operations like:
 adding a column of HEALPix indices computed from positions to a CSV file;
@@ -24,12 +24,12 @@ you can thus install the `hpx` executable using `pip`:
 
 ```bash
 pip install -U hpx-cli
-moc --help
+hpx --help
 ```
 
 ### Pre-compile binaries for MacOS, Linux and Windows, and .deb packages
 
-See the [github release page](https://github.com/cds-astro/cds-moc-rust/releases),
+See the [github release page](https://github.com/cds-astro/cds-hpx-rust/releases),
 simply download, unpack and exec the binary file.
 
 ### From source code (Rust compiler needed)
@@ -48,7 +48,7 @@ Clone the [cdshealpix rust lib](https://github.com/cds-astro/cds-healpix-rust) p
 git clone https://github.com/cds-astro/cds-healpix-rust
 ```
 
-Install from using `cargo`:
+Install from using `cargo` from the project root directory:
 
 ```bash
 cargo install --path crates/cli
@@ -357,8 +357,12 @@ with a hot cache). We let the user take care of applying a post-filter fitting t
 
 ## To-do list
 
+* [ ] Add option to control de ICRS/Galactic conversion in skympa/MOMs view
+* [ ] Add an option to flatten the BMOC output in `cov` (get only the list of cells at the maximum depth)
+* [ ] Add a `ring` sub-command
 * [ ] Add more methods to merge Skymaps (diff, mult, ...)
 * [ ] Add more methods to merge MOMs (add, diff, mult, ...)
+* [ ] Add a `flatten` method on MOMs to convert back into a skymap (then, e.g. use the a skymap difference)
 * [ ] Add `path_along_cell_edge` method?
 * [ ] Create an implicit density map covering only the cells in a BMOC?
 * [ ] ...
