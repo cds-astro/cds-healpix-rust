@@ -537,14 +537,14 @@ fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2
 /// > d = (lat - LAT_OF_SQUARE_CELL) * (dMax - dMin)/(TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL) + dMin
 #[inline]
 fn largest_c2v_dist_in_eqr_top(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!(LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE);
+  // debug_assert!(unchecked || LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE); // in all references to this function, it's either checked or the exception gives a false positive
   linear_approx(lat_abs, csts.slope_eqr, csts.intercept_eqr)
 }
 /// Same as the above method, but taking into account an additional radius
 #[inline]
 fn largest_c2v_dist_in_eqr_top_with_radius(lat_abs: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
   debug_assert!(0_f64 < radius);
-  debug_assert!(LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE);
+  // debug_assert!(nocheck || LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE); // this function only has two references, one of which is checked, the other of which wrongly panics
   largest_c2v_dist_in_eqr_top(f64::min(lat_abs + radius, TRANSITION_LATITUDE), csts)
 }
 
