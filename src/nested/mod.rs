@@ -1,6 +1,7 @@
 use std::{
   f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
   ops::Shr,
+  ops::{Range, RangeInclusive},
 };
 
 use super::{
@@ -30,57 +31,56 @@ pub mod map;
 pub mod sort;
 pub mod zordercurve;
 
-// We use an array here since operations on f64 are not yet stable for `const fn` :o/
-// Run the following code on e.g. https://play.rust-lang.org/
-// fn main() {
-//   for d in 0..=29 {
-//     let nside = (1 as u32) << d;
-//     let time_nside = (d as u64) << 52;
-//     let one_over_nside_v1 = 1_f64 / nside as f64;
-//     let one_over_nside_v2 = f64::from_bits(1_f64.to_bits() - time_nside);
-//     assert_eq!(one_over_nside_v1, one_over_nside_v2);
-//     println!("  {},", one_over_nside_v2);
-//   }
-// }
-const ONE_OVER_NSIDE: [f64; 30] = [
-  1.0,
-  0.5,
-  0.25,
-  0.125,
-  0.0625,
-  0.03125,
-  0.015625,
-  0.0078125,
-  0.00390625,
-  0.001953125,
-  0.0009765625,
-  0.00048828125,
-  0.000244140625,
-  0.0001220703125,
-  0.00006103515625,
-  0.000030517578125,
-  0.0000152587890625,
-  0.00000762939453125,
-  0.000003814697265625,
-  0.0000019073486328125,
-  0.00000095367431640625,
-  0.000000476837158203125,
-  0.0000002384185791015625,
-  0.00000011920928955078125,
-  0.00000005960464477539063,
-  0.000000029802322387695313,
-  0.000000014901161193847656,
-  0.000000007450580596923828,
-  0.000000003725290298461914,
-  0.000000001862645149230957,
-];
+/// Return the hash value of the parent of the given `hash` at a depth equals to the `hash` depth minus `delta_depth`.
+/// I.e., for `delta_depth = 1`, the returned value is the value of the direct parent of the given `hash` value.
+/// For `delta_depth = 1`, the "grandparent" is returned, and so on.
+///
+/// # Params
+/// * `hash`: a pixel index at a given (unspecified) depth
+/// * `delta_depth`: hash depth minus the target parent depth
+///
+/// # Warning
+/// The calling code is responsible for ensuring that the `hash` depth minus `delta_depth`
+/// is not smaller than 0.
+/// But such a case is harmless here since the result will simply be equal to 0.
+pub const fn parent(hash: u64, delta_depth: u8) -> u64 {
+  hash >> (delta_depth << 1)
+}
 
-/*
-// Wait for stabilization: https://github.com/rust-lang/rust/issues/72447
+/// Returns a range representing the set of values of all the siblings if the given hash value
+/// (including the value itself).
+///
+/// # Params
+/// * `depth`: depth of the hash value, must be in `[0, 29]`
+/// * `hash`: hash value, i.e. cell number
+///
+/// # Warning
+/// * not check is performed on `depth`n the calling code must ensure that depth is <= 29.
+///
+pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
+  if depth == 0 {
+    0..=11
+  } else {
+    let hash = hash & 0xFFFFFFFFFFFFFFFC; // <=> & 0b1111..111100
+    hash..=(hash | 3)
+  }
+}
+
+/// Returns the range representing the set of values of all the child of the given `hash`
+/// at a depth equals to the (unspecified) hash depth + the given `delta_depth`.
+///
+/// # Warning
+/// THe calling code must ensure that hash depth + delta_depth is <= 29.
+///
+pub const fn childs(hash: u64, delta_depth: u8) -> Range<u64> {
+  let twice_dd = delta_depth << 1;
+  (hash >> twice_dd)..((hash + 1) >> twice_dd)
+}
+
 const fn one_over_nside(depth: u8) -> f64 {
   let time_nside = (depth as u64) << 52;
   f64::from_bits(1_f64.to_bits() - time_nside)
-}*/
+}
 
 /// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
 const LAYERS: [Layer; 30] = [
@@ -195,7 +195,7 @@ pub const fn from_zuniq(zuniq: u64) -> (u8, u64) {
 
 /// Returns the depth and the hash number from the uniq representation.
 /// Inverse operation of [to_uniq](fn.to_uniq.html).
-pub fn from_uniq(uniq_hash: u64) -> (u8, u64) {
+pub const fn from_uniq(uniq_hash: u64) -> (u8, u64) {
   let depth = (60 - uniq_hash.leading_zeros()) >> 1;
   let hash = uniq_hash & !(16_u64 << (depth << 1));
   // = uniq_hash - (16_u64 << (depth << 1));
@@ -205,7 +205,7 @@ pub fn from_uniq(uniq_hash: u64) -> (u8, u64) {
 
 /// Returns the depth and the hash number from the uniq representation.
 /// Inverse operation of [to_uniq](fn.to_uniq_ivoa.html).
-pub fn from_uniq_ivoa(uniq_hash: u64) -> (u8, u64) {
+pub const fn from_uniq_ivoa(uniq_hash: u64) -> (u8, u64) {
   let depth = (61 - uniq_hash.leading_zeros()) >> 1;
   let hash = uniq_hash - (4_u64 << (depth << 1));
   (depth as u8, hash)
@@ -546,7 +546,7 @@ impl Layer {
       y_mask: nested::y_mask(depth), //x_mask << 1,
       xy_mask: nested::xy_mask(depth),
       time_half_nside: (depth as i64 - 1) << 52,
-      one_over_nside: ONE_OVER_NSIDE[depth as usize], // f64::from_bits(onef64_to_bits - time_nside),
+      one_over_nside: one_over_nside(depth),
       z_order_curve,
     }
   }
@@ -5136,6 +5136,12 @@ mod tests {
   }
 
   #[test]
+  fn testok_cone_approx_bmoc_2() {
+    // From https://github.com/cds-astro/cds-healpix-rust/issues/21
+    let actual_res = cone_coverage_approx(1, 0.0, -0.3956593324046537, 0.00986851403158301);
+  }
+
+  #[test]
   fn testok_cone_approx_custom_bmoc_2() {
     // let res = cone_overlap_approx(5, 0.01, 0.02, 0.05);
     // let res = cone_overlap_approx(6, 160.771389_f64.to_radians(), 64.3813_f64.to_radians(), 0.8962_f64.to_radians());
@@ -5900,7 +5906,10 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     // to_aladin_moc(&actual_res_exact);
     for h in actual_res_exact.flat_iter() {
-      assert!(h != 4806091 || h != 4806094, "Contains 10/4806091 or 10/4806094");
+      assert!(
+        h != 4806091 || h != 4806094,
+        "Contains 10/4806091 or 10/4806094"
+      );
     }
   }
 
