@@ -422,20 +422,23 @@ pub fn largest_center_to_vertex_distance_with_radius(
     return FRAC_PI_2 - TRANSITION_LATITUDE;
   }
   // Regular case
+  let csts = get_or_create(depth);
   let lat_abs = lat.abs();
   let lat_max = lat_abs + radius;
-  let lat_min = lat_abs - radius;
+  let lat_min = (lat_abs - radius).max(0.0);
   if lat_max >= TRANSITION_LATITUDE {
-    largest_c2v_dist_in_npc_with_radius(lon, radius, get_or_create(depth))
+    largest_c2v_dist_in_npc_with_radius(lon, radius, csts)
   } else if lat_min >= LAT_OF_SQUARE_CELL {
-    largest_c2v_dist_in_eqr_top_with_radius(lat_abs, radius, get_or_create(depth))
+    largest_c2v_dist_in_eqr_top(lat_max, csts)
   } else if lat_max <= LAT_OF_SQUARE_CELL {
-    largest_c2v_dist_in_eqr_bottom_with_radius(lat_abs, radius, get_or_create(depth))
+    largest_c2v_dist_in_eqr_bottom(lat_min, csts)
   } else {
-    let csts = get_or_create(depth);
+    debug_assert!(
+      lat_min < LAT_OF_SQUARE_CELL && lat_max > LAT_OF_SQUARE_CELL && lat_max < TRANSITION_LATITUDE
+    );
     f64::max(
-      largest_c2v_dist_in_eqr_top_with_radius(lat_abs, radius, csts),
-      largest_c2v_dist_in_eqr_bottom_with_radius(lat_abs, radius, csts),
+      largest_c2v_dist_in_eqr_top(lat_max, csts),
+      largest_c2v_dist_in_eqr_bottom(lat_min, csts),
     )
   }
 }
@@ -537,15 +540,8 @@ fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2
 /// > d = (lat - LAT_OF_SQUARE_CELL) * (dMax - dMin)/(TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL) + dMin
 #[inline]
 fn largest_c2v_dist_in_eqr_top(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!(LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE);
+  debug_assert!((LAT_OF_SQUARE_CELL..TRANSITION_LATITUDE).contains(&lat_abs));
   linear_approx(lat_abs, csts.slope_eqr, csts.intercept_eqr)
-}
-/// Same as the above method, but taking into account an additional radius
-#[inline]
-fn largest_c2v_dist_in_eqr_top_with_radius(lat_abs: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!(0_f64 < radius);
-  debug_assert!(LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE);
-  largest_c2v_dist_in_eqr_top(f64::min(lat_abs + radius, TRANSITION_LATITUDE), csts)
 }
 
 /// Returns an upper limit on distance between the center of a cell and its furthest vertex.  
@@ -563,19 +559,8 @@ fn largest_c2v_dist_in_eqr_top_with_radius(lat_abs: f64, radius: f64, csts: &Con
 ///   - => dist =  d_max * (1 - (1 - cos(LAT_OF_SQUARE_CELL)) / LAT_OF_SQUARE_CELL^2 * lat^2)
 #[inline]
 fn largest_c2v_dist_in_eqr_bottom(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!(0_f64 <= lat_abs && lat_abs <= LAT_OF_SQUARE_CELL);
+  debug_assert!((0_f64..LAT_OF_SQUARE_CELL).contains(&lat_abs));
   csts.coeff_x2_eqr * pow2(lat_abs) + csts.coeff_cst_eqr
-}
-/// Same as the above method, but taking into account an additional radius.
-#[inline]
-fn largest_c2v_dist_in_eqr_bottom_with_radius(
-  lat_abs: f64,
-  radius: f64,
-  csts: &ConstantsC2V,
-) -> f64 {
-  debug_assert!(0_f64 < radius);
-  debug_assert!(0_f64 <= lat_abs && lat_abs <= LAT_OF_SQUARE_CELL);
-  largest_c2v_dist_in_eqr_bottom(f64::max(lat_abs - radius, 0_f64), csts)
 }
 
 #[inline]
