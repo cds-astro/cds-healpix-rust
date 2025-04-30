@@ -344,7 +344,7 @@ pub trait Mom<'a>: Sized {
   /// * `merge`: possibly performs a post-merge operation, considering the (four) siblings of the join operation.
   ///   + the depth and hash value of the parent cell (if cells are merged) are provided in input,
   ///   + together with the 4 values to be possibly merged in the parent cell.
-  ///   + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if 
+  ///   + result if either `Ok` with the merged value if a merge occurs, or `Err` with the input values if
   ///     the merge does not occurs.
   /// * `L`: type of the left MOM
   /// * `R`: type of the right MOM
@@ -541,8 +541,8 @@ where
   /// * healpix order (depth)
   /// * healpix cell number (hash value)
   /// * the associated value
-  /// 
-  /// This is supposedly less efficient to work with (to be tested), and required extra space 
+  ///
+  /// This is supposedly less efficient to work with (to be tested), and required extra space
   /// (`depth` coded on a `u8` instead of a sentinel bit in the cell number, useless ITS PRimary header
   /// of 2880 bytes), but has a broder compatibility since it can be read from a all tools supporting
   /// FITS BINTABLE reading.
@@ -745,7 +745,7 @@ mod tests {
         )
         .unwrap();
       }
-      _ => panic!()
+      _ => panic!(),
     }
   }
 }
