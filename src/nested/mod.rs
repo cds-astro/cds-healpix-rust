@@ -74,7 +74,7 @@ pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
 ///
 pub const fn children(hash: u64, delta_depth: u8) -> Range<u64> {
   let twice_dd = delta_depth << 1;
-  (hash >> twice_dd)..((hash + 1) >> twice_dd)
+  (hash << twice_dd)..((hash + 1) << twice_dd)
 }
 
 const fn one_over_nside(depth: u8) -> f64 {
