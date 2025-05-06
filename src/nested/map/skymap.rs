@@ -1,16 +1,19 @@
 use std::{
-  error::Error,
   f64::consts::PI,
   fs::File,
   io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Read, Seek, Write},
   iter::{Enumerate, Map},
   marker::PhantomData,
-  ops::{Add, AddAssign, Deref, RangeInclusive},
+  ops::{Add, AddAssign, Deref},
   path::Path,
   slice::Iter,
   vec::IntoIter,
 };
 
+#[cfg(feature = "skymap")]
+use std::{error::Error, ops::RangeInclusive};
+
+#[cfg(feature = "skymap")]
 use colorous::Gradient;
 use itertools::Itertools;
 use num_traits::ToBytes;
@@ -22,6 +25,7 @@ use rayon::{
   ThreadPool,
 };
 
+#[cfg(feature = "skymap")]
 use mapproj::CanonicalProjection;
 
 use crate::{
@@ -36,12 +40,12 @@ use crate::{
   },
 };
 
+#[cfg(feature = "skymap")]
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::show_with_default_app;
-use super::{
-  fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits},
-  img::{to_skymap_png, ColorMapFunctionType, PosConversion},
-};
+use super::fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits};
+#[cfg(feature = "skymap")]
+use super::img::{to_skymap_png, ColorMapFunctionType, PosConversion};
 
 /// Trait marking the type of the values writable in a FITS skymap.
 pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone {
@@ -382,6 +386,7 @@ impl SkyMapEnum {
   }
 
   #[cfg(not(target_arch = "wasm32"))]
+  #[cfg(feature = "skymap")]
   pub fn to_skymap_png_file<P: CanonicalProjection, W: AsRef<Path>>(
     &self,
     img_size: (u16, u16),
@@ -418,6 +423,7 @@ impl SkyMapEnum {
       })
   }
 
+  #[cfg(feature = "skymap")]
   pub fn to_skymap_png<P: CanonicalProjection, W: Write>(
     &self,
     img_size: (u16, u16),

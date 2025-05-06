@@ -4,7 +4,7 @@ pub mod bslice;
 pub mod ported_from_mom_builder;
 pub mod zvec;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "skymap", feature = "memmap"))]
 mod tests {
   use std::f64::consts::PI;
 
