@@ -33,7 +33,7 @@ pub mod zordercurve;
 
 /// Return the hash value of the parent of the given `hash` at a depth equals to the `hash` depth minus `delta_depth`.
 /// I.e., for `delta_depth = 1`, the returned value is the value of the direct parent of the given `hash` value.
-/// For `delta_depth = 1`, the "grandparent" is returned, and so on.
+/// For `delta_depth > 1`, the "grandparent" is returned, and so on.
 ///
 /// # Params
 /// * `hash`: a pixel index at a given (unspecified) depth
