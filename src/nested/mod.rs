@@ -4801,6 +4801,23 @@ mod tests {
   }
 
   #[test]
+  fn test_children() {
+    let hash1: u64 = 0;
+    let children1: Range<u64> = children(hash1, 1);
+    // Range is right exclusive
+    assert_eq!(children1.start, 0);
+    assert_eq!(children1.end, 4);
+    let grandchildren1 = children(hash1, 2);
+    assert_eq!(grandchildren1.start, 0);
+    assert_eq!(grandchildren1.end, 16);
+
+    let hash2: u64 = 31;
+    let children2 = children(hash2, 1);
+    assert_eq!(children2.start, 124);
+    assert_eq!(children2.end, 128);
+  }
+
+  #[test]
   fn testok_hash_d0() {
     let layer = get(0);
     assert_eq!(
