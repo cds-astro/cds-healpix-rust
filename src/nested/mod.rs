@@ -61,6 +61,7 @@ pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
   if depth == 0 {
     0..=11
   } else {
+    // floor-round to a multiple of 4
     let hash = hash & 0xFFFFFFFFFFFFFFFC; // <=> & 0b1111..111100
     hash..=(hash | 3)
   }
@@ -70,7 +71,7 @@ pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
 /// at a depth equals to the (unspecified) hash depth + the given `delta_depth`.
 ///
 /// # Warning
-/// THe calling code must ensure that hash depth + delta_depth is <= 29.
+/// The calling code must ensure that hash depth + delta_depth is <= 29.
 ///
 pub const fn children(hash: u64, delta_depth: u8) -> Range<u64> {
   let twice_dd = delta_depth << 1;
