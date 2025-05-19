@@ -4786,6 +4786,21 @@ mod tests {
   }
 
   #[test]
+  fn test_parent() {
+    let hash1: u64 = 4;
+    let parent1 = parent(hash1, 1);
+    assert_eq!(parent1, 1);
+
+    let hash2: u64 = 640;
+    let parent2 = parent(hash2, 1);
+    assert_eq!(parent2, 160);
+    let grandparent2 = parent(hash2, 2);
+    assert_eq!(grandparent2, 40);
+    let base2 = parent(hash2, 3);
+    assert_eq!(base2, 10);
+  }
+
+  #[test]
   fn testok_hash_d0() {
     let layer = get(0);
     assert_eq!(
