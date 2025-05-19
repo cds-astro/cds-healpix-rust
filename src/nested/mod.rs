@@ -4773,13 +4773,14 @@ mod tests {
   #[test]
   fn test_siblings() {
     let hash1: u64 = 3;
-    let siblings1 = siblings(0, hash1);
+    let siblings1: RangeInclusive<u64> = siblings(0, hash1);
+    // RangeInclusive is right inclusive
     assert!(siblings1.contains(&hash1));
     assert_eq!(*siblings1.start(), 0);
     assert_eq!(*siblings1.end(), 11);
 
     let hash2: u64 = 76;
-    let siblings2 = siblings(2, hash2);
+    let siblings2: RangeInclusive<u64> = siblings(2, hash2);
     assert!(siblings2.contains(&hash2));
     assert_eq!(*siblings2.start() & 3, 0);
     assert_eq!(*siblings2.end() & 3, 3);
