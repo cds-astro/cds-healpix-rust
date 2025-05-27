@@ -33,7 +33,7 @@ pub mod zordercurve;
 
 /// Return the hash value of the parent of the given `hash` at a depth equals to the `hash` depth minus `delta_depth`.
 /// I.e., for `delta_depth = 1`, the returned value is the value of the direct parent of the given `hash` value.
-/// For `delta_depth = 1`, the "grandparent" is returned, and so on.
+/// For `delta_depth > 1`, the "grandparent" is returned, and so on.
 ///
 /// # Params
 /// * `hash`: a pixel index at a given (unspecified) depth
@@ -61,6 +61,7 @@ pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
   if depth == 0 {
     0..=11
   } else {
+    // floor-round to a multiple of 4
     let hash = hash & 0xFFFFFFFFFFFFFFFC; // <=> & 0b1111..111100
     hash..=(hash | 3)
   }
@@ -70,7 +71,7 @@ pub const fn siblings(depth: u8, hash: u64) -> RangeInclusive<u64> {
 /// at a depth equals to the (unspecified) hash depth + the given `delta_depth`.
 ///
 /// # Warning
-/// THe calling code must ensure that hash depth + delta_depth is <= 29.
+/// The calling code must ensure that hash depth + delta_depth is <= 29.
 ///
 pub const fn children(hash: u64, delta_depth: u8) -> Range<u64> {
   let twice_dd = delta_depth << 1;
@@ -4768,6 +4769,54 @@ fn shs_computer(cone_lon: f64, cone_lat: f64, cos_cone_lat: f64) -> impl Fn((f64
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn test_siblings() {
+    let hash1: u64 = 3;
+    let siblings1: RangeInclusive<u64> = siblings(0, hash1);
+    // RangeInclusive is right inclusive
+    assert!(siblings1.contains(&hash1));
+    assert_eq!(*siblings1.start(), 0);
+    assert_eq!(*siblings1.end(), 11);
+
+    let hash2: u64 = 76;
+    let siblings2: RangeInclusive<u64> = siblings(2, hash2);
+    assert!(siblings2.contains(&hash2));
+    assert_eq!(*siblings2.start() & 3, 0);
+    assert_eq!(*siblings2.end() & 3, 3);
+  }
+
+  #[test]
+  fn test_parent() {
+    let hash1: u64 = 4;
+    let parent1 = parent(hash1, 1);
+    assert_eq!(parent1, 1);
+
+    let hash2: u64 = 640;
+    let parent2 = parent(hash2, 1);
+    assert_eq!(parent2, 160);
+    let grandparent2 = parent(hash2, 2);
+    assert_eq!(grandparent2, 40);
+    let base2 = parent(hash2, 3);
+    assert_eq!(base2, 10);
+  }
+
+  #[test]
+  fn test_children() {
+    let hash1: u64 = 0;
+    let children1: Range<u64> = children(hash1, 1);
+    // Range is right exclusive
+    assert_eq!(children1.start, 0);
+    assert_eq!(children1.end, 4);
+    let grandchildren1 = children(hash1, 2);
+    assert_eq!(grandchildren1.start, 0);
+    assert_eq!(grandchildren1.end, 16);
+
+    let hash2: u64 = 31;
+    let children2 = children(hash2, 1);
+    assert_eq!(children2.start, 124);
+    assert_eq!(children2.end, 128);
+  }
 
   #[test]
   fn testok_hash_d0() {
