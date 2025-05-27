@@ -193,6 +193,14 @@ pub enum Conversion {
     /// Completeness of the chi2 distribution of 3 degrees of freedom.
     #[clap(default_value_t = 16.266)]
     threshold: f64,
+    /// Depth threshold
+    #[clap(short, long, value_name = "DEPTH_MIN")]
+    depth_threshold: Option<u8>,
+  },
+  Count2mom {
+    /// Upper value on a cell count
+    #[clap(value_name = "COUNT_MAX")]
+    threshold: u32,
   },
   /// Transforms a density map into a MOM based on a chi2 merge algorithm.
   Dens2chi2mom {
@@ -228,10 +236,21 @@ impl Convert {
         let dens_map = thread_pool.install(|| count_map.to_dens_map_par());
         dens_map.to_fits_file(self.output)
       }
-      Conversion::Count2chi2mom { threshold } => {
+      Conversion::Count2chi2mom {
+        threshold,
+        depth_threshold,
+      } => {
+        let count_map = skymap.to_count_map()?;
+        let mom = match depth_threshold {
+          Some(dt) => count_map.to_chi2_mom_with_depth_threshold(threshold, dt),
+          None => count_map.to_chi2_mom(threshold),
+        };
+        mom.to_fits_file(self.output, "count")
+      }
+      Conversion::Count2mom { threshold } => {
         let count_map = skymap.to_count_map()?;
         count_map
-          .to_chi2_mom(threshold)
+          .to_upper_count_threshold_mom(threshold)
           .to_fits_file(self.output, "count")
       }
       Conversion::Dens2chi2mom { threshold } => {

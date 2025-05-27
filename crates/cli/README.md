@@ -183,7 +183,7 @@ sys	34m42,810s
 Or, a better option (faster while single-threaded):
 
 ```bash
-> time cut -f , -d 2,3 gaia_edr3_dist.csv | tail -n +2 \
+> time cut -d , -f 2,3 gaia_edr3_dist.csv | tail -n +2 \
   | hpx map dens 11 gaia_edr3_dist.dens.fits list -d ,
 
 real	8m25,812s
