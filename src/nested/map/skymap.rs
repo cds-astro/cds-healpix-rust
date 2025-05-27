@@ -1,3 +1,5 @@
+//! For the Skymap FITS file convention, see [this document](https://gamma-astro-data-formats.readthedocs.io/en/latest/skymaps/healpix/index.html).
+
 use std::{
   error::Error,
   f64::consts::PI,
@@ -13,6 +15,7 @@ use std::{
 
 use colorous::Gradient;
 use itertools::Itertools;
+use log::warn;
 use num_traits::ToBytes;
 use rayon::{
   prelude::{
@@ -329,6 +332,21 @@ impl SkyMapEnum {
           std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values)
         })))
       }
+      Self::ImplicitU64I64(skymap) => {
+        warn!("Transforms i64 skymap into u32 skymap without checking possible overflow!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
+      }
+      Self::ImplicitU64F32(skymap) => {
+        warn!("Transforms f32 skymap into u32 skymap assuming integer values!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
+      }
+      Self::ImplicitU64F64(skymap) => {
+        warn!("Transforms f64 skymap into u32 skymap assuming integer values!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
+      }
       _ => Err(String::from("Unable to convert to count map.")),
     }
   }
@@ -601,6 +619,20 @@ impl CountMap {
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
+  /// Merge sibling cells till the sum of their counts remains lower than
+  /// the given threshold.
+  pub fn to_upper_count_threshold_mom(&self, upper_count_threshold: u32) -> MomVecImpl<u64, u32> {
+    let merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+      let sum = *n0 + *n1 + *n2 + *n3;
+      if sum < upper_count_threshold {
+        Some(sum)
+      } else {
+        None
+      }
+    };
+    MomVecImpl::from_skymap_ref(&self.0, merger)
+  }
+
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
   /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
@@ -644,6 +676,41 @@ impl CountMap {
       // 99.9% => 16.266
       if chi2_of_3dof < chi2_of_3dof_threshold {
         Some(*n0 + *n1 + *n2 + *n3)
+      } else {
+        None
+      }
+    };
+    let mom = MomVecImpl::from_skymap_ref(&self.0, chi2_merger);
+    // Create a new MOM transforming number of sources into densities.
+    MomVecImpl::from_map(mom, |z, v| {
+      v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
+    })
+  }
+
+  /// Like `to_chi2_mom` but adding a threshold on `depth` to avoid making to low resolution cells
+  /// (e.g. for catalogues having a small number of sources distributed on the whole sky).
+  pub fn to_chi2_mom_with_depth_threshold(
+    &self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: u8,
+  ) -> MomVecImpl<u64, f64> {
+    let chi2_merger = |depth: u8, _hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+      if depth >= depth_threshold {
+        let mu0 = *n0 as f64;
+        let mu1 = *n1 as f64;
+        let mu2 = *n2 as f64;
+        let mu3 = *n3 as f64;
+
+        let sum = mu0 + mu1 + mu2 + mu3;
+        let weighted_var_inv =
+          1.0 / mu0.max(1.0) + 1.0 / mu1.max(1.0) + 1.0 / mu2.max(1.0) + 1.0 / mu3.max(1.0);
+        let weighted_mean = 4.0 / weighted_var_inv;
+        let chi2_of_3dof = sum - 4.0 * weighted_mean;
+        if chi2_of_3dof < chi2_of_3dof_threshold {
+          Some(*n0 + *n1 + *n2 + *n3)
+        } else {
+          None
+        }
       } else {
         None
       }

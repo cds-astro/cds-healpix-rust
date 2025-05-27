@@ -311,7 +311,7 @@ pub trait Mom<'a>: Sized {
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
   ///   (i.e. the 4 cells belonging to a same direct parent cell).
-  ///   The function decide whether value are merge (and how they are merged) or not returning
+  ///   The function decide whether values are merge (and how they are merged) or not returning
   ///   either `Some` or `None`.
   fn from_skymap_ref<'s, S, M>(skymap: &'s S, merger: M) -> Self
   where
