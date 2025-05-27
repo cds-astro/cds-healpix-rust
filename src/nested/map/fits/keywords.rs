@@ -2,6 +2,8 @@
 
 use std::{fmt, slice::ChunksMut, str};
 
+use log::warn;
+
 use super::{
   error::FitsError,
   read::{get_keyword, get_str_val_no_quote, parse_uint_val},
@@ -86,16 +88,24 @@ impl FitsCard for CoordSys {
 
   fn specific_parse_value(keyword_record: &[u8]) -> Result<Self, FitsError> {
     match get_str_val_no_quote(keyword_record)? {
-      b"CEL" => Ok(CoordSys::Cel),
+      b"C" => Ok(CoordSys::Cel),
       b"GAL" => Ok(CoordSys::Gal),
-      parsed_val => Err(Self::predefine_val_err(parsed_val, &[b"CEL", b"GAL"])),
+      b"CEL" => {
+        warn!("COORDSYS value should be 'C', not 'CEL'");
+        Ok(CoordSys::Cel)
+      }
+      b"GAL" => {
+        warn!("COORDSYS value should be 'G', not 'CAL'");
+        Ok(CoordSys::Gal)
+      }
+      parsed_val => Err(Self::predefine_val_err(parsed_val, &[b"C", b"G"])),
     }
   }
 
   fn to_fits_value(&self) -> String {
     String::from(match self {
-      CoordSys::Cel => "'CEL'",
-      CoordSys::Gal => "'GAL'",
+      CoordSys::Cel => "'C'",
+      CoordSys::Gal => "'G'",
     })
   }
 }
@@ -300,6 +310,11 @@ impl FirstPix {
     self.0
   }
 }
+impl Default for FirstPix {
+  fn default() -> Self {
+    Self(0)
+  }
+}
 impl FitsCard for FirstPix {
   const KEYWORD: &'static [u8; 8] = b"FIRSTPIX";
 
@@ -360,7 +375,7 @@ impl FitsCard for IndexSchema {
   }
 }
 
-// Usse the index in an array of Option(SkymapKeywords) for fast retrieving of the Card :)
+// Uses the index in an array of Option(SkymapKeywords) for fast retrieving of the Card :)
 pub trait SkymapCard: FitsCard {
   const INDEX: u8;
 }
@@ -451,6 +466,11 @@ impl SkymapKeywordsMap {
       }
       None => {
         if accept_not_found {
+          warn!(
+            "Missing keyword '{}'; Value '{}' is assumed!",
+            CoordSys::keyword_str(),
+            expected.to_fits_value()
+          );
           Ok(())
         } else {
           Err(FitsError::MissingKeyword {
@@ -462,7 +482,11 @@ impl SkymapKeywordsMap {
     }
   }
 
-  pub(super) fn check_ordering(&self, expected: Ordering) -> Result<(), FitsError> {
+  pub(super) fn check_ordering(
+    &self,
+    expected: Ordering,
+    accept_not_found: bool,
+  ) -> Result<(), FitsError> {
     match self.get::<Ordering>() {
       Some(SkymapKeywords::Ordering(actual)) => {
         if *actual == expected {
@@ -475,13 +499,28 @@ impl SkymapKeywordsMap {
           })
         }
       }
-      _ => Err(FitsError::MissingKeyword {
-        keyword: Ordering::keyword_string(),
-      }),
+      _ => {
+        if accept_not_found {
+          warn!(
+            "Missing keyword '{}'; Value '{}' is assumed!",
+            Ordering::keyword_str(),
+            expected.to_fits_value()
+          );
+          Ok(())
+        } else {
+          Err(FitsError::MissingKeyword {
+            keyword: Ordering::keyword_string(),
+          })
+        }
+      }
     }
   }
 
-  pub(super) fn check_firstpix(&self, expected: u64) -> Result<(), FitsError> {
+  pub(super) fn check_firstpix(
+    &self,
+    expected: u64,
+    accept_not_found: bool,
+  ) -> Result<(), FitsError> {
     match self.get::<FirstPix>() {
       Some(SkymapKeywords::FirstPix(FirstPix(actual))) => {
         if *actual == expected {
@@ -494,14 +533,29 @@ impl SkymapKeywordsMap {
           })
         }
       }
-      None => Err(FitsError::MissingKeyword {
-        keyword: FirstPix::keyword_string(),
-      }),
+      None => {
+        if accept_not_found {
+          warn!(
+            "Missing keyword '{}'; Value '{}' is assumed!",
+            FirstPix::keyword_str(),
+            expected
+          );
+          Ok(())
+        } else {
+          Err(FitsError::MissingKeyword {
+            keyword: FirstPix::keyword_string(),
+          })
+        }
+      }
       _ => unreachable!(),
     }
   }
 
-  pub(super) fn check_lastpix(&self, expected: u64) -> Result<(), FitsError> {
+  pub(super) fn check_lastpix(
+    &self,
+    expected: u64,
+    accept_not_found: bool,
+  ) -> Result<(), FitsError> {
     match self.get::<LastPix>() {
       Some(SkymapKeywords::LastPix(LastPix(actual))) => {
         if *actual == expected {
@@ -514,9 +568,20 @@ impl SkymapKeywordsMap {
           })
         }
       }
-      None => Err(FitsError::MissingKeyword {
-        keyword: LastPix::keyword_string(),
-      }),
+      None => {
+        if accept_not_found {
+          warn!(
+            "Missing keyword '{}'; Value '{}' is assumed!",
+            LastPix::keyword_str(),
+            &expected
+          );
+          Ok(())
+        } else {
+          Err(FitsError::MissingKeyword {
+            keyword: LastPix::keyword_string(),
+          })
+        }
+      }
       _ => unreachable!(),
     }
   }
@@ -535,7 +600,7 @@ impl SkymapKeywordsMap {
         }
       }
       _ => Err(FitsError::MissingKeyword {
-        keyword: Ordering::keyword_string(),
+        keyword: IndexSchema::keyword_string(),
       }),
     }
   }

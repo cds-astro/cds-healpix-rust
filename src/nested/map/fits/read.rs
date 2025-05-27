@@ -75,8 +75,10 @@ pub fn from_fits_skymap<R: Read + Seek>(mut reader: BufReader<R>) -> Result<SkyM
 
 pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum, FitsError> {
   let mut header_block = [b' '; 2880];
+  debug!("Parse primary HDU...");
   consume_primary_hdu(&mut reader, &mut header_block)?;
   // Read the extension HDU
+  debug!("Parse extension...");
   let mut it80 = next_36_chunks_of_80_bytes(&mut reader, &mut header_block)?;
   // See Table 10 and 17 in https://fits.gsfc.nasa.gov/standard40/fits_standard40aa-le.pdf
   check_keyword_and_val(it80.next().unwrap(), b"XTENSION", b"'BINTABLE'")?;
@@ -87,10 +89,6 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
   check_keyword_and_val(it80.next().unwrap(), b"PCOUNT  ", b"0")?;
   check_keyword_and_val(it80.next().unwrap(), b"GCOUNT  ", b"1")?;
   let n_cols = check_keyword_and_parse_uint_val::<u64>(it80.next().unwrap(), b"TFIELDS ")?;
-  let colname_1 = TType1::parse_value(it80.next().unwrap())?;
-  debug!("Skymap column name: {}", colname_1.get());
-  let coltype_1 = TForm1::parse_value(it80.next().unwrap())?;
-  debug!("Skymap column type: {}", coltype_1.to_fits_value());
 
   // nbits = |BITPIX|xGCOUNTx(PCOUNT+NAXIS1xNAXIS2x...xNAXISn)
   // In our case (bitpix = Depends on TForm, GCOUNT = 1, PCOUNT = 0) => nbytes = n_cells * size_of(T)
@@ -124,12 +122,43 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
     // Read next 2880 bytes
     it80 = next_36_chunks_of_80_bytes(&mut reader, &mut header_block)?;
   }
+  // Check IndexSchema
+  match skymap_kws.get::<IndexSchema>() {
+    Some(_) => skymap_kws.check_index_schema(IndexSchema::Implicit),
+    None => {
+      warn!(
+        "Missing skymap keywork '{}'. Value '{}' is assumed!",
+        IndexSchema::keyword_str(),
+        IndexSchema::Implicit.to_fits_value()
+      );
+      skymap_kws.insert(SkymapKeywords::IndexSchema(IndexSchema::Implicit));
+      Ok(())
+    }
+  }?;
+  // Check TType and TForm
+  // -- check ttype
+  match skymap_kws.get::<TType1>() {
+    Some(SkymapKeywords::TType1(ttype1)) => debug!("Skymap column name: {}", ttype1.get()),
+    None => warn!("Missing keyword {}.", TType1::keyword_str()),
+    _ => unreachable!(),
+  };
+  // -- check tform
+  let coltype_1 = match skymap_kws.get::<TForm1>() {
+    Some(SkymapKeywords::TForm1(tform1)) => Ok(tform1),
+    None => Err(FitsError::MissingKeyword {
+      keyword: TForm1::keyword_string(),
+    }),
+    _ => unreachable!(),
+  }?;
+  debug!("Skymap column type: {}", coltype_1.to_fits_value());
+
   // Check constant header params
   skymap_kws.check_pixtype()?; // = HEALPIX
-  skymap_kws.check_ordering(Ordering::Nested)?; // So far we support only 'NESTED'
+  skymap_kws.check_ordering(Ordering::Nested, false)?;
   skymap_kws.check_coordsys(CoordSys::Cel, true)?; // So far we support only Celestial coordinates (not Galactic)
-  skymap_kws.check_index_schema(IndexSchema::Implicit)?; // So far we support only 'IMLPLICIT'
-  skymap_kws.check_firstpix(0)?;
+  skymap_kws.check_index_schema(IndexSchema::Implicit)?; // So far we support only 'IMPLICIT'
+  skymap_kws.check_firstpix(0, true)?;
+
   // Check number of columns
   // - we so far support only map having a single column of values
   if n_cols != 1 {
@@ -162,7 +191,8 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
     _ => unreachable!(),
   }?;
   let n_hash = n_hash(depth);
-  skymap_kws.check_lastpix(n_hash - 1)?;
+
+  skymap_kws.check_lastpix(n_hash - 1, true)?;
   // Check whether TForm compatible with N bytes per row
   let n_hash_2 = coltype_1.n_pack() as u64 * n_rows;
   if n_hash != n_hash_2 {
@@ -222,8 +252,16 @@ fn consume_primary_hdu<R: BufRead>(
   // SIMPLE = 'T' => file compliant with the FITS standard
   check_keyword_and_val(chunks_of_80.next().unwrap(), b"SIMPLE ", b"T")?;
   chunks_of_80.next().unwrap(); // Do not check for BITPIX (we expect an empty header)
-                                // NAXIS = 0 => we only support FITS files with no data in the primary HDU
-  check_keyword_and_val(chunks_of_80.next().unwrap(), b"NAXIS ", b"0")?;
+
+  // NAXIS = 0 => we only support FITS files with no data in the primary HDU
+  match check_keyword_and_val(chunks_of_80.next().unwrap(), b"NAXIS   ", b"0") {
+    Ok(()) => Ok(()),
+    Err(FitsError::UnexpectedValue { .. }) => {
+      // If NAXIS has been set to 1, we then must ensure that NAXIS1 is set to 0
+      check_keyword_and_val(chunks_of_80.next().unwrap(), b"NAXIS1  ", b"0")
+    }
+    Err(e) => Err(e),
+  }?;
   // Ignore possible additional keywords
   while !contains_end(&mut chunks_of_80) {
     // Few chances to enter here (except if someone had a lot of things to say in the header)
@@ -256,12 +294,18 @@ fn contains_end<'a, I: Iterator<Item = &'a [u8]>>(chunks_of_80: &'a mut I) -> bo
 /// the simple quotes in case of String value.
 /// It is made for fast checking, but assuming we know the exact format of the
 /// value (including simple quotes and extra spaces in case of String values).
-/// To specifically  check the trimmed string value after having parse simple quotes, see `check_keyword_and_str_val`.   
+/// To specifically  check the trimmed string value after having parse simple quotes, see `check_keyword_and_str_val`.
 pub(crate) fn check_keyword_and_val(
   keyword_record: &[u8],
   expected_kw: &[u8],
   expected_val: &[u8],
 ) -> Result<(), FitsError> {
+  debug!(
+    "Check KW: '{}' and val: '{}' in card: '{}'.",
+    unsafe { str::from_utf8_unchecked(expected_kw) },
+    unsafe { str::from_utf8_unchecked(expected_val) },
+    unsafe { str::from_utf8_unchecked(keyword_record) }
+  );
   check_expected_keyword(keyword_record, expected_kw)
     .and_then(|()| check_for_value_indicator(keyword_record))
     .and_then(|()| check_expected_value(keyword_record, expected_val))
@@ -272,6 +316,12 @@ pub(crate) fn check_keyword_and_str_val(
   expected_kw: &[u8],
   expected_val: &[u8],
 ) -> Result<(), FitsError> {
+  debug!(
+    "Check KW: '{}' and val: '{}' in card: '{}'.",
+    unsafe { str::from_utf8_unchecked(expected_kw) },
+    unsafe { str::from_utf8_unchecked(expected_val) },
+    unsafe { str::from_utf8_unchecked(keyword_record) }
+  );
   check_expected_keyword(keyword_record, expected_kw)
     .and_then(|()| check_for_value_indicator(keyword_record))
     .and_then(|()| check_expected_str_value(keyword_record, expected_val))
@@ -285,6 +335,11 @@ pub(crate) fn check_keyword_and_parse_uint_val<T>(
 where
   T: Into<u64> + FromStr<Err = ParseIntError>,
 {
+  debug!(
+    "Check KW: '{}' and return uint from card: '{}'.",
+    unsafe { str::from_utf8_unchecked(expected_kw) },
+    unsafe { str::from_utf8_unchecked(keyword_record) }
+  );
   check_expected_keyword(keyword_record, expected_kw)
     .and_then(|()| check_for_value_indicator(keyword_record))
     .and_then(|()| parse_uint_val::<T>(keyword_record))
@@ -295,6 +350,11 @@ pub(crate) fn check_keyword_and_get_str_val<'a>(
   keyword_record: &'a [u8],
   expected_kw: &[u8],
 ) -> Result<&'a str, FitsError> {
+  debug!(
+    "Check KW: '{}' and return str from card: '{}'.",
+    unsafe { str::from_utf8_unchecked(expected_kw) },
+    unsafe { str::from_utf8_unchecked(keyword_record) }
+  );
   check_expected_keyword(keyword_record, expected_kw)
     .and_then(|()| check_for_value_indicator(keyword_record))
     .and_then(|()| {
@@ -358,7 +418,9 @@ pub(crate) fn check_expected_value(
   if lt_src.len() >= expected.len() && &lt_src[..expected.len()] == expected {
     Ok(())
   } else {
-    let keyword = String::from_utf8_lossy(&src[0..8]).trim_end().to_string();
+    let keyword = String::from_utf8_lossy(&keyword_record[0..8])
+      .trim_end()
+      .to_string();
     // We know what we put in it, so unsafe is ok here
     let expected = String::from(unsafe { str::from_utf8_unchecked(expected) });
     // Here, may contains binary data

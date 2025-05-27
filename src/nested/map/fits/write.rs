@@ -163,7 +163,7 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::FITS_TFORM);
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
   it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
-  it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
+  it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'C       '");
   it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NSIDE   ", nside as u64);
   it.next().unwrap()[0..30].copy_from_slice(b"FIRSTPIX=                    0");

@@ -102,4 +102,24 @@ mod tests {
       )
       .unwrap();
   }
+
+  fn init_logger() {
+    let log_level = log::LevelFilter::max();
+    // let log_level = log::LevelFilter::Error;
+
+    let _ = env_logger::builder()
+      // Include all events in tests
+      .filter_level(log_level)
+      // Ensure events are captured by `cargo test`
+      .is_test(true)
+      // Ignore errors initializing the logger if tests race to configure it
+      .try_init();
+  }
+
+  #[test]
+  fn test_read_skymap() {
+    init_logger();
+    let path = "test/resources/skymap/gaiadr3.nside64.densmap.fits";
+    let skymap = SkyMapEnum::from_fits_file(path).unwrap();
+  }
 }
