@@ -1,6 +1,6 @@
 [package]
 name = "hpx-cli"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 description = "Command-line tool to play with HEALPix"
 license = "MIT OR Apache-2.0"

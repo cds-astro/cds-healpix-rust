@@ -1,5 +1,19 @@
 # `cdshealpix` Change Log
 
+## 0.8.1
+
+Released 2025-06-02
+
+### Changed
+
+* Relax constraints on Skymap reading
+* Replace CEL by C and GAL by G in ORDERING when writing a skymap
+
+### Added
+
+* Add countmap2chi2mom with depth threshold: add countmap2countmom (HATS structure)
+
+
 ## 0.8.0
 
 Released 2025-03-21
