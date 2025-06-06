@@ -89,7 +89,7 @@ impl FitsCard for CoordSys {
   fn specific_parse_value(keyword_record: &[u8]) -> Result<Self, FitsError> {
     match get_str_val_no_quote(keyword_record)? {
       b"C" => Ok(CoordSys::Cel),
-      b"GAL" => Ok(CoordSys::Gal),
+      b"G" => Ok(CoordSys::Gal),
       b"CEL" => {
         warn!("COORDSYS value should be 'C', not 'CEL'");
         Ok(CoordSys::Cel)

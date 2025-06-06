@@ -1604,9 +1604,9 @@ impl BMOC {
     it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'ZUNIQ   '");
     it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'K       '");
     it.next().unwrap()[0..25].copy_from_slice(b"TTYPE2  = 'FULLY_COVERED'");
-    it.next().unwrap()[0..20].copy_from_slice(b"TFORM1  = 'L       '");
+    it.next().unwrap()[0..20].copy_from_slice(b"TFORM2  = 'L       '");
     it.next().unwrap()[0..16].copy_from_slice(b"PRODTYPE= 'BMOC'");
-    it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'CEL     '");
+    it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'C       '");
     it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
     write_uint_mandatory_keyword_record(it.next().unwrap(), b"MAXORDER", self.depth_max as u64);
     write_keyword_record(
@@ -1614,7 +1614,9 @@ impl BMOC {
       b"DATE    ",
       format!(
         "'{}'",
-        Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+        Utc::now()
+          .to_rfc3339_opts(SecondsFormat::Secs, true)
+          .trim_end_matches('Z')
       )
       .as_str(),
     );
@@ -1636,7 +1638,11 @@ impl BMOC {
   fn write_bintable_fits_data<W: Write>(&self, mut writer: W) -> Result<usize, IoError> {
     let mut n = 0_usize;
     for fzuniq in self.entries.iter().cloned() {
-      let is_full = fzuniq as u8 & 1_u8;
+      let is_full = if (fzuniq as u8 & 1_u8) == 1_u8 {
+        b'T'
+      } else {
+        b'F'
+      };
       let zuniq = fzuniq >> 1;
       writer
         .write_all(zuniq.to_le_bytes().as_ref())
