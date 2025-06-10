@@ -5188,6 +5188,12 @@ mod tests {
   fn testok_cone_approx_bmoc_2() {
     // From https://github.com/cds-astro/cds-healpix-rust/issues/21
     let actual_res = cone_coverage_approx(1, 0.0, -0.3956593324046537, 0.00986851403158301);
+
+    let actual_res = cone_coverage_approx(10, 0.0, 0.0, (5f64 / 3600.0).to_radians());
+    println!("@@@@@ FLAT VIEW");
+    for cell in actual_res.flat_iter() {
+      println!("@@@@@ cell a: {:?}", cell);
+    }
   }
 
   #[test]
@@ -7057,6 +7063,39 @@ mod tests {
     let depth = 4;
     let vertices = [(PI, 1.000), (PI + 1e-3, 1.001), (PI - 1e-3, 1.002)];
     let expected_res_exact: [u64; 3] = [373, 375, 698];
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_polygone_exact_8() {
+    // In Aladin: draw polygon(ra1, dec1, ra2, dec2, ...)
+    let depth = 4;
+    let mut vertices = [
+      (154.0_f64, -44.0_f64),
+      (154.0_f64, -10.0_f64),
+      (113.0_f64, -10.0_f64),
+      (113.0_f64, -44.0_f64),
+    ];
+    for (lon, lat) in &mut vertices {
+      *lon = (*lon).to_radians();
+      *lat = (*lat).to_radians();
+    }
+    let expected_res_exact: [u64; 117] = [
+      1344, 1345, 1347, 1348, 1349, 1350, 1666, 1672, 1673, 1674, 2365, 2366, 2367, 2402, 2403,
+      2404, 2405, 2406, 2407, 2408, 2409, 2410, 2411, 2412, 2413, 2414, 2415, 2418, 2424, 2425,
+      2426, 2427, 2430, 2447, 2449, 2450, 2451, 2452, 2453, 2454, 2455, 2456, 2457, 2458, 2459,
+      2460, 2461, 2462, 2463, 2480, 2481, 2483, 2484, 2485, 2486, 2487, 2492, 2493, 2495, 2496,
+      2497, 2498, 2499, 2500, 2501, 2502, 2503, 2504, 2505, 2506, 2507, 2508, 2509, 2510, 2511,
+      2512, 2513, 2514, 2515, 2516, 2517, 2518, 2519, 2520, 2521, 2522, 2523, 2524, 2525, 2526,
+      2527, 2528, 2529, 2530, 2531, 2532, 2533, 2534, 2535, 2536, 2537, 2538, 2539, 2540, 2541,
+      2542, 2543, 2544, 2545, 2546, 2547, 2548, 2549, 2550, 2552, 2553, 2554,
+    ];
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     // to_aladin_moc(&actual_res_exact);
     assert!(actual_res_exact.deep_size() > 0);

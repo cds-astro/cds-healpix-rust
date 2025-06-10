@@ -456,6 +456,9 @@ fn arc_special_point_in_pc_same_quarter(
   z_eps_max: f64,
   n_iter_max: u8,
 ) -> Option<LonLat> {
+  if p1.lon() == p2.lon() {
+    return None;
+  }
   debug_assert!(
     p1.lon() < p2.lon(),
     "p1: ({}, {}); p2: ({}, {})",
