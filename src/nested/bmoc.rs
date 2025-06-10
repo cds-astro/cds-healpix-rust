@@ -1645,7 +1645,7 @@ impl BMOC {
       };
       let zuniq = fzuniq >> 1;
       writer
-        .write_all(zuniq.to_le_bytes().as_ref())
+        .write_all(zuniq.to_be_bytes().as_ref())
         .and_then(|()| writer.write_u8(is_full))?;
       n += 1;
     }
