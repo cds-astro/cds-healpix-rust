@@ -1,34 +1,39 @@
-use super::super::{
-  super::{
-    fits::{
-      error::FitsError,
-      read::{
-        check_keyword_and_parse_uint_val, check_keyword_and_str_val, check_keyword_and_val,
-        get_str_val_no_quote, next_36_chunks_of_80_bytes, parse_uint_val,
-      },
-    },
-    skymap::{SkyMap, SkyMapValue},
-  },
-  LhsRhsBoth, Mom, ZUniqHashT,
+use crate::nested::map::{
+  skymap::{SkyMap, SkyMapValue},
+  mom::{LhsRhsBoth, Mom, ZUniqHashT},
 };
+#[cfg(feature = "memmap")]
+use crate::nested::map::fits::{
+  error::FitsError,
+  read::{
+    check_keyword_and_parse_uint_val, check_keyword_and_str_val, check_keyword_and_val,
+    get_str_val_no_quote, next_36_chunks_of_80_bytes, parse_uint_val,
+  },
+};
+#[cfg(feature = "memmap")]
 use crate::nested::map::mom::WritableMom;
+#[cfg(feature = "memmap")]
 use chrono::{DateTime, Utc};
+#[cfg(feature = "memmap")]
 use log::debug;
+#[cfg(feature = "memmap")]
 use memmap2::{Mmap, MmapOptions};
 use num_traits::{FromBytes, ToBytes};
-use std::io::{BufWriter, Write};
+#[cfg(feature = "memmap")]
+use std::{
+  fs::File,
+  io::{BufWriter, Write},
+  path::Path,
+  str,
+  time::SystemTime,
+};
 use std::{
   array::TryFromSliceError,
   cmp::Ordering,
-  convert::{TryFrom, TryInto},
-  fs::File,
   iter::{Empty, Map},
   marker::PhantomData,
   ops::Range,
-  path::Path,
   slice::{from_raw_parts, ChunksExact},
-  str,
-  time::SystemTime,
 };
 
 /// Defines the type of ZUniq Hash values that can be read/write from/to FITS files.
@@ -61,6 +66,7 @@ where
 {
 }
 
+#[cfg(feature = "memmap")]
 pub enum FITSMom {
   U32U32(FitsMMappedCIndex<u32, u32>),
   U32F32(FitsMMappedCIndex<u32, f32>),
@@ -69,6 +75,7 @@ pub enum FITSMom {
   U64F32(FitsMMappedCIndex<u64, f32>),
   U64F64(FitsMMappedCIndex<u64, f64>),
 }
+#[cfg(feature = "memmap")]
 impl FITSMom {
   // TODO: make a method loading everything from a reader a aking a zvec object!
   #[cfg(not(target_arch = "wasm32"))]
@@ -227,6 +234,7 @@ impl FITSMom {
 }
 
 #[derive(Debug)]
+#[cfg(feature = "memmap")]
 pub struct FitsMMappedCIndex<Z: Z4FITS, V: V4FITS> {
   fits_creation_date: Option<SystemTime>,
   value_name: String,
@@ -237,6 +245,7 @@ pub struct FitsMMappedCIndex<Z: Z4FITS, V: V4FITS> {
   _phantom_v: PhantomData<V>,
 }
 
+#[cfg(feature = "memmap")]
 impl<Z: Z4FITS, V: V4FITS> FitsMMappedCIndex<Z, V> {
   fn new(
     fits_creation_date: Option<SystemTime>,
