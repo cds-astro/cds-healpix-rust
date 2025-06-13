@@ -552,8 +552,8 @@ where
     mut writer: W,
     value_colname: T,
   ) -> Result<(), FitsError> {
-    write_primary_hdu(&mut writer)
-      .and_then(|()| self.write_bintable_fits_header(&mut writer, value_colname))
+    self
+      .write_bintable_fits_header(&mut writer, value_colname)
       .and_then(|()| self.write_all_bintable_entries(&mut writer))
       .and_then(|n_data_bytes| write_final_padding(&mut writer, n_data_bytes))
   }
