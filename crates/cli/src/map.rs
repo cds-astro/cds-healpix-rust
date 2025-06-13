@@ -207,6 +207,9 @@ pub enum Conversion {
     /// Completeness of the chi2 distribution of 3 degrees of freedom.
     #[clap(default_value_t = 16.266)]
     threshold: f64,
+    /// Depth threshold
+    #[clap(short, long, value_name = "DEPTH_MIN")]
+    depth_threshold: Option<u8>,
   },
 }
 
@@ -241,10 +244,7 @@ impl Convert {
         depth_threshold,
       } => {
         let count_map = skymap.to_count_map()?;
-        let mom = match depth_threshold {
-          Some(dt) => count_map.to_chi2_mom_with_depth_threshold(threshold, dt),
-          None => count_map.to_chi2_mom(threshold),
-        };
+        let mom = count_map.to_chi2_mom(threshold, depth_threshold);
         mom.to_fits_file(self.output, "count")
       }
       Conversion::Count2mom { threshold } => {
@@ -253,11 +253,13 @@ impl Convert {
           .to_upper_count_threshold_mom(threshold)
           .to_fits_file(self.output, "count")
       }
-      Conversion::Dens2chi2mom { threshold } => {
+      Conversion::Dens2chi2mom {
+        threshold,
+        depth_threshold,
+      } => {
         let dens_map = skymap.to_dens_map()?;
-        dens_map
-          .to_chi2_mom(threshold)
-          .to_fits_file(self.output, "density")
+        let mom = dens_map.to_chi2_mom(threshold, depth_threshold);
+        mom.to_fits_file(self.output, "density")
       }
     }
     .map_err(|e| e.into())
