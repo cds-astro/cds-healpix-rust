@@ -104,13 +104,13 @@ pub trait HCIndex {
   /// The starting cumulative value associated to a HEALPix cell of index `i` is obtained by `get(i)`
   /// while the ending cumulative value is obtained by `get(i+1)`.
   /// It means that the largest index equals the number of HEALPix cells at the index depth, and the
-  /// number of stored values equals thi number plus one.
+  /// number of stored values equals this number plus one.
   ///
   /// # Panics
   /// If `index` larger than `n_hash(depth)`.
   fn get(&self, index: usize) -> Self::V;
 
-  /// For the firs serialization. Must write the `n_hash(depth) + 1` values, in ascnding order,
+  /// For the fits serialization. Must write the `n_hash(depth) + 1` values, in ascending order,
   /// and in little-endian, in the given writer.
   /// Exactly `(n_hash(depth) + 1) * size_of::<Self::V>` bytes must be written.
   fn write_all_values<W: Write>(&self, writer: W) -> Result<usize, IoError>;
@@ -243,8 +243,7 @@ pub trait HCIndex {
     indexed_colname_lon: Option<&str>,
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
-    let indexed_file_last_modif_date =
-      indexed_file_last_modif_date.map(DateTime::<Utc>::from);
+    let indexed_file_last_modif_date = indexed_file_last_modif_date.map(DateTime::<Utc>::from);
     let n_values = n_hash(self.depth()) + 1;
     // Perpare the header
     let mut header_block = [b' '; 2880];

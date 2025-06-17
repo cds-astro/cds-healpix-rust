@@ -40,7 +40,7 @@ use crate::{
 };
 
 /// A very basic and simple BMOC Builder: we push elements in it assuming that we provide them
-/// in the write order, without duplicates and small cells included in larger cells.
+/// in the right order, without duplicates and small cells included in larger cells.
 #[derive(Debug)]
 pub struct BMOCBuilderUnsafe {
   // (super) // removed because of external test
