@@ -1,12 +1,14 @@
 //! Tree configuration.
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Tree configuration.
 ///
 /// Actually, it is a configuration of the forest of trees, but for simplicity we call it
 /// a multi-root tree.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TreeConfig {
     /// Number of roots.
     #[allow(dead_code)]

@@ -4,36 +4,37 @@
 
 use std::{
   cmp::Ordering,
-  error::Error,
   fmt::{Debug, Display},
   fs::File,
   io::{BufWriter, Write},
-  ops::{AddAssign, RangeInclusive},
+  ops::AddAssign,
   path::Path,
 };
 
-use chrono::{SecondsFormat, Utc};
-use colorous::Gradient;
-use mapproj::CanonicalProjection;
-use num::PrimInt;
-use num_traits::ToBytes;
+#[cfg(feature = "skymap")]
+use std::{error::Error, ops::RangeInclusive};
 
+use chrono::{SecondsFormat, Utc};
+#[cfg(feature = "skymap")]
+use colorous::Gradient;
+#[cfg(feature = "skymap")]
+use mapproj::CanonicalProjection;
+use num_traits::{PrimInt, ToBytes};
+
+#[cfg(feature = "skymap")]
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::to_mom_png_file;
-use super::{
-  skymap::{SkyMap, SkyMapValue},
-  HHash,
-};
-use crate::nested::map::{
-  fits::{
-    error::FitsError,
-    write::{
-      write_final_padding, write_keyword_record, write_primary_hdu, write_str_keyword_record,
-      write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
-    },
+use super::skymap::{SkyMap, SkyMapValue};
+use super::HHash;
+use super::fits::{
+  error::FitsError,
+  write::{
+    write_final_padding, write_keyword_record, write_primary_hdu, write_str_keyword_record,
+    write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
   },
-  img::{to_mom_png, ColorMapFunctionType, PosConversion, Val},
 };
+#[cfg(feature = "skymap")]
+use super::img::{to_mom_png, ColorMapFunctionType, PosConversion, Val};
 
 pub mod impls;
 
@@ -361,6 +362,7 @@ pub trait Mom<'a>: Sized {
     ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
 }
 
+#[cfg(feature = "skymap")]
 pub trait ViewableMom<'a>: Mom<'a>
 where
   <Self as Mom<'a>>::ValueType: SkyMapValue + Val + 'a,
@@ -426,6 +428,7 @@ where
     )
   }
 }
+#[cfg(feature = "skymap")]
 /// Implement `ViewableMom` for all `Mom` having a `ValueType` implementing `Val`.
 impl<'a, V: SkyMapValue + Val + 'a, M: Mom<'a, ValueType = V>> ViewableMom<'a> for M {}
 
@@ -610,7 +613,7 @@ where
 /// Implement `WritableMom` for all `Mom` having a `ValueType` implementing `ToBytes`.
 impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'a> for M {}
 
-#[cfg(test)]
+#[cfg(all(test, feature = "skymap"))]
 mod tests {
   use crate::nested::map::img::to_mom_png_file;
   use crate::nested::map::mom::LhsRhsBoth;

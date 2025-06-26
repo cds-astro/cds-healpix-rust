@@ -13,8 +13,7 @@
 //! - works with compressed MOCs decompressed on-the-fly, and compressing the result on-the-fly
 //!   too (with a very few amount of memory needed).
 
-use num::{PrimInt, ToPrimitive, Unsigned};
-use num_traits::NumAssign;
+use num_traits::{NumAssign, PrimInt, ToPrimitive, Unsigned};
 
 use std::cmp::{min, Ordering};
 use std::fmt::{Debug, Display};

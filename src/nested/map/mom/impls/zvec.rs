@@ -776,7 +776,7 @@ where
   }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "skymap"))]
 mod tests {
   use std::f64::consts::PI;
 
