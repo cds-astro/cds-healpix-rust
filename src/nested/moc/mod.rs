@@ -690,7 +690,7 @@ where
   H: HpxHash,
   R: RangeMOCIterator<H>,
 {
-  pub fn new(it: &mut R) -> MOCIteratorFromRefRanges<H, R> {
+  pub fn new(it: &mut R) -> MOCIteratorFromRefRanges<'_, H, R> {
     let curr = it.next();
     let depth_max = it.depth_max();
     let twice_dd = ((H::MAX_DEPTH - depth_max) << 1) as usize;

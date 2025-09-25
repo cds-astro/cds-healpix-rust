@@ -267,7 +267,7 @@ impl<Z: Z4FITS, V: V4FITS> FitsMMappedCIndex<Z, V> {
     self.fits_creation_date.as_ref()
   }
 
-  pub fn get_mom(&self) -> MomSliceImpl<Z, V> {
+  pub fn get_mom(&self) -> MomSliceImpl<'_, Z, V> {
     MomSliceImpl::new(
       self.depth,
       &self.mmap[0..self.n_rows as usize * (size_of::<Z>() + size_of::<V>())],

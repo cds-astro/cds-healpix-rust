@@ -26,7 +26,7 @@ where
 
 /// Uncompress on-the-fly, while iterating, the MOC compressed in the given slice.
 /// For more information, see the `decompress` method in BMOCs.
-pub fn uncompress<H: HpxHash>(compressed: &[u8]) -> UncompressMocIter<H> {
+pub fn uncompress<H: HpxHash>(compressed: &[u8]) -> UncompressMocIter<'_, H> {
   UncompressMocIter::new(compressed)
 }
 

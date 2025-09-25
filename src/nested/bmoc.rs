@@ -1112,13 +1112,13 @@ impl BMOC {
   /// WARNING: this is probably not the method you are interested in as a user,
   /// see [flat_iter](#method.flat_iter) instead.
   /// TODO: make a public method to extract information from the raw value
-  pub fn iter(&self) -> Iter<u64> {
+  pub fn iter(&self) -> Iter<'_, u64> {
     self.entries.iter()
   }
 
   /// Returns an iterator iterating over all cells at the BMOC maximum depth
   /// (the iteration is made in the natural cell order).
-  pub fn flat_iter(&self) -> BMOCFlatIter {
+  pub fn flat_iter(&self) -> BMOCFlatIter<'_> {
     BMOCFlatIter::new(self.depth_max, self.deep_size(), self.entries.iter())
   }
 
@@ -1136,7 +1136,7 @@ impl BMOC {
   /// (the iteration is made in the natural cell order).  
   /// Contrary to [flat_iter](fn.flat_iter.html), the full cell information (the raw BMOC value
   /// it belongs to, its flag) is kept.
-  pub fn flat_iter_cell(&self) -> BMOCFlatIterCell {
+  pub fn flat_iter_cell(&self) -> BMOCFlatIterCell<'_> {
     BMOCFlatIterCell::new(self.depth_max, self.deep_size(), self.entries.iter())
   }
 
