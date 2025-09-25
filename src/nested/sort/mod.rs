@@ -1,10 +1,8 @@
-use std::io::stdin;
 use std::{
   cmp::Ordering,
   error::Error,
   fs::{self, read_dir, remove_dir, remove_file, File, OpenOptions},
-  io,
-  io::{BufRead, BufReader, BufWriter, Error as IoError, Seek, Write},
+  io::{self, stdin, BufRead, BufReader, BufWriter, Error as IoError, Seek, Write},
   iter::Zip,
   marker::{Send, Sync},
   ops::Range,
@@ -30,6 +28,7 @@ use crate::nested::{
 };
 
 pub mod cindex;
+pub mod scindex;
 
 /// Type defining a row that can be sorted internally.
 pub trait IntSortable: Send {}
