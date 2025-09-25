@@ -207,7 +207,7 @@ pub enum Conversion {
     /// Completeness of the chi2 distribution of 3 degrees of freedom.
     #[clap(default_value_t = 16.266)]
     threshold: f64,
-    /// Depth threshold
+    /// Depth threshold (i.e. smallest depth)
     #[clap(short, long, value_name = "DEPTH_MIN")]
     depth_threshold: Option<u8>,
   },

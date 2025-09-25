@@ -651,7 +651,7 @@ where
 /// Implement `WritableMom` for all `Mom` having a `ValueType` implementing `ToBytes`.
 impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'a> for M {}
 
-/// Provide a merger merging density values based on a chi-square criterion.  
+/// Provide a merger merging density values based on a chi-square criterion.
 /// # Params
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
 /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
@@ -699,7 +699,7 @@ pub fn new_chi2_density_ref_merger<
     // Applying Pineau et al. 2017:
     // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
     // let four = V::from_f64(4.0).unwrap();
-    let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shl(2)).unwrap() / V::PI();
+    let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shr(2)).unwrap() / V::PI();
 
     let mu0 = *n0;
     let mu1 = *n1;
@@ -722,7 +722,7 @@ pub fn new_chi2_density_ref_merger<
   }
 }
 
-/// Provide a merger merging counts based on a chi-square criterion.  
+/// Provide a merger merging counts based on a chi-square criterion.
 /// # Params
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
 /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
