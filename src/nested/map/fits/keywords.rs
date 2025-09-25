@@ -32,7 +32,7 @@ pub trait FitsCard: Sized {
     Ok(())
   }
 
-  /// Must be in quotes `'val'` is value type is string
+  /// Must be in quotes `'val'` if value type is string
   fn to_fits_value(&self) -> String;
 
   /// Generate an error in case the parsed value does not match a pre-define list of possible values

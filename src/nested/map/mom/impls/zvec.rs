@@ -1,5 +1,6 @@
 use std::{
   cmp::Ordering,
+  error::Error,
   iter::{Cloned, Map},
   slice::Iter,
   vec::IntoIter,
@@ -7,7 +8,7 @@ use std::{
 
 use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
 
-use crate::nested::n_hash;
+use crate::nested::{map::mom::new_chi2_density_merger, n_hash};
 
 use super::{
   super::{
@@ -180,6 +181,102 @@ where
     self.entries.into_iter()
   }
 
+  fn from_hpx_sorted_entries<I, M>(depth: u8, sorted_entries_it: I, merger: M) -> Self
+  where
+    I: Iterator<Item = (Self::ZUniqHType, Self::ValueType)>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
+  {
+    let parent_depth = depth - 1;
+    let mut entries: Vec<(Z, V)> =
+      Vec::with_capacity(((n_hash(depth) >> 2) as usize).min(10_000_000)); // n_cells at depth / 4
+    let mut expected_next_hash = Z::zero();
+    for (h, v) in sorted_entries_it {
+      entries.push((Z::to_zuniq(depth, h), v));
+      // Check that the value of the cell was the expected one and that
+      // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
+      // (among the 4 possible values 0, 1, 2 and 3).
+      let parent_h = h >> 2;
+      if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+        let (z3, v3) = entries.pop().unwrap();
+        let (z2, v2) = entries.pop().unwrap();
+        let (z1, v1) = entries.pop().unwrap();
+        let (z0, v0) = entries.pop().unwrap();
+        match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
+          Ok(v_merged) => {
+            let z_merged = Z::to_zuniq(parent_depth, parent_h);
+            entries.push((z_merged, v_merged));
+            Self::from_skymap_recursive(&mut entries, &merger);
+          }
+          Err([v0, v1, v2, v3]) => {
+            entries.push((z0, v0));
+            entries.push((z1, v1));
+            entries.push((z2, v2));
+            entries.push((z3, v3));
+          }
+        }
+      } else if h & Z::LAST_LAYER_MASK == Z::zero() {
+        expected_next_hash = h;
+      }
+      expected_next_hash += Z::one();
+    }
+    Self { depth, entries }
+  }
+
+  fn from_hpx_sorted_entries_fallible<E, I, M>(
+    depth: u8,
+    sorted_entries_it: I,
+    merger: M,
+  ) -> Result<Self, E>
+  where
+    E: Error,
+    I: Iterator<Item = Result<(Self::ZUniqHType, Self::ValueType), E>>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
+  {
+    let parent_depth = depth - 1;
+    let mut entries: Vec<(Z, V)> =
+      Vec::with_capacity(((n_hash(depth) >> 2) as usize).min(10_000_000)); // n_cells at depth / 4
+    let mut expected_next_hash = Z::zero();
+    for res_hv in sorted_entries_it {
+      let (h, v) = res_hv?;
+      entries.push((Z::to_zuniq(depth, h), v));
+      // Check that the value of the cell was the expected one and that
+      // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
+      // (among the 4 possible values 0, 1, 2 and 3).
+      let parent_h = h >> 2;
+      if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
+        let (z3, v3) = entries.pop().unwrap();
+        let (z2, v2) = entries.pop().unwrap();
+        let (z1, v1) = entries.pop().unwrap();
+        let (z0, v0) = entries.pop().unwrap();
+        match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
+          Ok(v_merged) => {
+            let z_merged = Z::to_zuniq(parent_depth, parent_h);
+            entries.push((z_merged, v_merged));
+            Self::from_skymap_recursive(&mut entries, &merger);
+          }
+          Err([v0, v1, v2, v3]) => {
+            entries.push((z0, v0));
+            entries.push((z1, v1));
+            entries.push((z2, v2));
+            entries.push((z3, v3));
+          }
+        }
+      } else if h & Z::LAST_LAYER_MASK == Z::zero() {
+        expected_next_hash = h;
+      }
+      expected_next_hash += Z::one();
+    }
+    Ok(Self { depth, entries })
+  }
+
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
   ///   (i.e. the 4 cells belonging to a same direct parent cell).
@@ -235,40 +332,7 @@ where
     M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
     Self::ValueType: 's,
   {
-    let depth = skymap.depth();
-    let parent_depth = depth - 1;
-    let mut entries: Vec<(Z, V)> = Vec::with_capacity(skymap.len());
-    let mut expected_next_hash = Z::zero();
-    for (h, v) in skymap.owned_entries() {
-      entries.push((Z::to_zuniq(depth, h), v));
-      // Check that the value of the cell was the expected one and that
-      // its values at the `depth` HEALPix layer (i.e last 2 LSB) is 3
-      // (among the 4 possible values 0, 1, 2 and 3).
-      let parent_h = h >> 2;
-      if h == expected_next_hash && h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
-        let (z3, v3) = entries.pop().unwrap();
-        let (z2, v2) = entries.pop().unwrap();
-        let (z1, v1) = entries.pop().unwrap();
-        let (z0, v0) = entries.pop().unwrap();
-        match merger(parent_depth, parent_h, [v0, v1, v2, v3]) {
-          Ok(v_merged) => {
-            let z_merged = Z::to_zuniq(parent_depth, parent_h);
-            entries.push((z_merged, v_merged));
-            Self::from_skymap_recursive(&mut entries, &merger);
-          }
-          Err([v0, v1, v2, v3]) => {
-            entries.push((z0, v0));
-            entries.push((z1, v1));
-            entries.push((z2, v2));
-            entries.push((z3, v3));
-          }
-        }
-      } else if h & Z::LAST_LAYER_MASK == Z::zero() {
-        expected_next_hash = h;
-      }
-      expected_next_hash += Z::one();
-    }
-    Self { depth, entries }
+    Self::from_hpx_sorted_entries(skymap.depth(), skymap.owned_entries(), merger)
   }
 
   fn merge<'s, L, R, S, O, M>(lhs: L, rhs: R, split: S, op: O, merge: M) -> Self
@@ -719,9 +783,6 @@ where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
     R: Mom<'s, ZUniqHType = Z, ValueType = V>,
   {
-    let threshold = V::from_f64(chi2_of_3dof_threshold).unwrap();
-    let four = V::from_f64(4.0).unwrap();
-
     let split = |_depth: u8, _hash: Z, val: V| -> [V; 4] { [val; 4] };
     let op = |lrb: LhsRhsBoth<V>| -> Option<V> {
       match lrb {
@@ -730,49 +791,13 @@ where
         LhsRhsBoth::Both(l, b) => Some(cte * l * b),
       }
     };
-    let merge = |depth: u8, _hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
-      // Apply a chi2 merge
-
-      // With Poisson distribution:
-      // * s_i = Surface of cell i = s (all cell have the same surface at a given depth)
-      // * mu_i = Number of source in cell i / Surface of cell i = Density in cell i
-      // * sigma_i = sqrt(Number of source in cell i) / Surface cell i = sqrt(mu_i / s)
-      // weight_i = 1 / sigma_i^2 = s / mu_i
-      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
-      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
-      // V_e^{-1} = s * sum_{1=1}^4 1/mu_i
-      // Applying Pineau et al. 2017:
-      // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
-      // let four = V::from_f64(4.0).unwrap();
-
-      let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shl(2)).unwrap() / V::PI();
-
-      let mu0 = values[0];
-      let mu1 = values[1];
-      let mu2 = values[2];
-      let mu3 = values[3];
-
-      let sum = mu0 + mu1 + mu2 + mu3;
-      let weighted_var_inv = V::one() / mu0.max(one_over_s)
-        + V::one() / mu1.max(one_over_s)
-        + V::one() / mu2.max(one_over_s)
-        + V::one() / mu3.max(one_over_s);
-      // let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
-      let weighted_mean = four / weighted_var_inv;
-      let chi2_of_3dof = (sum - four * weighted_mean) / one_over_s;
-      // chi2 3 dof:
-      // 90.0% =>  6.251
-      // 95.0% =>  7.815
-      // 97.5% =>  9.348
-      // 99.0% => 11.345
-      // 99.9% => 16.266
-      if chi2_of_3dof < threshold {
-        Ok(sum / four)
-      } else {
-        Err(values)
-      }
-    };
-    Self::merge(lhs, rhs, split, op, merge)
+    Self::merge(
+      lhs,
+      rhs,
+      split,
+      op,
+      new_chi2_density_merger(chi2_of_3dof_threshold),
+    )
   }
 }
 
@@ -786,7 +811,7 @@ mod tests {
     n_hash,
     nested::map::{
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-      mom::{impls::zvec::MomVecImpl, Mom, ZUniqHashT},
+      mom::{impls::zvec::MomVecImpl, new_chi2_count_ref_merger, Mom, ZUniqHashT},
       skymap::SkyMapEnum,
     },
   };
@@ -857,32 +882,7 @@ mod tests {
       SkyMapEnum::ImplicitU64I32(skymap) => {
         // println!("Skymap size: {}", skymap.len());
 
-        let merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
-          let mu0 = *n0 as f64;
-          // let sig0 = mu0.sqrt();
-          let mu1 = *n1 as f64;
-          // let sig1 = mu1.sqrt();
-          let mu2 = *n2 as f64;
-          // let sig2 = mu2.sqrt();
-          let mu3 = *n3 as f64;
-          // let sig3 = mu3.sqrt();
-
-          let sum = mu0 + mu1 + mu2 + mu3;
-          let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
-          let weighted_mean = 4.0 / weighted_var_inv;
-          let chi2_of_3dof = sum - 4.0 * weighted_mean;
-          // chi2 3 dof:
-          // 90.0% =>  6.251
-          // 95.0% =>  7.815
-          // 97.5% =>  9.348
-          // 99.0% => 11.345
-          // 99.9% => 16.266
-          if chi2_of_3dof < 16.266 {
-            Some(*n0 + *n1 + *n2 + *n3)
-          } else {
-            None
-          }
-        };
+        let merger = new_chi2_count_ref_merger(16.266);
         let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
         /*println!("Mom len: {}", mom.entries.len());
         for (z, v) in mom.entries {

@@ -1,6 +1,9 @@
-use std::fmt::{Debug, Display};
+use std::{
+  array::TryFromSliceError,
+  fmt::{Debug, Display},
+};
 
-use num_traits::{AsPrimitive, PrimInt};
+use num_traits::{AsPrimitive, FromBytes, PrimInt, ToBytes};
 
 pub mod astrometry;
 pub mod fits;
@@ -10,15 +13,25 @@ pub mod skymap;
 
 /// `HHash` stands for HEALPix Hash.
 pub trait HHash:
-  // 'static mean that Idx does not contains any reference
-  'static + PrimInt + AsPrimitive<usize> + Send + Sync + Debug + Display + Clone
+// 'static mean that Idx does not contains any reference
+'static + PrimInt + AsPrimitive<usize> + Send + Sync + Debug + Display + Clone + ToBytes
++ FromBytes<Bytes: for<'a> TryFrom<&'a [u8], Error=TryFromSliceError>>
 {
+  fn to_u32(&self) -> u32;
+
+  fn from_u32(v: u32) -> Self;
   fn to_u64(&self) -> u64;
   fn from_u64(v: u64) -> Self;
   fn from_usize(v: usize) -> Self;
 }
 
 impl HHash for u32 {
+  fn to_u32(&self) -> u32 {
+    *self
+  }
+  fn from_u32(v: u32) -> Self {
+    v
+  }
   fn to_u64(&self) -> u64 {
     *self as u64
   }
@@ -30,6 +43,12 @@ impl HHash for u32 {
   }
 }
 impl HHash for u64 {
+  fn to_u32(&self) -> u32 {
+    *self as u32
+  }
+  fn from_u32(v: u32) -> Self {
+    v as u64
+  }
   fn to_u64(&self) -> u64 {
     *self
   }

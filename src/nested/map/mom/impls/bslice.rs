@@ -1,3 +1,24 @@
+use std::{
+  array::TryFromSliceError,
+  cmp::Ordering,
+  convert::{TryFrom, TryInto},
+  error::Error,
+  fs::File,
+  io::{BufWriter, Write},
+  iter::{Empty, Map},
+  marker::PhantomData,
+  ops::Range,
+  path::Path,
+  slice::{from_raw_parts, ChunksExact},
+  str,
+  time::SystemTime,
+};
+
+use chrono::{DateTime, Utc};
+use log::debug;
+use memmap2::{Mmap, MmapOptions};
+use num_traits::{FromBytes, ToBytes};
+
 use super::super::{
   super::{
     fits::{
@@ -12,24 +33,6 @@ use super::super::{
   LhsRhsBoth, Mom, ZUniqHashT,
 };
 use crate::nested::map::mom::WritableMom;
-use chrono::{DateTime, Utc};
-use log::debug;
-use memmap2::{Mmap, MmapOptions};
-use num_traits::{FromBytes, ToBytes};
-use std::io::{BufWriter, Write};
-use std::{
-  array::TryFromSliceError,
-  cmp::Ordering,
-  convert::{TryFrom, TryInto},
-  fs::File,
-  iter::{Empty, Map},
-  marker::PhantomData,
-  ops::Range,
-  path::Path,
-  slice::{from_raw_parts, ChunksExact},
-  str,
-  time::SystemTime,
-};
 
 /// Defines the type of ZUniq Hash values that can be read/write from/to FITS files.
 pub trait Z4FITS:
@@ -162,10 +165,7 @@ impl FITSMom {
         .map(&file)
         .map_err(FitsError::Io)?
     };
-    match (
-      datatype_z.as_deref(),
-      datatype_v.as_deref(),
-    ) {
+    match (datatype_z.as_deref(), datatype_v.as_deref()) {
       (Some(<u32 as ZUniqHashT>::FITS_DATATYPE), Some(<u32 as SkyMapValue>::FITS_DATATYPE)) => {
         Ok(FITSMom::U32U32(FitsMMappedCIndex::new(
           date, value_name, depth, n_rows, mmap,
@@ -500,6 +500,39 @@ where
       })
   }
 
+  fn from_hpx_sorted_entries<I, M>(_depth: u8, _sorted_entries_it: I, _merger: M) -> Self
+  where
+    I: Iterator<Item = (Self::ZUniqHType, Self::ValueType)>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
+  {
+    unimplemented!(
+      "Unable to create this object from the merge operation. Look at MomVecImpl instead."
+    )
+  }
+
+  fn from_hpx_sorted_entries_fallible<E, I, M>(
+    _depth: u8,
+    _sorted_entries_it: I,
+    _merger: M,
+  ) -> Result<Self, E>
+  where
+    E: Error,
+    I: Iterator<Item = Result<(Self::ZUniqHType, Self::ValueType), E>>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
+  {
+    unimplemented!(
+      "Unable to create this object from the merge operation. Look at MomVecImpl instead."
+    )
+  }
+
   /// WARNING: not implemented, see `MomVecImpl`!
   fn from_skymap_ref<'s, S, M>(_skymap: &'s S, _merger: M) -> Self
   where
@@ -511,7 +544,7 @@ where
   }
 
   /// WARNING: not implemented, see `MomVecImpl`!
-  fn from_skymap<'s, S, M>(_skymap: S, _merger: M) -> Self
+  fn from_skymap<'s, S, M>(skymap: S, merger: M) -> Self
   where
     S: SkyMap<'s, HashType = Self::ZUniqHType, ValueType = Self::ValueType>,
     M: Fn(
@@ -521,7 +554,7 @@ where
     ) -> Result<Self::ValueType, [Self::ValueType; 4]>,
     Self::ValueType: 's,
   {
-    unimplemented!("Unable to create this object from a skymap. Look at MomVecImpl instead.")
+    Self::from_hpx_sorted_entries(skymap.depth(), skymap.owned_entries(), merger)
   }
 
   /// WARNING: not implemented, see `MomVecImpl`!

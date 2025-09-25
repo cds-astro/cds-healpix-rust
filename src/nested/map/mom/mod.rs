@@ -15,8 +15,8 @@ use std::{
 use chrono::{SecondsFormat, Utc};
 use colorous::Gradient;
 use mapproj::CanonicalProjection;
-use num::PrimInt;
-use num_traits::ToBytes;
+use num::{Integer, PrimInt};
+use num_traits::{AsPrimitive, Float, FloatConst, FromPrimitive, ToBytes};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::to_mom_png_file;
@@ -24,15 +24,18 @@ use super::{
   skymap::{SkyMap, SkyMapValue},
   HHash,
 };
-use crate::nested::map::{
-  fits::{
-    error::FitsError,
-    write::{
-      write_final_padding, write_keyword_record, write_primary_hdu, write_str_keyword_record,
-      write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
+use crate::nested::{
+  map::{
+    fits::{
+      error::FitsError,
+      write::{
+        write_final_padding, write_keyword_record, write_primary_hdu, write_str_keyword_record,
+        write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
+      },
     },
+    img::{to_mom_png, ColorMapFunctionType, PosConversion, Val},
   },
-  img::{to_mom_png, ColorMapFunctionType, PosConversion, Val},
+  n_hash,
 };
 
 pub mod impls;
@@ -80,6 +83,7 @@ pub trait ZUniqHashT:
   fn delta_with_depth_max(depth: u8) -> u8 {
     Self::MAX_DEPTH - depth
   }
+
   fn shift_from_depth_max(depth: u8) -> u8 {
     Self::shift(Self::delta_with_depth_max(depth))
   }
@@ -307,6 +311,43 @@ pub trait Mom<'a>: Sized {
     }
     Ok(())
   }
+
+  /// # Params
+  /// * `depth`; the HEALPix depth of the hash values provide as first parameter of the given iterator tuples.
+  /// * `sorted_entries_it`: an iterator over `(hash, values)` tuples. The iterator **must** be sorted
+  /// * `merger`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
+  /// # Warning
+  /// * the caller has to ensure that the iterator is sorted. In case of doubt, create a decorator
+  /// similar to the ones in `nested::iter::checksorted` and call `from_hpx_sorted_entries_fallible` instead.
+  fn from_hpx_sorted_entries<I, M>(depth: u8, sorted_entries_it: I, merger: M) -> Self
+  where
+    I: Iterator<Item = (Self::ZUniqHType, Self::ValueType)>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
+
+  /// # Params
+  /// * `depth`; the HEALPix depth of the hash values provide as first parameter of the given iterator tuples.
+  /// * `sorted_entries_it`: a fallible iterator over `(hash, values)` tuples. The iterator **must** be sorted
+  /// * `merger`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
+  /// # Warning
+  /// * the caller has to ensure that the iterator is sorted. In case of doubt, create a decorator
+  /// similar to the ones in `nested::iter::checksorted`.
+  fn from_hpx_sorted_entries_fallible<E, I, M>(
+    depth: u8,
+    sorted_entries_it: I,
+    merger: M,
+  ) -> Result<Self, E>
+  where
+    E: Error,
+    I: Iterator<Item = Result<(Self::ZUniqHType, Self::ValueType), E>>,
+    M: Fn(
+      u8,
+      Self::ZUniqHType,
+      [Self::ValueType; 4],
+    ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
 
   /// # Params
   /// * `M`: merger function, i.e. function applied on the 4 values of 4 sibling cells
@@ -610,10 +651,128 @@ where
 /// Implement `WritableMom` for all `Mom` having a `ValueType` implementing `ToBytes`.
 impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'a> for M {}
 
+/// Provide a merger merging density values based on a chi-square criterion.  
+/// # Params
+/// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+/// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+/// from the same normal distribution which mean and variance comes from a poisson distribution.
+/// Here a few typical values corresponding the the given completeness:
+/// * Completeness = 90.0% =>  6.251
+/// * Completeness = 95.0% =>  7.815
+/// * Completeness = 97.5% =>  9.348
+/// * Completeness = 99.0% => 11.345
+/// * Completeness = 99.9% => 16.266
+pub fn new_chi2_density_merger<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Float + FloatConst + FromPrimitive,
+>(
+  chi2_of_3dof_threshold: f64,
+) -> impl Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]> {
+  let merger_ref = new_chi2_density_ref_merger(chi2_of_3dof_threshold);
+  move |depth: u8, hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
+    merger_ref(
+      depth,
+      hash,
+      [&values[0], &values[1], &values[2], &values[3]],
+    )
+    .ok_or(values)
+  }
+}
+
+pub fn new_chi2_density_ref_merger<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Float + FloatConst + FromPrimitive,
+>(
+  chi2_of_3dof_threshold: f64,
+) -> impl Fn(u8, Z, [&V; 4]) -> Option<V> {
+  let threshold = V::from_f64(chi2_of_3dof_threshold).unwrap();
+  let four = V::from_f64(4.0).unwrap();
+  move |depth: u8, _hash: Z, [n0, n1, n2, n3]: [&V; 4]| -> Option<V> {
+    // With Poisson distribution:
+    // * s_i = Surface of cell i = s (all cell have the same surface at a given depth)
+    // * mu_i = Number of source in cell i / Surface of cell i = Density in cell i
+    // * sigma_i = sqrt(Number of source in cell i) / Surface cell i = sqrt(mu_i / s)
+    // weight_i = 1 / sigma_i^2 = s / mu_i
+    // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
+    //                      = 4 / ( sum_{1=1}^4 1/mu_i )
+    // V_e^{-1} = s * sum_{1=1}^4 1/mu_i
+    // Applying Pineau et al. 2017:
+    // => sum_{1=1}^4 (mu_i - mu_e)^2 / sigma_i^2 = ... = s * [(sum_{1=1}^4 mu_i) - 4 * mu_e]
+    // let four = V::from_f64(4.0).unwrap();
+    let one_over_s = V::from_u64(n_hash(depth + 1).unsigned_shl(2)).unwrap() / V::PI();
+
+    let mu0 = *n0;
+    let mu1 = *n1;
+    let mu2 = *n2;
+    let mu3 = *n3;
+
+    let sum = mu0 + mu1 + mu2 + mu3;
+    let weighted_var_inv = V::one() / mu0.max(one_over_s)
+      + V::one() / mu1.max(one_over_s)
+      + V::one() / mu2.max(one_over_s)
+      + V::one() / mu3.max(one_over_s);
+    // let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+    let weighted_mean = four / weighted_var_inv;
+    let chi2_of_3dof = (sum - four * weighted_mean) / one_over_s;
+    if chi2_of_3dof < threshold {
+      Some(sum / four)
+    } else {
+      None
+    }
+  }
+}
+
+/// Provide a merger merging counts based on a chi-square criterion.  
+/// # Params
+/// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+/// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+/// from the same normal distribution which mean and variance comes from a poisson distribution.
+/// Here a few typical values corresponding the the given completeness:
+/// * Completeness = 90.0% =>  6.251
+/// * Completeness = 95.0% =>  7.815
+/// * Completeness = 97.5% =>  9.348
+/// * Completeness = 99.0% => 11.345
+/// * Completeness = 99.9% => 16.266
+pub fn new_chi2_count_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPrimitive<f64>>(
+  chi2_of_3dof_threshold: f64,
+) -> impl Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]> {
+  let merger_ref = new_chi2_count_ref_merger(chi2_of_3dof_threshold);
+  move |depth: u8, hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
+    merger_ref(
+      depth,
+      hash,
+      [&values[0], &values[1], &values[2], &values[3]],
+    )
+    .ok_or(values)
+  }
+}
+
+pub fn new_chi2_count_ref_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPrimitive<f64>>(
+  chi2_of_3dof_threshold: f64,
+) -> impl Fn(u8, Z, [&V; 4]) -> Option<V> {
+  move |_depth: u8, _hash: Z, [n0, n1, n2, n3]: [&V; 4]| -> Option<V> {
+    let mu0 = (*n0).as_();
+    let mu1 = (*n1).as_();
+    let mu2 = (*n2).as_();
+    let mu3 = (*n3).as_();
+
+    let sum = mu0 + mu1 + mu2 + mu3;
+    let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
+    let weighted_mean = 4.0 / weighted_var_inv;
+    let chi2_of_3dof = sum - 4.0 * weighted_mean;
+
+    if chi2_of_3dof < chi2_of_3dof_threshold {
+      Some(*n0 + *n1 + *n2 + *n3)
+    } else {
+      None
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use crate::nested::map::img::to_mom_png_file;
-  use crate::nested::map::mom::LhsRhsBoth;
+  use crate::nested::map::mom::{new_chi2_count_ref_merger, LhsRhsBoth};
   use mapproj::pseudocyl::mol::Mol;
 
   use super::{
@@ -632,37 +791,11 @@ mod tests {
     let skymap_2mass = SkyMapEnum::from_fits_file(path).unwrap();
     let path = "test/resources/skymap/skymap.gaiadr3.depth6.fits";
     let skymap_gaia = SkyMapEnum::from_fits_file(path).unwrap();
-
-    let chi2_merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
-      let mu0 = *n0 as f64;
-      // let sig0 = mu0.sqrt();
-      let mu1 = *n1 as f64;
-      // let sig1 = mu1.sqrt();
-      let mu2 = *n2 as f64;
-      // let sig2 = mu2.sqrt();
-      let mu3 = *n3 as f64;
-      // let sig3 = mu3.sqrt();
-
-      let sum = mu0 + mu1 + mu2 + mu3;
-      let weighted_var_inv = 1.0 / mu0 + 1.0 / mu1 + 1.0 / mu2 + 1.0 / mu3;
-      let weighted_mean = 4.0 / weighted_var_inv;
-      let chi2_of_3dof = sum - 4.0 * weighted_mean;
-      // chi2 3 dof:
-      // 90.0% =>  6.251
-      // 95.0% =>  7.815
-      // 97.5% =>  9.348
-      // 99.0% => 11.345
-      // 99.9% => 16.266
-      if chi2_of_3dof < 16.266 {
-        Some(*n0 + *n1 + *n2 + *n3)
-      } else {
-        None
-      }
-    };
-
     match (skymap_2mass, skymap_gaia) {
       (SkyMapEnum::ImplicitU64I32(iskymap_2mass), SkyMapEnum::ImplicitU64I32(iskymap_gaia_dr3)) => {
+        let chi2_merger = new_chi2_count_ref_merger(16.266);
         let mom_2mass = MomVecImpl::from_skymap_ref(&iskymap_2mass, chi2_merger);
+        let chi2_merger = new_chi2_count_ref_merger(16.266);
         let mom_gaia = MomVecImpl::from_skymap_ref(&iskymap_gaia_dr3, chi2_merger);
         // Transform count MOMs into PDF MOMs.
         let n_tot_2mass = mom_2mass.values().sum::<i32>() as f64;
