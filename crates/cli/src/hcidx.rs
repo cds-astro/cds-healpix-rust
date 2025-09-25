@@ -6,10 +6,12 @@ use std::{
 };
 
 use clap::Args;
+
+use hpxlib::nested::sort::cindex::OwnedCIndexExplicit;
 use hpxlib::nested::{
   get, n_hash,
   sort::{
-    cindex::{HCIndex, OwnedCIndex},
+    cindex::{HCIndex, HCIndexShape, OwnedCIndex},
     get_hpx,
   },
 };
@@ -31,8 +33,17 @@ pub struct HealpixCumulIndex {
   #[clap(short = 'b', long, value_name = "FIELD", default_value_t = 2)]
   lat: usize,
   /// Depth of the HEALPix cumulative index (around 6 to 10, then output file will be large).
-  #[arg(long, default_value_t = 8_u8)]
+  #[arg(long, default_value_t = 8_u8)] // '-d' used for delimiter in CSV
   depth: u8,
+  #[arg(short = 'e', long)]
+  /// Use in-memory `explicit` representation instead of `implicit`.
+  explicit: bool,
+  #[arg(short = 'r', long = "ratio")]
+  /// Limit on the ratio of the implicit over the explicit byte sizes for the FITS serialisation.
+  /// Above the limit, the explicit representation is chosen.
+  /// Below the limit, the implicit representation is chosen.
+  /// If unset, the in-memory representation is chosen.
+  implicit_over_explicit_ratio: Option<f64>,
 }
 
 impl HealpixCumulIndex {
@@ -64,45 +75,87 @@ impl HealpixCumulIndex {
       self.csv.delimiter,
       get(self.depth),
     );
+
+    if self.explicit {
+      let len = n_hash(self.depth) + 1;
+      let mut entries: Vec<(u64, u64)> = Vec::with_capacity(len.min(1_000_000) as usize);
+      // Read line by line
+      let mut prev_icell = 0;
+      let mut irow = 0;
+      while n_bytes > 0 {
+        line.pop(); // removes the ending '\n'
+        let icell = hpx(&line);
+        if icell + 1 < prev_icell {
+          return Err(
+            format!(
+              "HEALPix error at row {}: the file seems not to be sorted!",
+              irow
+            )
+            .into(),
+          );
+        }
+        // Push only the starting byte of the first row having a given cell number.
+        entries.push((icell, n_bytes_read as u64));
+        n_bytes_read += n_bytes;
+        irow += 1;
+        line.clear();
+        n_bytes = reader.read_line(&mut line)?;
+        prev_icell = icell;
+      }
+      entries.push((prev_icell, n_bytes_read as u64));
+      // Write the cumulative map
+      let explicit_index = OwnedCIndexExplicit::new_unchecked(self.depth, entries);
+      self.write_index(explicit_index)
+    } else {
+      // Prepare building the map
+      let len = n_hash(self.depth) + 1;
+      let mut map: Vec<u64> = Vec::with_capacity(len as usize);
+      // Read line by line
+      let mut irow = 0;
+      while n_bytes > 0 {
+        line.pop(); // removes the ending '\n'
+        let icell = hpx(&line);
+        if icell + 1 < map.len() as u64 {
+          return Err(
+            format!(
+              "HEALPix error at row {}: the file seems not to be sorted!",
+              irow
+            )
+            .into(),
+          );
+        }
+        // Push only the starting byte of the first row having a given cell number.
+        // Copy the value for all empty cells between two non-empty cells.
+        for _ in map.len() as u64..=icell {
+          //info!("Push row: {}; bytes: {:?}", irow, &byte_range);
+          map.push(n_bytes_read as u64);
+        }
+        n_bytes_read += n_bytes;
+        irow += 1;
+        line.clear();
+        n_bytes = reader.read_line(&mut line)?;
+      }
+      // Complete the map if necessary
+      for _ in map.len() as u64..len {
+        map.push(n_bytes_read as u64);
+      }
+      // Write the cumulative map
+      let implicit_index = OwnedCIndex::new_unchecked(self.depth, map.into_boxed_slice());
+      self.write_index(implicit_index)
+    }
+  }
+
+  fn write_index<H: HCIndex>(self, cindex: H) -> Result<(), Box<dyn Error>> {
     // Prepare output
     let fits_file = File::create(self.output)?;
     let out_fits_write = BufWriter::new(fits_file);
-    // Prepare building the map
-    let len = n_hash(self.depth) + 1;
-    let mut map: Vec<u64> = Vec::with_capacity(len as usize);
-    // Read line by line
-    let mut irow = 0;
-    while n_bytes > 0 {
-      line.pop(); // removes the ending `'\n'
-      let icell = hpx(&line);
-      if icell + 1 < map.len() as u64 {
-        return Err(
-          format!(
-            "HEALPix error at row {}: the file seems not ot be sorted!",
-            irow
-          )
-          .into(),
-        );
-      }
-      // Push only the starting byte of the first row having a given cell number.
-      // Copy the value for all empty cells between two non-empty cells.
-      for _ in map.len() as u64..=icell {
-        //info!("Push row: {}; bytes: {:?}", irow, &byte_range);
-        map.push(n_bytes_read as u64);
-      }
-      n_bytes_read += n_bytes;
-      irow += 1;
-      line.clear();
-      n_bytes = reader.read_line(&mut line)?;
-    }
-    // Complete the map if necessary
-    for _ in map.len() as u64..len {
-      map.push(n_bytes_read as u64);
-    }
-    // Write the cumulative map
     let file_metadata = self.csv.input.metadata().ok();
-    OwnedCIndex::new_unchecked(self.depth, map.into_boxed_slice())
-      .to_fits(
+    let best_repr = self
+      .implicit_over_explicit_ratio
+      .map(|ratio| cindex.best_representation(ratio))
+      .unwrap_or(HCIndexShape::Implicit);
+    match best_repr {
+      HCIndexShape::Implicit => cindex.to_fits_implicit(
         out_fits_write,
         self.csv.input.file_name().and_then(|name| name.to_str()),
         file_metadata.as_ref().map(|meta| meta.len()),
@@ -110,7 +163,17 @@ impl HealpixCumulIndex {
         file_metadata.as_ref().and_then(|meta| meta.modified().ok()),
         Some(format!("#{}", self.lon).as_str()),
         Some(format!("#{}", self.lat).as_str()),
-      )
-      .map_err(|e| e.into())
+      ),
+      HCIndexShape::Explicit => cindex.to_fits_explicit(
+        out_fits_write,
+        self.csv.input.file_name().and_then(|name| name.to_str()),
+        file_metadata.as_ref().map(|meta| meta.len()),
+        None, // So far we do not compute the md5 of the VOTable!
+        file_metadata.as_ref().and_then(|meta| meta.modified().ok()),
+        Some(format!("#{}", self.lon).as_str()),
+        Some(format!("#{}", self.lat).as_str()),
+      ),
+    }
+    .map_err(|e| e.into())
   }
 }

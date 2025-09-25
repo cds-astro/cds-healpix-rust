@@ -24,7 +24,7 @@ use hpx_cli::{
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-/// Perform HEALPix related operation on the command line.
+/// Perform HEALPix related operations on the command line.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 enum Args {

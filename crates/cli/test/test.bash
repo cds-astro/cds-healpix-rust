@@ -318,10 +318,18 @@ test_hcidx_qhicid(){
   hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx is not empt!"; exit 1; } 
+  [[ "$?" != "0" ]] && { echo "Diff on qhcidx is not empty!"; exit 1; }
 }
 test_hcidx_qhicid
 
+
+test_hcidx_qhicid_explicit(){
+  hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits --explicit hipmain.sorted.csv
+  diff <(tail -n +2 hipmain.sorted.csv) \
+       <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
+  [[ "$?" != "0" ]] && { echo "Diff on qhcidx is not empty!"; exit 1; }
+}
+test_hcidx_qhicid
 
 ######################
 # Test 'hpx map ...' #

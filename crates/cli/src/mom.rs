@@ -1,6 +1,7 @@
 use std::{error::Error, path::PathBuf};
 
 use clap::{Args, Subcommand};
+use log::error;
 
 use mapproj::{
   cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
@@ -9,21 +10,35 @@ use mapproj::{
   zenithal::{air::Air, arc::Arc, feye::Feye, sin::Sin, stg::Stg, tan::Tan, zea::Zea},
 };
 
-use super::view::Mode;
-use crate::map::ColorMapFunction;
-use hpxlib::nested::map::{
-  img::{ColorMapFunctionType, PosConversion, Val},
-  mom::{
-    impls::{bslice::FITSMom, zvec::MomVecImpl},
-    Mom as MomTrait, ViewableMom, WritableMom,
+use hpxlib::nested::{
+  iter::{
+    sortedcoo2sortedhash::SortedHashIt, sortedhash2hashcount::SortedHash2HashCountIncludingZeroIt,
   },
-  skymap::SkyMapValue,
+  map::{
+    img::{ColorMapFunctionType, PosConversion, Val},
+    mom::{
+      impls::{bslice::FITSMom, zvec::MomVecImpl},
+      new_chi2_count_merger, Mom as MomTrait, ViewableMom, WritableMom,
+    },
+    skymap::SkyMapValue,
+  },
+};
+
+use crate::{
+  input::{
+    hash::{HashItOperation, HashListInput},
+    pos::{PosItOperation, PosListInput},
+  },
+  map::ColorMapFunction,
+  view::Mode,
 };
 
 /// Create and manipulate HEALPix count and density MOMs.
 #[derive(Debug, Subcommand)]
 pub enum Mom {
+  // Chi2Count From sorted HPX / sorted coo
   //From(MomFrom),    // HATS,  ProbDens (threshold merge), CountMap, DensMap (chi2merge, threshold merge), Sorted iterator of pos (to interpret has counts)
+  Count(Count),
   Op(Operation), // add or mult: we can decide wether the split method return 4 time the initial value or divide the value in 4!
   Convert(Convert),
   View(View),
@@ -32,11 +47,126 @@ impl Mom {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
     match self {
       // Self::From(e) => e.exec(),
+      Self::Count(e) => e.exec(),
       Self::Op(e) => e.exec(),
       Self::Convert(e) => e.exec(),
       Self::View(e) => e.exec(),
     }
   }
+}
+
+/// Build a chi2 count MOM from a list of pre-ordered HEALPix indices or positions.
+#[derive(Debug, Args)]
+pub struct Count {
+  /// Healpix maximum depth (aka order) of the count MOM.
+  #[clap(value_parser = clap::value_parser!(u8).range(0..=29))]
+  depth: u8,
+  /// Completeness of the chi2 distribution of 3 degrees of freedom.
+  #[clap(default_value_t = 16.266)]
+  threshold: f64,
+  /// Count MOM destination FITS file.
+  output: PathBuf,
+  #[clap(subcommand)]
+  input: PosOrHash,
+}
+impl Count {
+  pub fn exec(self) -> Result<(), Box<dyn Error>> {
+    self.input.exec(self.depth, self.threshold, self.output)
+  }
+}
+
+#[derive(Debug, Subcommand)]
+enum PosOrHash {
+  /// Create a chi2 MOM from a list of HEALPix ordered positions
+  Pos {
+    #[clap(subcommand)]
+    input: PosListInput,
+  },
+  /// Create a chi2 MOM from a list of ordered HEALPix hash (aka ipix) at the maximum MOM depth
+  Hash {
+    #[clap(subcommand)]
+    input: HashListInput,
+  },
+}
+impl PosOrHash {
+  pub fn exec(self, depth: u8, threshold: f64, output: PathBuf) -> Result<(), Box<dyn Error>> {
+    match self {
+      Self::Pos { input } => build_count_mom_from_pos(depth, threshold, input),
+      Self::Hash { input } => build_count_mom_from_hash(depth, threshold, input),
+    }
+    .and_then(|mom| mom.to_fits_file(output, "DENSITY").map_err(|e| e.into()))
+  }
+}
+fn build_count_mom_from_pos(
+  depth: u8,
+  threshold: f64,
+  input: PosListInput,
+) -> Result<MomVecImpl<u64, u32>, Box<dyn Error>> {
+  struct Op {
+    depth: u8,
+    threshold: f64,
+  }
+  impl PosItOperation for Op {
+    type R = MomVecImpl<u64, u32>;
+    fn exec<I>(self, pos_it: I) -> Result<Self::R, Box<dyn Error>>
+    where
+      I: Iterator<Item = Result<(f64, f64), Box<dyn Error>>>,
+    {
+      let it = pos_it.filter_map(|r| match r {
+        Ok(lonlat) => Some(lonlat),
+        Err(e) => {
+          error!("Error reading/parsing line: {:?}", e);
+          None
+        }
+      });
+      let hash_count_it = SortedHash2HashCountIncludingZeroIt::new_from_fallible(
+        self.depth,
+        SortedHashIt::new(self.depth, it),
+      );
+      let chi2_merger = new_chi2_count_merger(self.threshold);
+      MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+        self.depth,
+        hash_count_it,
+        chi2_merger,
+      )
+      .map_err(|e| e.into())
+    }
+  }
+  input.exec(Op { depth, threshold })
+}
+fn build_count_mom_from_hash(
+  depth: u8,
+  threshold: f64,
+  input: HashListInput,
+) -> Result<MomVecImpl<u64, u32>, Box<dyn Error>> {
+  struct Op {
+    depth: u8,
+    threshold: f64,
+  }
+  impl HashItOperation for Op {
+    type R = MomVecImpl<u64, u32>;
+    fn exec<I>(self, hash_it: I) -> Result<Self::R, Box<dyn Error>>
+    where
+      I: Iterator<Item = Result<u64, Box<dyn Error>>>,
+    {
+      let it = hash_it.filter_map(|r| match r {
+        Ok(hash) => Some(hash),
+        Err(e) => {
+          error!("Error reading/parsing line: {:?}", e);
+          None
+        }
+      });
+      let hash_count_it = SortedHash2HashCountIncludingZeroIt::new_from_infallible(self.depth, it);
+      let chi2_merger = new_chi2_count_merger(self.threshold);
+      MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+        self.depth,
+        hash_count_it,
+        chi2_merger,
+      )
+      .map_err(|e| e.into())
+    }
+  }
+  input.exec(Op { depth, threshold })
 }
 
 #[derive(Debug, Subcommand)]

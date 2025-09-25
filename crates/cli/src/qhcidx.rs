@@ -9,7 +9,7 @@ use memmap2::MmapOptions;
 
 use hpxlib::nested::{
   bmoc::BMOC,
-  sort::cindex::{BorrowedCIndex, FITSCIndex, HCIndex},
+  sort::cindex::{FITSCIndex, HCIndex},
 };
 
 /// Type of the query (HEALPix cell or BMOC).
@@ -29,7 +29,7 @@ pub enum QueryType {
   },
 }
 impl QueryType {
-  pub fn exec(self, csv_name: String, hci: BorrowedCIndex<'_, u64>) -> Result<(), Box<dyn Error>> {
+  pub fn exec<H: HCIndex<V = u64>>(self, csv_name: String, hci: H) -> Result<(), Box<dyn Error>> {
     let hci_depth = hci.depth();
     match self {
       Self::Cell { depth, ipix } => {
@@ -104,34 +104,40 @@ pub struct QueryHCIndex {
 impl QueryHCIndex {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
     match FITSCIndex::from_fits_file(self.hcindex)? {
-      FITSCIndex::U64(fits_hci) => {
+      FITSCIndex::ImplicitU64(fits_hci) => {
         let csv_name = fits_hci
           .get_indexed_file_name()
           .expect("No file name found in the FITS HCI file.");
         let expected_csv_len = fits_hci
           .get_indexed_file_len()
           .expect("No file length found in the FITS HCI file.");
-        // Check if file exists
-        fs::exists(csv_name)
-          .map_err(|e| e.into())
-          .and_then(|exists| {
-            if exists {
-              Ok::<(), Box<dyn Error>>(())
-            } else {
-              Err(format!("File `{}` not found in the current directory.", csv_name).into())
-            }
-          })?;
-        // Check file len
-        let actual_csv_len = fs::metadata(csv_name).map(|metadata| metadata.len())?;
-        if actual_csv_len != expected_csv_len {
-          return Err(
-            format!(
-              "Local CSV file `{}` len does not match index info. Expected: {}. Actual: {}.",
-              csv_name, expected_csv_len, actual_csv_len
-            )
-            .into(),
-          );
-        }
+        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
+        // Ok, load index data...
+        let hci = fits_hci.get_hcindex();
+        // ... and performs the query
+        self.query.exec(csv_name.clone(), hci)
+      }
+      FITSCIndex::ExplicitU32U64(fits_hci) => {
+        let csv_name = fits_hci
+          .get_indexed_file_name()
+          .expect("No file name found in the FITS HCI file.");
+        let expected_csv_len = fits_hci
+          .get_indexed_file_len()
+          .expect("No file length found in the FITS HCI file.");
+        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
+        // Ok, load index data...
+        let hci = fits_hci.get_hcindex();
+        // ... and performs the query
+        self.query.exec(csv_name.clone(), hci)
+      }
+      FITSCIndex::ExplicitU64U64(fits_hci) => {
+        let csv_name = fits_hci
+          .get_indexed_file_name()
+          .expect("No file name found in the FITS HCI file.");
+        let expected_csv_len = fits_hci
+          .get_indexed_file_len()
+          .expect("No file length found in the FITS HCI file.");
+        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
         // Ok, load index data...
         let hci = fits_hci.get_hcindex();
         // ... and performs the query
@@ -142,5 +148,34 @@ impl QueryHCIndex {
           .into(),
       ),
     }
+  }
+}
+
+fn check_file_exists_and_check_file_len(
+  csv_name: &String,
+  expected_csv_len: u64,
+) -> Result<(), Box<dyn Error>> {
+  // Check if file exists
+  fs::exists(csv_name)
+    .map_err(|e| e.into())
+    .and_then(|exists| {
+      if exists {
+        Ok::<(), Box<dyn Error>>(())
+      } else {
+        Err(format!("File `{}` not found in the current directory.", csv_name).into())
+      }
+    })?;
+  // Check file len
+  let actual_csv_len = fs::metadata(csv_name).map(|metadata| metadata.len())?;
+  if actual_csv_len != expected_csv_len {
+    Err(
+      format!(
+        "Local CSV file `{}` len does not match index info. Expected: {}. Actual: {}.",
+        csv_name, expected_csv_len, actual_csv_len
+      )
+      .into(),
+    )
+  } else {
+    Ok(())
   }
 }
