@@ -27,6 +27,7 @@ use self::{
 
 pub mod bmoc;
 pub mod gpu;
+pub mod iter;
 pub mod map;
 pub mod sort;
 pub mod zordercurve;
