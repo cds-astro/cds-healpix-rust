@@ -7,6 +7,7 @@ use std::{
 use clap::{Args, Subcommand};
 use memmap2::MmapOptions;
 
+use hpxlib::nested::sort::cindex::FitsMMappedCIndex;
 use hpxlib::nested::{
   bmoc::BMOC,
   sort::cindex::{FITSCIndex, HCIndex},
@@ -29,7 +30,22 @@ pub enum QueryType {
   },
 }
 impl QueryType {
-  pub fn exec<H: HCIndex<V = u64>>(self, csv_name: String, hci: H) -> Result<(), Box<dyn Error>> {
+  // FitsMMappedCIndex
+  //pub fn exec<H: HCIndex<V = u64>>(self, csv_name: String, hci: H) -> Result<(), Box<dyn Error>> {
+  pub fn exec<'a, H, T>(self, fits_hci: &'a T) -> Result<(), Box<dyn Error>>
+  where
+    H: HCIndex<V = u64>,
+    T: FitsMMappedCIndex<'a, HCIndexType = H> + 'a,
+  {
+    let csv_name = fits_hci
+      .get_indexed_file_name()
+      .expect("No file name found in the FITS HCI file.");
+    let expected_csv_len = fits_hci
+      .get_indexed_file_len()
+      .expect("No file length found in the FITS HCI file.");
+    check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
+
+    let hci = fits_hci.get_hcindex();
     let hci_depth = hci.depth();
     match self {
       Self::Cell { depth, ipix } => {
@@ -104,45 +120,9 @@ pub struct QueryHCIndex {
 impl QueryHCIndex {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
     match FITSCIndex::from_fits_file(self.hcindex)? {
-      FITSCIndex::ImplicitU64(fits_hci) => {
-        let csv_name = fits_hci
-          .get_indexed_file_name()
-          .expect("No file name found in the FITS HCI file.");
-        let expected_csv_len = fits_hci
-          .get_indexed_file_len()
-          .expect("No file length found in the FITS HCI file.");
-        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
-        // Ok, load index data...
-        let hci = fits_hci.get_hcindex();
-        // ... and performs the query
-        self.query.exec(csv_name.clone(), hci)
-      }
-      FITSCIndex::ExplicitU32U64(fits_hci) => {
-        let csv_name = fits_hci
-          .get_indexed_file_name()
-          .expect("No file name found in the FITS HCI file.");
-        let expected_csv_len = fits_hci
-          .get_indexed_file_len()
-          .expect("No file length found in the FITS HCI file.");
-        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
-        // Ok, load index data...
-        let hci = fits_hci.get_hcindex();
-        // ... and performs the query
-        self.query.exec(csv_name.clone(), hci)
-      }
-      FITSCIndex::ExplicitU64U64(fits_hci) => {
-        let csv_name = fits_hci
-          .get_indexed_file_name()
-          .expect("No file name found in the FITS HCI file.");
-        let expected_csv_len = fits_hci
-          .get_indexed_file_len()
-          .expect("No file length found in the FITS HCI file.");
-        check_file_exists_and_check_file_len(csv_name, expected_csv_len)?;
-        // Ok, load index data...
-        let hci = fits_hci.get_hcindex();
-        // ... and performs the query
-        self.query.exec(csv_name.clone(), hci)
-      }
+      FITSCIndex::ImplicitU64(fits_hci) => self.query.exec(&fits_hci),
+      FITSCIndex::ExplicitU32U64(fits_hci) => self.query.exec(&fits_hci),
+      FITSCIndex::ExplicitU64U64(fits_hci) => self.query.exec(&fits_hci),
       _ => Err(
         String::from("Wrong data type in the FITS Healpix Cumulative Index type. Expected: u64.")
           .into(),

@@ -1144,6 +1144,21 @@ impl FITSCIndex {
   }
 }
 
+pub trait FitsMMappedCIndex<'a> {
+  type HCIndexType: 'a + HCIndex;
+
+  fn get_fits_creation_date(&self) -> Option<&SystemTime>;
+  fn get_indexed_file_name(&self) -> Option<&String>;
+  fn get_indexed_file_len(&self) -> Option<u64>;
+  fn get_indexed_file_md5(&self) -> Option<&String>;
+  fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime>;
+  fn get_indexed_colname_lon(&self) -> Option<&String>;
+  fn get_indexed_colname_lat(&self) -> Option<&String>;
+
+  /// Get the actual Healpix Cumulative Index on the MMapped data.
+  fn get_hcindex(&'a self) -> Self::HCIndexType;
+}
+
 /// The result of reading a FITS file, containing a memory map on the data, and from which we can obtain
 /// an actual Healpix Cumulative Index object.
 #[derive(Debug)]
@@ -1190,31 +1205,35 @@ impl<T: HCIndexValue> FitsMMappedCIndexImplicit<T> {
       _phantom: PhantomData,
     }
   }
+}
 
-  pub fn get_fits_creation_date(&self) -> Option<&SystemTime> {
+impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T> {
+  type HCIndexType = BorrowedCIndex<'a, T>;
+
+  fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
   }
-  pub fn get_indexed_file_name(&self) -> Option<&String> {
+  fn get_indexed_file_name(&self) -> Option<&String> {
     self.indexed_file_name.as_ref()
   }
-  pub fn get_indexed_file_len(&self) -> Option<u64> {
+  fn get_indexed_file_len(&self) -> Option<u64> {
     self.indexed_file_len
   }
-  pub fn get_indexed_file_md5(&self) -> Option<&String> {
+  fn get_indexed_file_md5(&self) -> Option<&String> {
     self.indexed_file_md5.as_ref()
   }
-  pub fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime> {
+  fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime> {
     self.indexed_file_last_modif_date.as_ref()
   }
-  pub fn get_indexed_colname_lon(&self) -> Option<&String> {
+  fn get_indexed_colname_lon(&self) -> Option<&String> {
     self.indexed_colname_lon.as_ref()
   }
-  pub fn get_indexed_colname_lat(&self) -> Option<&String> {
+  fn get_indexed_colname_lat(&self) -> Option<&String> {
     self.indexed_colname_lat.as_ref()
   }
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
-  pub fn get_hcindex(&self) -> BorrowedCIndex<'_, T> {
+  fn get_hcindex(&self) -> Self::HCIndexType {
     let offset = self.mmap.as_ptr().align_offset(align_of::<T>());
     if offset != 0 {
       // I assume we never enter here, but the assumption had to be tested!
@@ -1429,31 +1448,35 @@ impl<H: HHash, T: HCIndexValue> FitsMMappedCIndexExplicit<H, T> {
       _phantom_v: PhantomData,
     }
   }
+}
 
-  pub fn get_fits_creation_date(&self) -> Option<&SystemTime> {
+impl<'a, H: HHash, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexExplicit<H, T> {
+  type HCIndexType = BorrowedCIndexExplicit<'a, H, T>;
+
+  fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
   }
-  pub fn get_indexed_file_name(&self) -> Option<&String> {
+  fn get_indexed_file_name(&self) -> Option<&String> {
     self.indexed_file_name.as_ref()
   }
-  pub fn get_indexed_file_len(&self) -> Option<u64> {
+  fn get_indexed_file_len(&self) -> Option<u64> {
     self.indexed_file_len
   }
-  pub fn get_indexed_file_md5(&self) -> Option<&String> {
+  fn get_indexed_file_md5(&self) -> Option<&String> {
     self.indexed_file_md5.as_ref()
   }
-  pub fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime> {
+  fn get_indexed_file_last_modif_date(&self) -> Option<&SystemTime> {
     self.indexed_file_last_modif_date.as_ref()
   }
-  pub fn get_indexed_colname_lon(&self) -> Option<&String> {
+  fn get_indexed_colname_lon(&self) -> Option<&String> {
     self.indexed_colname_lon.as_ref()
   }
-  pub fn get_indexed_colname_lat(&self) -> Option<&String> {
+  fn get_indexed_colname_lat(&self) -> Option<&String> {
     self.indexed_colname_lat.as_ref()
   }
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
-  pub fn get_hcindex(&self) -> BorrowedCIndexExplicit<'_, H, T> {
+  fn get_hcindex(&'a self) -> Self::HCIndexType {
     BorrowedCIndexExplicit::new(self.depth, self.mmap.as_ref())
   }
 }
