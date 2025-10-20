@@ -1305,7 +1305,7 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicit<H, T> {
 
 /// `BTreeMap` based structure: slow loading (tree creation), but fast queries.
 // P.S.: to index a HPX sorted CSV file, the best thing to do would be to return an
-// iterator on (hpx, starting_byte) and to create a `cds-bstree-file-readonly-rust` structur
+// iterator on (hpx, starting_byte) and to create a `cds-bstree-file-readonly-rust` structure
 // (from an already sorted iterator).
 #[derive(Debug, PartialEq)]
 pub struct OwnedCIndexExplicitBTree<H: HHash, T: HCIndexValue> {

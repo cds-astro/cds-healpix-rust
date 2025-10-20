@@ -148,7 +148,7 @@ impl FitsCard for Order {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum TForm1 {
+pub enum TForm {
   B(Option<u32>), // u8
   I(Option<u32>), // u16
   J(Option<u32>), // u32
@@ -156,60 +156,60 @@ pub enum TForm1 {
   E(Option<u32>), // f32
   D(Option<u32>), // f64
 }
-impl TForm1 {
+impl TForm {
   pub fn type_n_bytes(&self) -> usize {
     match self {
-      TForm1::B(_) => size_of::<u8>(),
-      TForm1::I(_) => size_of::<u16>(),
-      TForm1::J(_) => size_of::<u32>(),
-      TForm1::K(_) => size_of::<u64>(),
-      TForm1::E(_) => size_of::<f32>(),
-      TForm1::D(_) => size_of::<f64>(),
+      TForm::B(_) => size_of::<u8>(),
+      TForm::I(_) => size_of::<u16>(),
+      TForm::J(_) => size_of::<u32>(),
+      TForm::K(_) => size_of::<u64>(),
+      TForm::E(_) => size_of::<f32>(),
+      TForm::D(_) => size_of::<f64>(),
     }
   }
   pub fn n_bytes(&self) -> usize {
     match self {
-      TForm1::B(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u8>(),
-      TForm1::I(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u16>(),
-      TForm1::J(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u32>(),
-      TForm1::K(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u64>(),
-      TForm1::E(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<f32>(),
-      TForm1::D(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<f64>(),
+      TForm::B(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u8>(),
+      TForm::I(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u16>(),
+      TForm::J(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u32>(),
+      TForm::K(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<u64>(),
+      TForm::E(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<f32>(),
+      TForm::D(opt_n) => opt_n.unwrap_or(1) as usize * size_of::<f64>(),
     }
   }
   pub fn n_pack(&self) -> u32 {
     match self {
-      TForm1::B(opt_n) => opt_n.unwrap_or(1),
-      TForm1::I(opt_n) => opt_n.unwrap_or(1),
-      TForm1::J(opt_n) => opt_n.unwrap_or(1),
-      TForm1::K(opt_n) => opt_n.unwrap_or(1),
-      TForm1::E(opt_n) => opt_n.unwrap_or(1),
-      TForm1::D(opt_n) => opt_n.unwrap_or(1),
+      TForm::B(opt_n) => opt_n.unwrap_or(1),
+      TForm::I(opt_n) => opt_n.unwrap_or(1),
+      TForm::J(opt_n) => opt_n.unwrap_or(1),
+      TForm::K(opt_n) => opt_n.unwrap_or(1),
+      TForm::E(opt_n) => opt_n.unwrap_or(1),
+      TForm::D(opt_n) => opt_n.unwrap_or(1),
     }
   }
-}
-impl fmt::Display for TForm1 {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{} = {}", Self::keyword_str(), self.to_fits_value())
-  }
-}
-impl FitsCard for TForm1 {
-  const KEYWORD: &'static [u8; 8] = b"TFORM1  ";
 
   fn specific_parse_value(keyword_record: &[u8]) -> Result<Self, FitsError> {
+    let expected_values = [b"nB", b"nI", b"nJ", b"nK", b"nE", b"nD"];
     let val = get_str_val_no_quote(keyword_record)?;
     if val.len() == 1 {
       match val {
-        b"B" => Ok(TForm1::B(None)),
-        b"I" => Ok(TForm1::I(None)),
-        b"J" => Ok(TForm1::J(None)),
-        b"K" => Ok(TForm1::K(None)),
-        b"E" => Ok(TForm1::E(None)),
-        b"D" => Ok(TForm1::D(None)),
-        parsed_val => Err(Self::predefine_val_err(
-          parsed_val,
-          &[b"nB", b"nI", b"nJ", b"nK", b"nE", b"nD"],
-        )),
+        b"B" => Ok(TForm::B(None)),
+        b"I" => Ok(TForm::I(None)),
+        b"J" => Ok(TForm::J(None)),
+        b"K" => Ok(TForm::K(None)),
+        b"E" => Ok(TForm::E(None)),
+        b"D" => Ok(TForm::D(None)),
+        parsed_value => Err(FitsError::UnexpectedValue {
+          keyword: unsafe { String::from_utf8_unchecked(get_keyword(keyword_record).to_vec()) },
+          expected: format!(
+            "{:?}",
+            expected_values
+              .iter()
+              .map(|v| unsafe { String::from_utf8_unchecked(v.to_vec()) })
+              .collect::<Vec<String>>()
+          ),
+          actual: String::from_utf8_lossy(parsed_value).to_string(),
+        }),
       }
     } else {
       let (n, k) = val.split_at(val.len() - 1);
@@ -221,47 +221,108 @@ impl FitsCard for TForm1 {
           err,
         })?;
       match k {
-        b"B" => Ok(TForm1::B(Some(n))),
-        b"I" => Ok(TForm1::I(Some(n))),
-        b"J" => Ok(TForm1::J(Some(n))),
-        b"K" => Ok(TForm1::K(Some(n))),
-        b"E" => Ok(TForm1::E(Some(n))),
-        b"D" => Ok(TForm1::D(Some(n))),
-        parsed_val => Err(Self::predefine_val_err(
-          parsed_val,
-          &[b"nB", b"nI", b"nJ", b"nK", b"nE", b"nD"],
-        )),
+        b"B" => Ok(TForm::B(Some(n))),
+        b"I" => Ok(TForm::I(Some(n))),
+        b"J" => Ok(TForm::J(Some(n))),
+        b"K" => Ok(TForm::K(Some(n))),
+        b"E" => Ok(TForm::E(Some(n))),
+        b"D" => Ok(TForm::D(Some(n))),
+        parsed_value => Err(FitsError::UnexpectedValue {
+          keyword: unsafe { String::from_utf8_unchecked(get_keyword(keyword_record).to_vec()) },
+          expected: format!(
+            "{:?}",
+            expected_values
+              .iter()
+              .map(|v| unsafe { String::from_utf8_unchecked(v.to_vec()) })
+              .collect::<Vec<String>>()
+          ),
+          actual: String::from_utf8_lossy(parsed_value).to_string(),
+        }),
       }
     }
+    // Self::predefine_val_err(
+    //           parsed_val,
+    //           &[b"nB", b"nI", b"nJ", b"nK", b"nE", b"nD"],
+    //         )),
   }
 
-  fn to_fits_value(&self) -> String {
+  pub fn to_fits_value(&self) -> String {
     match self {
-      TForm1::B(opt_n) => format!(
+      TForm::B(opt_n) => format!(
         "'{}B'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
-      TForm1::I(opt_n) => format!(
+      TForm::I(opt_n) => format!(
         "'{}I'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
-      TForm1::J(opt_n) => format!(
+      TForm::J(opt_n) => format!(
         "'{}J'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
-      TForm1::K(opt_n) => format!(
+      TForm::K(opt_n) => format!(
         "'{}K'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
-      TForm1::E(opt_n) => format!(
+      TForm::E(opt_n) => format!(
         "'{}E'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
-      TForm1::D(opt_n) => format!(
+      TForm::D(opt_n) => format!(
         "'{}D'",
         opt_n.map(|n| n.to_string()).unwrap_or(String::from(""))
       ),
     }
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct TForm1(TForm);
+impl TForm1 {
+  pub fn to_tform(self) -> TForm {
+    self.0
+  }
+}
+
+impl fmt::Display for TForm1 {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{} = {}", Self::keyword_str(), self.to_fits_value())
+  }
+}
+impl FitsCard for TForm1 {
+  const KEYWORD: &'static [u8; 8] = b"TFORM1  ";
+
+  fn specific_parse_value(keyword_record: &[u8]) -> Result<Self, FitsError> {
+    TForm::specific_parse_value(keyword_record).map(Self)
+  }
+
+  fn to_fits_value(&self) -> String {
+    self.0.to_fits_value()
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct TForm2(TForm);
+impl TForm2 {
+  pub fn to_tform(self) -> TForm {
+    self.0
+  }
+}
+
+impl fmt::Display for TForm2 {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{} = {}", Self::keyword_str(), self.to_fits_value())
+  }
+}
+impl FitsCard for TForm2 {
+  const KEYWORD: &'static [u8; 8] = b"TFORM2  ";
+
+  fn specific_parse_value(keyword_record: &[u8]) -> Result<Self, FitsError> {
+    TForm::specific_parse_value(keyword_record).map(Self)
+  }
+
+  fn to_fits_value(&self) -> String {
+    self.0.to_fits_value()
   }
 }
 
@@ -394,30 +455,35 @@ impl SkymapCard for PixType {
 impl SkymapCard for TForm1 {
   const INDEX: u8 = 4;
 }
-impl SkymapCard for TType1 {
+impl SkymapCard for TForm2 {
   const INDEX: u8 = 5;
 }
-impl SkymapCard for Nside {
+impl SkymapCard for TType1 {
   const INDEX: u8 = 6;
 }
-impl SkymapCard for FirstPix {
+impl SkymapCard for Nside {
   const INDEX: u8 = 7;
 }
-impl SkymapCard for LastPix {
+impl SkymapCard for FirstPix {
   const INDEX: u8 = 8;
 }
-impl SkymapCard for IndexSchema {
+impl SkymapCard for LastPix {
   const INDEX: u8 = 9;
+}
+impl SkymapCard for IndexSchema {
+  const INDEX: u8 = 10;
 }
 
 #[derive(Debug)]
 pub(super) struct SkymapKeywordsMap {
-  entries: [Option<SkymapKeywords>; 10],
+  entries: [Option<SkymapKeywords>; 11],
 }
 impl SkymapKeywordsMap {
   pub(super) fn new() -> SkymapKeywordsMap {
     Self {
-      entries: [None, None, None, None, None, None, None, None, None, None],
+      entries: [
+        None, None, None, None, None, None, None, None, None, None, None,
+      ],
     }
   }
 
@@ -586,7 +652,7 @@ impl SkymapKeywordsMap {
     }
   }
 
-  pub(super) fn check_index_schema(&self, expected: IndexSchema) -> Result<(), FitsError> {
+  /*pub(super) fn check_index_schema(&self, expected: IndexSchema) -> Result<(), FitsError> {
     match self.get::<IndexSchema>() {
       Some(SkymapKeywords::IndexSchema(actual)) => {
         if *actual == expected {
@@ -603,7 +669,7 @@ impl SkymapKeywordsMap {
         keyword: IndexSchema::keyword_string(),
       }),
     }
-  }
+  }*/
 }
 
 #[derive(Debug)]
@@ -613,6 +679,7 @@ pub enum SkymapKeywords {
   Order(Order),
   PixType(PixType),
   TForm1(TForm1),
+  TForm2(TForm2),
   TType1(TType1),
   Nside(Nside),
   FirstPix(FirstPix),
@@ -637,6 +704,9 @@ impl SkymapKeywords {
         .map(Some),
       b"TFORM1  " => TForm1::parse_value(keyword_record)
         .map(SkymapKeywords::TForm1)
+        .map(Some),
+      b"TFORM2  " => TForm2::parse_value(keyword_record)
+        .map(SkymapKeywords::TForm2)
         .map(Some),
       b"TTYPE1  " => TType1::parse_value(keyword_record)
         .map(SkymapKeywords::TType1)
@@ -664,6 +734,7 @@ impl SkymapKeywords {
       SkymapKeywords::Order(_) => Order::INDEX,
       SkymapKeywords::PixType(_) => PixType::INDEX,
       SkymapKeywords::TForm1(_) => TForm1::INDEX,
+      SkymapKeywords::TForm2(_) => TForm2::INDEX,
       SkymapKeywords::TType1(_) => TType1::INDEX,
       SkymapKeywords::Nside(_) => Nside::INDEX,
       SkymapKeywords::FirstPix(_) => FirstPix::INDEX,
@@ -679,6 +750,7 @@ impl SkymapKeywords {
       SkymapKeywords::Order(_) => Order::KEYWORD,
       SkymapKeywords::PixType(_) => PixType::KEYWORD,
       SkymapKeywords::TForm1(_) => TForm1::KEYWORD,
+      SkymapKeywords::TForm2(_) => TForm2::KEYWORD,
       SkymapKeywords::TType1(_) => TType1::KEYWORD,
       SkymapKeywords::Nside(_) => Nside::KEYWORD,
       SkymapKeywords::FirstPix(_) => FirstPix::KEYWORD,
@@ -698,6 +770,7 @@ impl SkymapKeywords {
       SkymapKeywords::Order(kw) => kw.write_keyword_record(keyword_record),
       SkymapKeywords::PixType(kw) => kw.write_keyword_record(keyword_record),
       SkymapKeywords::TForm1(kw) => kw.write_keyword_record(keyword_record),
+      SkymapKeywords::TForm2(kw) => kw.write_keyword_record(keyword_record),
       SkymapKeywords::TType1(kw) => kw.write_keyword_record(keyword_record),
       SkymapKeywords::Nside(kw) => kw.write_keyword_record(keyword_record),
       SkymapKeywords::FirstPix(kw) => kw.write_keyword_record(keyword_record),

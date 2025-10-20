@@ -1,22 +1,4 @@
-//! For the Skymap FITS file convention, see [this document](https://gamma-astro-data-formats.readthedocs.io/en/latest/skymaps/healpix/index.html).
-
-use std::{
-  error::Error,
-  f64::consts::PI,
-  fs::File,
-  io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Read, Seek, Write},
-  iter::{Enumerate, Map},
-  marker::PhantomData,
-  ops::{Add, AddAssign, Deref, RangeInclusive},
-  path::Path,
-  slice::Iter,
-  vec::IntoIter,
-};
-
-use colorous::Gradient;
 use itertools::Itertools;
-use log::warn;
-use num_traits::ToBytes;
 use rayon::{
   prelude::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
@@ -24,14 +6,28 @@ use rayon::{
   },
   ThreadPool,
 };
+use std::collections::BTreeMap;
+use std::{
+  f64::consts::PI,
+  fs::File,
+  io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Write},
+  iter::{Enumerate, Map},
+  marker::PhantomData,
+  ops::Add,
+  ops::{AddAssign, Deref},
+  path::Path,
+  slice::Iter,
+  vec::IntoIter,
+};
 
-use mapproj::CanonicalProjection;
-
+use super::{SkyMap, SkyMapValue};
+use crate::nested::map::skymap::explicit::ExplicitSkyMapBTree;
 use crate::{
   n_hash,
   nested::{
     get,
     map::{
+      fits::{error::FitsError, write::write_implicit_skymap_fits},
       mom::{
         impls::zvec::MomVecImpl, new_chi2_count_ref_merger, new_chi2_density_ref_merger, Mom,
         ZUniqHashT,
@@ -42,116 +38,18 @@ use crate::{
   },
 };
 
-#[cfg(not(target_arch = "wasm32"))]
-use super::img::show_with_default_app;
-use super::{
-  fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits},
-  img::{to_skymap_png, ColorMapFunctionType, PosConversion},
-};
-
-/// Trait marking the type of the values writable in a FITS skymap.
-pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone {
-  /// FITS size, in bytes, of a value.
-  const FITS_NAXIS1: u8 = size_of::<Self>() as u8;
-  /// FITS TFORM type of the value
-  const FITS_TFORM: &'static str;
-  /// Non standard value used in FITS to support various datatypes (including unsigned integer, ...).
-  const FITS_DATATYPE: &'static str;
-}
-
-impl SkyMapValue for u8 {
-  const FITS_TFORM: &'static str = "B";
-  const FITS_DATATYPE: &'static str = "u8";
-}
-impl SkyMapValue for i16 {
-  const FITS_TFORM: &'static str = "B";
-  const FITS_DATATYPE: &'static str = "i16";
-}
-impl SkyMapValue for i32 {
-  const FITS_TFORM: &'static str = "J";
-  const FITS_DATATYPE: &'static str = "i32";
-}
-impl SkyMapValue for i64 {
-  const FITS_TFORM: &'static str = "K";
-  const FITS_DATATYPE: &'static str = "i64";
-}
-impl SkyMapValue for u32 {
-  const FITS_TFORM: &'static str = "J";
-  const FITS_DATATYPE: &'static str = "u32";
-}
-impl SkyMapValue for u64 {
-  const FITS_TFORM: &'static str = "K";
-  const FITS_DATATYPE: &'static str = "u64";
-}
-impl SkyMapValue for f32 {
-  const FITS_TFORM: &'static str = "E";
-  const FITS_DATATYPE: &'static str = "f32";
-}
-impl SkyMapValue for f64 {
-  const FITS_TFORM: &'static str = "D";
-  const FITS_DATATYPE: &'static str = "f64";
-}
-
-// Make a struct:
-// SkyMapMap<S, F>
-// where
-//   F: FnMut(S::ValueType) -> B,
-// {
-//   skymap: S,
-//   f: F
-// }
-//
-// And implement SkyMap on it.
-
-#[allow(clippy::len_without_is_empty)]
-pub trait SkyMap<'a> {
-  /// Type of the HEALPix hash value (mainly `u32` or `u64`).
-  type HashType: HHash;
-  /// Type of the value associated to each HEALPix cell.
-  type ValueType: 'a + SkyMapValue;
-  /// Type of the iterator iterating on the skymap values.
-  type ValuesIt: Iterator<Item = &'a Self::ValueType>;
-  /// Type of the iterator iterating on the skymap borrowed entries.
-  /// WARNING: we are so far stucked with iterator on ranges,
-  /// e.g `(0..n_cell).iter().zip(...)`, since it relies on the `Step` trait
-  /// which requires `nightly builds`.
-  /// In the case of `implicit` skymaps, a solution is to use `enumerate`.
-  type EntriesIt: Iterator<Item = (Self::HashType, &'a Self::ValueType)>;
-  /// Type of iterator iterating on owned entries.
-  type OwnedEntriesIt: Iterator<Item = (Self::HashType, Self::ValueType)>;
-
-  /// Depth (<=> HEALPix order) of the skymap.
-  fn depth(&self) -> u8;
-
-  /// Tells whether the map is implicit or not.
-  /// If implicit, method `values` and `entries` will return as many items as the number
-  /// of HEALPix cell at the map HEALPix depth.
-  fn is_implicit(&self) -> bool;
-
-  /// Returns the number of elements in the skymap.
-  /// For implicit skymaps, the number of elements equals the number of HEALPix cells at the
-  /// skymap depth/order.
-  fn len(&self) -> usize;
-
-  /// Returns the value associated with the HEALPix cell of given hash number.
-  fn get(&self, hash: Self::HashType) -> &Self::ValueType;
-
-  /// Returns all values associated with HEALPix cells, ordered by increasing cell hash number.
-  fn values(&'a self) -> Self::ValuesIt;
-
-  /// Returns all entries, i.e. HEALPix cell hash / value tuples, ordered by increasing cell hash number.
-  fn entries(&'a self) -> Self::EntriesIt;
-
-  /// In case we want to build mom from complex type that are costly to clone.
-  fn owned_entries(self) -> Self::OwnedEntriesIt;
-}
-
 #[derive(Debug)]
 pub struct ImplicitSkyMapArray<H: HHash, V: SkyMapValue> {
-  depth: u8,
-  values: Box<[V]>,
+  pub depth: u8,
+  pub values: Box<[V]>,
   _htype: PhantomData<H>,
 }
+impl<V: SkyMapValue> From<ImplicitSkyMapArray<u32, V>> for ImplicitSkyMapArray<u64, V> {
+  fn from(value: ImplicitSkyMapArray<u32, V>) -> Self {
+    Self::new(value.depth, value.values)
+  }
+}
+
 impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
   /// WARNING: we assume that the coherency between the depth and the number of elements in the
   ///array has already been tested.
@@ -159,7 +57,7 @@ impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
     assert_eq!(
       n_hash(depth) as usize,
       values.deref().len(),
-      "Wrong implicit skymap size. Epecgted: {}. Actual: {}.",
+      "Wrong implicit skymap size. Expected: {}. Actual: {}.",
       n_hash(depth),
       values.len()
     );
@@ -168,6 +66,15 @@ impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
       values,
       _htype: PhantomData,
     }
+  }
+
+  pub fn to_explicit_map(self) -> ExplicitSkyMapBTree<H, V> {
+    let depth = self.depth;
+    let btreemap: BTreeMap<H, V> = self
+      .owned_entries()
+      .filter(move |(_k, v)| !v.is_zero())
+      .collect();
+    ExplicitSkyMapBTree::new(depth, btreemap)
   }
 }
 impl<H: HHash, V: SkyMapValue + Send + Sync + AddAssign> ImplicitSkyMapArray<H, V> {
@@ -305,225 +212,14 @@ impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArr
   }
 }
 
-#[derive(Debug)]
-pub enum SkyMapEnum {
-  ImplicitU64U8(ImplicitSkyMapArray<u64, u8>),
-  ImplicitU64I16(ImplicitSkyMapArray<u64, i16>),
-  ImplicitU64I32(ImplicitSkyMapArray<u64, i32>),
-  ImplicitU64I64(ImplicitSkyMapArray<u64, i64>),
-  ImplicitU64F32(ImplicitSkyMapArray<u64, f32>),
-  ImplicitU64F64(ImplicitSkyMapArray<u64, f64>),
-}
-
-impl SkyMapEnum {
-  #[cfg(not(target_arch = "wasm32"))]
-  pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
-    File::open(path)
-      .map_err(FitsError::Io)
-      .map(BufReader::new)
-      .and_then(SkyMapEnum::from_fits)
-  }
-
-  pub fn from_fits<R: Read + Seek>(reader: BufReader<R>) -> Result<Self, FitsError> {
-    from_fits_skymap(reader)
-  }
-
-  pub fn to_count_map(self) -> Result<CountMap, String> {
-    match self {
-      Self::ImplicitU64I32(skymap) => {
-        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, unsafe {
-          std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values)
-        })))
-      }
-      Self::ImplicitU64I64(skymap) => {
-        warn!("Transforms i64 skymap into u32 skymap without checking possible overflow!");
-        let values = skymap.values.iter().map(|&v| v as u32).collect();
-        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
-      }
-      Self::ImplicitU64F32(skymap) => {
-        warn!("Transforms f32 skymap into u32 skymap assuming integer values!");
-        let values = skymap.values.iter().map(|&v| v as u32).collect();
-        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
-      }
-      Self::ImplicitU64F64(skymap) => {
-        warn!("Transforms f64 skymap into u32 skymap assuming integer values!");
-        let values = skymap.values.iter().map(|&v| v as u32).collect();
-        Ok(CountMap(ImplicitSkyMapArray::new(skymap.depth, values)))
-      }
-      _ => Err(String::from("Unable to convert to count map.")),
-    }
-  }
-
-  pub fn to_count_map_u32(self) -> Result<CountMapU32, String> {
-    match self {
-      Self::ImplicitU64I32(skymap) => Ok(CountMapU32(ImplicitSkyMapArray::new(
-        skymap.depth,
-        unsafe { std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values) },
-      ))),
-      _ => Err(String::from("Unable to convert to count map.")),
-    }
-  }
-
-  pub fn to_dens_map(self) -> Result<DensityMap, String> {
-    match self {
-      Self::ImplicitU64F64(skymap) => Ok(DensityMap(ImplicitSkyMapArray::new(
-        skymap.depth,
-        skymap.values,
-      ))),
-      _ => Err(String::from("Unable to convert to count map.")),
-    }
-  }
-
-  pub fn par_add(self, rhs: Self) -> Result<Self, FitsError> {
-    match (self, rhs) {
-      (Self::ImplicitU64I32(l), Self::ImplicitU64I32(r)) => Ok(Self::ImplicitU64I32(l.par_add(r))),
-      (Self::ImplicitU64F32(l), Self::ImplicitU64F32(r)) => Ok(Self::ImplicitU64F32(l.par_add(r))),
-      (Self::ImplicitU64F64(l), Self::ImplicitU64F64(r)) => Ok(Self::ImplicitU64F64(l.par_add(r))),
-      _ => Err(FitsError::Custom {
-        msg: format!("Skymap type not supported or not the same in 'add' operation"),
-      }),
-    }
-  }
-
-  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
-    match &self {
-      Self::ImplicitU64U8(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-      Self::ImplicitU64I16(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-      Self::ImplicitU64I32(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-      Self::ImplicitU64I64(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-      Self::ImplicitU64F32(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-      Self::ImplicitU64F64(s) => write_implicit_skymap_fits(writer, s.values.deref()),
-    }
-  }
-
-  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
-    File::create(path)
-      .map_err(FitsError::Io)
-      .and_then(|file| self.to_fits(BufWriter::new(file)))
-  }
-
-  #[cfg(not(target_arch = "wasm32"))]
-  pub fn to_skymap_png_file<P: CanonicalProjection, W: AsRef<Path>>(
-    &self,
-    img_size: (u16, u16),
-    proj: Option<P>,
-    proj_center: Option<(f64, f64)>,
-    proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
-    pos_convert: Option<PosConversion>,
-    color_map: Option<Gradient>,
-    color_map_func_type: Option<ColorMapFunctionType>,
-    path: W,
-    view: bool,
-  ) -> Result<(), Box<dyn Error>> {
-    File::create(path.as_ref())
-      .map_err(|e| e.into())
-      .map(BufWriter::new)
-      .and_then(|mut writer| {
-        self.to_skymap_png(
-          img_size,
-          proj,
-          proj_center,
-          proj_bounds,
-          pos_convert,
-          color_map,
-          color_map_func_type,
-          &mut writer,
-        )
-      })
-      .and_then(|()| {
-        if view {
-          show_with_default_app(path.as_ref().to_string_lossy().as_ref()).map_err(|e| e.into())
-        } else {
-          Ok(())
-        }
-      })
-  }
-
-  pub fn to_skymap_png<P: CanonicalProjection, W: Write>(
-    &self,
-    img_size: (u16, u16),
-    proj: Option<P>,
-    proj_center: Option<(f64, f64)>,
-    proj_bounds: Option<(RangeInclusive<f64>, RangeInclusive<f64>)>,
-    pos_convert: Option<PosConversion>,
-    color_map: Option<Gradient>,
-    color_map_func_type: Option<ColorMapFunctionType>,
-    writer: W,
-  ) -> Result<(), Box<dyn Error>> {
-    match &self {
-      Self::ImplicitU64U8(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-      Self::ImplicitU64I16(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-      Self::ImplicitU64I32(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-      Self::ImplicitU64I64(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-      Self::ImplicitU64F32(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-      Self::ImplicitU64F64(s) => to_skymap_png(
-        s,
-        img_size,
-        proj,
-        proj_center,
-        proj_bounds,
-        pos_convert,
-        color_map,
-        color_map_func_type,
-        writer,
-      ),
-    }
-  }
-}
-
 /// SkyMap implementation use to store counts.
 #[derive(Debug)]
 pub struct CountMap(ImplicitSkyMapArray<u64, u32>);
+impl From<ImplicitSkyMapArray<u64, u32>> for CountMap {
+  fn from(value: ImplicitSkyMapArray<u64, u32>) -> Self {
+    Self(value)
+  }
+}
 impl CountMap {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u64, u32> {
     &self.0
@@ -771,6 +467,11 @@ impl<'a> SkyMap<'a> for CountMap {
 /// SkyMap implementation use to store counts, rely on u32 HEALPix index instead of u64.
 #[derive(Debug)]
 pub struct CountMapU32(ImplicitSkyMapArray<u32, u32>);
+impl From<ImplicitSkyMapArray<u32, u32>> for CountMapU32 {
+  fn from(value: ImplicitSkyMapArray<u32, u32>) -> Self {
+    Self(value)
+  }
+}
 impl CountMapU32 {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, u32> {
     &self.0
@@ -1157,6 +858,11 @@ impl<'a> SkyMap<'a> for CountMapU32 {
 /// SkyMap implementation use to store densities.
 #[derive(Debug)]
 pub struct DensityMap(ImplicitSkyMapArray<u32, f64>);
+impl From<ImplicitSkyMapArray<u32, f64>> for DensityMap {
+  fn from(value: ImplicitSkyMapArray<u32, f64>) -> Self {
+    Self(value)
+  }
+}
 impl DensityMap {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, f64> {
     &self.0
@@ -1228,181 +934,4 @@ impl DensityMap {
   }
 
   // to_png
-}
-
-#[cfg(test)]
-mod tests {
-
-  fn init_logger() {
-    let log_level = log::LevelFilter::max();
-    // let log_level = log::LevelFilter::Error;
-
-    let _ = env_logger::builder()
-      // Include all events in tests
-      .filter_level(log_level)
-      // Ensure events are captured by `cargo test`
-      .is_test(true)
-      // Ignore errors initializing the logger if tests race to configure it
-      .try_init();
-  }
-
-  /*  Test only on personal computer
-  #[test]
-  #[cfg(not(target_arch = "wasm32"))]
-  fn test_xmm_slew_dens() {
-    use std::{fs::read_to_string, time::SystemTime};
-    use log::debug;
-    use mapproj::pseudocyl::mol::Mol;
-    use crate::nested::map::{
-      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
-      skymap::{CountMap, CountMapU32, DensityMap},
-    };
-
-    let path = "local_resources/xmmsl3_241122_posonly.csv";
-    let content = read_to_string(path).unwrap();
-    let img_size = (1366, 768);
-    let depth = 8;
-
-    let it = content.lines().skip(1).map(|row| {
-      let (l, b) = row.split_once(',').unwrap();
-      (
-        l.parse::<f64>().unwrap().to_radians(),
-        b.parse::<f64>().unwrap().to_radians(),
-      )
-    });
-    let dens_map = DensityMap::from_positions(depth, it);
-    to_skymap_png_file::<'_, _, Mol, _>(
-      &dens_map.0,
-      img_size,
-      None,
-      None,
-      None,
-      Some(PosConversion::EqMap2GalImg),
-      None,
-      Some(ColorMapFunctionType::LinearLog), // LinearLog
-      "local_resources/xmmsl3_241122.dens_map.png",
-      false,
-    )
-    .unwrap();
-    // println!("{:?}", dens_map);
-    let dens_mom = dens_map.to_chi2_mom();
-    to_mom_png_file::<'_, _, Mol, _>(
-      &dens_mom,
-      img_size,
-      None,
-      None,
-      None,
-      Some(PosConversion::EqMap2GalImg),
-      None,
-      Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
-      "local_resources/xmmsl3_241122.dens_mom.png",
-      false,
-    )
-    .unwrap();
-  }
-  */
-
-  /*  Test only on personal computer
-  #[test]
-  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
-  fn test_xmm_slew_count() {
-    use std::{fs::read_to_string, time::SystemTime};
-    use log::debug;
-    use mapproj::pseudocyl::mol::Mol;
-    use crate::nested::map::{
-      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
-      skymap::{CountMap, CountMapU32, DensityMap},
-    };
-
-    let path = "local_resources/xmmsl3_241122_posonly.csv";
-    let content = read_to_string(path).unwrap();
-    let img_size = (1366, 768);
-    let depth = 7;
-
-    let it = content.lines().skip(1).map(|row| {
-      let (l, b) = row.split_once(',').unwrap();
-      (
-        l.parse::<f64>().unwrap().to_radians(),
-        b.parse::<f64>().unwrap().to_radians(),
-      )
-    });
-    let dens_map = CountMap::from_positions(depth, it);
-    to_skymap_png_file::<'_, _, Mol, _>(
-      &dens_map.0,
-      img_size,
-      None,
-      None,
-      None,
-      Some(PosConversion::EqMap2GalImg),
-      None,
-      Some(ColorMapFunctionType::LinearLog), // LinearLog
-      "local_resources/xmmsl3_241122.dens_map_from_counts.png",
-      false,
-    )
-    .unwrap();
-
-    // println!("{:?}", dens_map);
-    let dens_mom = dens_map.to_chi2_mom();
-    to_mom_png_file::<'_, _, Mol, _>(
-      &dens_mom,
-      img_size,
-      None,
-      None,
-      None,
-      Some(PosConversion::EqMap2GalImg),
-      None,
-      Some(ColorMapFunctionType::LinearLog), //Some(ColorMapFunctionType::LinearSqrt)
-      "local_resources/xmmsl3_241122.dens_mom_from_counts.png",
-      false,
-    )
-    .unwrap();
-  }
-  */
-
-  /* Test only on personal computer
-  #[test]
-  #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
-  fn test_countmap_par() {
-    use std::{fs::read_to_string, time::SystemTime};
-    use log::debug;
-    use mapproj::pseudocyl::mol::Mol;
-    use crate::nested::map::{
-      img::{to_mom_png_file, to_skymap_png_file, ColorMapFunctionType, PosConversion},
-      skymap::{CountMap, CountMapU32, DensityMap},
-    };
-
-    let n_threads = Some(4);
-    let path = "./local_resources/input11.csv"; // 3.5 GB file, depth=4 chunk_size=2M => total time = 8.57 s, i.e 400 MB/s
-    let depth = 6; // Test also with 10
-    let has_header = false;
-    let chunk_size = 2_000_000;
-    // Init logger
-    init_logger();
-    // Build thread pool
-    let mut pool_builder = rayon::ThreadPoolBuilder::new();
-    if let Some(n_threads) = n_threads {
-      pool_builder = pool_builder.num_threads(n_threads);
-    }
-    let thread_pool = pool_builder.build().unwrap();
-
-    let tstart = SystemTime::now();
-    let count_map = CountMapU32::from_csv_file_par(
-      path,
-      1,
-      2,
-      Some(','),
-      has_header,
-      depth,
-      chunk_size,
-      &thread_pool,
-    )
-    .unwrap();
-    debug!(
-      "Count map computed in {} ms",
-      SystemTime::now()
-        .duration_since(tstart)
-        .unwrap_or_default()
-        .as_millis()
-    );
-  }*/
 }

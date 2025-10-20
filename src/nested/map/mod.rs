@@ -17,6 +17,11 @@ pub trait HHash:
 'static + PrimInt + AsPrimitive<usize> + Send + Sync + Debug + Display + Clone + ToBytes
 + FromBytes<Bytes: for<'a> TryFrom<&'a [u8], Error=TryFromSliceError>>
 {
+  /// FITS size, in bytes, of a value.
+  const FITS_NAXIS1: u8 = size_of::<Self>() as u8;
+  /// FITS TFORM type of the value
+  const FITS_TFORM: &'static str;
+
   fn to_u32(&self) -> u32;
 
   fn from_u32(v: u32) -> Self;
@@ -26,6 +31,8 @@ pub trait HHash:
 }
 
 impl HHash for u32 {
+  const FITS_TFORM: &'static str = "J";
+
   fn to_u32(&self) -> u32 {
     *self
   }
@@ -43,6 +50,8 @@ impl HHash for u32 {
   }
 }
 impl HHash for u64 {
+  const FITS_TFORM: &'static str = "K";
+
   fn to_u32(&self) -> u32 {
     *self as u32
   }

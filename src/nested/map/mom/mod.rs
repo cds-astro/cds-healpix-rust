@@ -64,8 +64,8 @@ pub trait ZUniqHashT:
   const LAST_LAYER_MASK: Self; // = Self:: Self::one().unsigned_shl(Self::DIM as u32) - Self::one();
   /// The datatype writen in FITS
   const FITS_DATATYPE: &'static str;
-  /// The TFORM compliant FITS keyword value.
-  const FITS_TFORM: &'static str;
+  // The TFORM compliant FITS keyword value.
+  // const FITS_TFORM: &'static str;
 
   /// Must return 2.
   fn two() -> Self;
@@ -127,7 +127,7 @@ pub trait ZUniqHashT:
 impl ZUniqHashT for u32 {
   const LAST_LAYER_MASK: Self = 3;
   const FITS_DATATYPE: &'static str = "u32";
-  const FITS_TFORM: &'static str = "J";
+  // const FITS_TFORM: &'static str = "J";
   fn two() -> Self {
     2
   }
@@ -138,7 +138,7 @@ impl ZUniqHashT for u32 {
 impl ZUniqHashT for u64 {
   const LAST_LAYER_MASK: Self = 3;
   const FITS_DATATYPE: &'static str = "u64";
-  const FITS_TFORM: &'static str = "K";
+  // const FITS_TFORM: &'static str = "K";
   fn two() -> Self {
     2
   }

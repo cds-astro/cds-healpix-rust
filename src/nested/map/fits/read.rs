@@ -1,3 +1,6 @@
+use byteorder::{BigEndian, ReadBytesExt};
+use log::{debug, warn};
+use std::collections::BTreeMap;
 use std::{
   io,
   io::{BufRead, BufReader, Read, Seek},
@@ -6,25 +9,24 @@ use std::{
   str::{self, FromStr},
 };
 
-use byteorder::{BigEndian, ReadBytesExt};
-use log::{debug, warn};
-
 use super::{
-  super::skymap::{ImplicitSkyMapArray, SkyMapEnum},
+  super::skymap::{implicit::ImplicitSkyMapArray, SkyMapEnum},
   error::FitsError,
   gz::{is_gz, uncompress},
   keywords::{
     CoordSys, FitsCard, IndexSchema, Nside, Order, Ordering, SkymapKeywords, SkymapKeywordsMap,
-    TForm1, TType1,
+    TForm, TForm1, TForm2, TType1,
   },
 };
+use crate::nested::map::skymap::explicit::ExplicitSkyMapBTree;
 use crate::{depth, is_nside, n_hash};
 
 /// We expect the FITS file to be a BINTABLE containing a map.
-/// [Here](https://gamma-astro-data-formats.readthedocs.io/en/latest/skymaps/healpix/index.html)
-/// a description of the format.
+/// [Here](https://healpix.sourceforge.io/data/examples/healpix_fits_specs.pdf),
+/// the most standard description of the format.
+/// While [here](https://gamma-astro-data-formats.readthedocs.io/en/latest/skymaps/healpix/index.html)
+/// another such convention.
 /// We so far implemented a subset of the format only:
-/// * `INDXSCHM= 'IMPLICIT'`
 /// * `ORDERING= 'NESTED  '`
 ///
 /// To be fast (in execution and development), we start by a non-flexible approach in which we
@@ -38,10 +40,9 @@ use crate::{depth, is_nside, n_hash};
 /// PCOUNT  =                    0 / number of group parameters                     
 /// GCOUNT  =                    1 / number of groups                               
 /// TFIELDS =                   ?? / number of table fields
-/// TTYPE1  = 'XXX'       // SHOULD STARS WITH 'PROB', else WARNING                                                            
-/// TFORM1  = 'XXX'       // MUST CONTAINS D (f64) or E (f32)                                                            
-/// TUNIT1  = 'pix-1    '
-/// TTYPE2  = ???                                                         
+/// TTYPE1  = 'XXX'
+/// TFORM1  = 'XXX'       // MUST CONTAINS D (f64) or E (f32), K, J, I , B
+/// TTYPE2  = ???
 /// TFORM2  = ???                                                            
 /// ...
 /// MOC     =                    T                                                  
@@ -122,53 +123,29 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
     // Read next 2880 bytes
     it80 = next_36_chunks_of_80_bytes(&mut reader, &mut header_block)?;
   }
-  // Check IndexSchema
-  match skymap_kws.get::<IndexSchema>() {
-    Some(_) => skymap_kws.check_index_schema(IndexSchema::Implicit),
-    None => {
-      warn!(
-        "Missing skymap keywork '{}'. Value '{}' is assumed!",
-        IndexSchema::keyword_str(),
-        IndexSchema::Implicit.to_fits_value()
-      );
-      skymap_kws.insert(SkymapKeywords::IndexSchema(IndexSchema::Implicit));
-      Ok(())
-    }
-  }?;
+
   // Check TType and TForm
-  // -- check ttype
+  // -- check ttype 1
   match skymap_kws.get::<TType1>() {
     Some(SkymapKeywords::TType1(ttype1)) => debug!("Skymap column name: {}", ttype1.get()),
     None => warn!("Missing keyword {}.", TType1::keyword_str()),
     _ => unreachable!(),
   };
-  // -- check tform
+  // -- get tform1
   let coltype_1 = match skymap_kws.get::<TForm1>() {
-    Some(SkymapKeywords::TForm1(tform1)) => Ok(tform1),
+    Some(SkymapKeywords::TForm1(tform1)) => Ok(tform1.to_tform()),
     None => Err(FitsError::MissingKeyword {
       keyword: TForm1::keyword_string(),
     }),
     _ => unreachable!(),
   }?;
   debug!("Skymap column type: {}", coltype_1.to_fits_value());
-
   // Check constant header params
   skymap_kws.check_pixtype()?; // = HEALPIX
   skymap_kws.check_ordering(Ordering::Nested, false)?;
   skymap_kws.check_coordsys(CoordSys::Cel, true)?; // So far we support only Celestial coordinates (not Galactic)
-  skymap_kws.check_index_schema(IndexSchema::Implicit)?; // So far we support only 'IMPLICIT'
-  skymap_kws.check_firstpix(0, true)?;
 
-  // Check number of columns
-  // - we so far support only map having a single column of values
-  if n_cols != 1 {
-    return Err(FitsError::UnexpectedValue {
-      keyword: String::from("TFIELDS"),
-      expected: 1.to_string(),
-      actual: n_cols.to_string(),
-    });
-  }
-  // Check whether lastpix
+  // Get depth from ORDER or NSIDE
   let depth = match skymap_kws.get::<Order>() {
     Some(SkymapKeywords::Order(order)) => Ok(order.get()),
     None => match skymap_kws.get::<Nside>() {
@@ -190,54 +167,249 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
     },
     _ => unreachable!(),
   }?;
-  let n_hash = n_hash(depth);
 
-  skymap_kws.check_lastpix(n_hash - 1, true)?;
-  // Check whether TForm compatible with N bytes per row
-  let n_hash_2 = coltype_1.n_pack() as u64 * n_rows;
-  if n_hash != n_hash_2 {
-    return Err(FitsError::new_custom(format!(
-      "Number of elements {} do not match number of HEALPix cells {}",
-      n_hash_2, n_hash
-    )));
-  }
-  // Check n_bytes_per_row
-  if n_bytes_per_row != coltype_1.n_bytes() as u64 {
-    return Err(FitsError::new_custom(format!(
-      "Number of bytes per row {} do not match TFORM1 = {}",
-      n_bytes_per_row,
-      coltype_1.to_fits_value()
-    )));
-  }
+  // Check IndexSchema
+  match skymap_kws.get::<IndexSchema>() {
+    Some(SkymapKeywords::IndexSchema(IndexSchema::Implicit)) => {
+      // IMPLICIT
 
-  // Read data
-  match coltype_1 {
-    TForm1::B(_) => (0..n_hash)
-      .map(|_| reader.read_u8())
-      .collect::<Result<Vec<u8>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64U8(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
-    TForm1::I(_) => (0..n_hash)
-      .map(|_| reader.read_i16::<BigEndian>())
-      .collect::<Result<Vec<i16>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64I16(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
-    TForm1::J(_) => (0..n_hash)
-      .map(|_| reader.read_i32::<BigEndian>())
-      .collect::<Result<Vec<i32>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64I32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
-    TForm1::K(_) => (0..n_hash)
-      .map(|_| reader.read_i64::<BigEndian>())
-      .collect::<Result<Vec<i64>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64I64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
-    TForm1::E(_) => (0..n_hash)
-      .map(|_| reader.read_f32::<BigEndian>())
-      .collect::<Result<Vec<f32>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64F32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
-    TForm1::D(_) => (0..n_hash)
-      .map(|_| reader.read_f64::<BigEndian>())
-      .collect::<Result<Vec<f64>, io::Error>>()
-      .map(|v| SkyMapEnum::ImplicitU64F64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))),
+      // Check number of columns
+      // - we so far support only map having a single column of values
+      if n_cols != 1 {
+        return Err(FitsError::UnexpectedValue {
+          keyword: String::from("TFIELDS"),
+          expected: 1.to_string(),
+          actual: n_cols.to_string(),
+        });
+      }
+
+      // Check firstpix
+      skymap_kws.check_firstpix(0, true)?;
+      let n_hash = n_hash(depth);
+      // Check lastpix
+      skymap_kws.check_lastpix(n_hash - 1, true)?;
+      // Check whether TForm compatible with N bytes per row
+      let n_hash_2 = coltype_1.n_pack() as u64 * n_rows;
+      if n_hash != n_hash_2 {
+        return Err(FitsError::new_custom(format!(
+          "Number of elements {} do not match number of HEALPix cells {}",
+          n_hash_2, n_hash
+        )));
+      }
+
+      // Check n_bytes_per_row
+      if n_bytes_per_row != coltype_1.n_bytes() as u64 {
+        return Err(FitsError::new_custom(format!(
+          "Number of bytes per row {} do not match TFORM1 = {}",
+          n_bytes_per_row,
+          coltype_1.to_fits_value()
+        )));
+      }
+
+      // Read data
+      match coltype_1 {
+        TForm::B(_) => (0..n_hash)
+          .map(|_| reader.read_u8())
+          .collect::<Result<Vec<u8>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64U8(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+        TForm::I(_) => (0..n_hash)
+          .map(|_| reader.read_i16::<BigEndian>())
+          .collect::<Result<Vec<i16>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64I16(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+        TForm::J(_) => (0..n_hash)
+          .map(|_| reader.read_i32::<BigEndian>())
+          .collect::<Result<Vec<i32>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64I32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+        TForm::K(_) => (0..n_hash)
+          .map(|_| reader.read_i64::<BigEndian>())
+          .collect::<Result<Vec<i64>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64I64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+        TForm::E(_) => (0..n_hash)
+          .map(|_| reader.read_f32::<BigEndian>())
+          .collect::<Result<Vec<f32>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64F32(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+        TForm::D(_) => (0..n_hash)
+          .map(|_| reader.read_f64::<BigEndian>())
+          .collect::<Result<Vec<f64>, io::Error>>()
+          .map(|v| {
+            SkyMapEnum::ImplicitU64F64(ImplicitSkyMapArray::new(depth, v.into_boxed_slice()))
+          }),
+      }
+      .map_err(FitsError::Io)
+    }
+    Some(SkymapKeywords::IndexSchema(IndexSchema::Explicit)) => {
+      // EXPLICIT
+
+      let coltype_2 = match skymap_kws.get::<TForm2>() {
+        Some(SkymapKeywords::TForm2(tform2)) => Ok(tform2.to_tform()),
+        None => Err(FitsError::MissingKeyword {
+          keyword: TForm1::keyword_string(),
+        }),
+        _ => unreachable!(),
+      }?;
+      // Check number of columns
+      // - we so far support only map having a single column of values
+      if n_cols != 2 {
+        return Err(FitsError::UnexpectedValue {
+          keyword: String::from("TFIELDS"),
+          expected: 2.to_string(),
+          actual: n_cols.to_string(),
+        });
+      }
+
+      // Check n_bytes_per_row
+      if n_bytes_per_row != (coltype_1.n_bytes() + coltype_2.n_bytes()) as u64 {
+        return Err(FitsError::new_custom(format!(
+          "Number of bytes per row {} do not match TFORM1 = {} plus FTORM2 = {}",
+          n_bytes_per_row,
+          coltype_1.to_fits_value(),
+          coltype_2.to_fits_value()
+        )));
+      }
+
+      // Read data
+      match (coltype_1, coltype_2) {
+        // u32
+        (TForm::J(_), TForm::B(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_u8().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, u8>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32U8(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::J(_), TForm::I(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_i16::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, i16>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32I16(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::J(_), TForm::J(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_i32::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, i32>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32I32(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::J(_), TForm::K(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_i64::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, i64>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32I64(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::J(_), TForm::E(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_f32::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, f32>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32F32(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::J(_), TForm::D(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u32::<BigEndian>()
+              .and_then(|k| reader.read_f64::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u32, f64>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU32F64(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        // u64
+        (TForm::K(_), TForm::B(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_u8().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, u8>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64U8(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::K(_), TForm::I(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_i16::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, i16>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64I16(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::K(_), TForm::J(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_i32::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, i32>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64I32(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::K(_), TForm::K(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_i64::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, i64>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64I64(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::K(_), TForm::E(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_f32::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, f32>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64F32(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        (TForm::K(_), TForm::D(_)) => (0..n_rows)
+          .map(|_| {
+            reader
+              .read_u64::<BigEndian>()
+              .and_then(|k| reader.read_f64::<BigEndian>().map(|v| (k, v)))
+          })
+          .collect::<Result<BTreeMap<u64, f64>, io::Error>>()
+          .map(|v| SkyMapEnum::ExplicitU64F64(ExplicitSkyMapBTree::new(depth, v)))
+          .map_err(FitsError::Io),
+        _ => Err(FitsError::UnexpectedValue {
+          keyword: String::from("TFORM1"),
+          expected: String::from("J or K"),
+          actual: coltype_2.to_fits_value(),
+        }),
+      }
+    }
+    Some(SkymapKeywords::IndexSchema(IndexSchema::Sparse)) => Err(FitsError::UnexpectedValue {
+      keyword: IndexSchema::keyword_string(),
+      expected: format!(
+        "{} or {}",
+        IndexSchema::Implicit.to_fits_value(),
+        IndexSchema::Explicit.to_fits_value()
+      ),
+      actual: IndexSchema::Sparse.to_fits_value(),
+    }),
+    Some(_) => unreachable!(),
+    None => Err(FitsError::MissingKeyword {
+      keyword: IndexSchema::keyword_string(),
+    }),
   }
-  .map_err(FitsError::Io)
 }
 
 const VALUE_INDICATOR: &[u8; 2] = b"= ";

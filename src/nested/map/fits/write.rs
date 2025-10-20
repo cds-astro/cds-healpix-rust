@@ -2,9 +2,15 @@ use std::io::{Error as IoError, Write};
 
 use num_traits::ToBytes;
 
-use crate::{depth_from_n_hash_unsafe, n_hash, nested::map::skymap::SkyMapValue, nside};
-
 use super::error::FitsError;
+use crate::{
+  depth_from_n_hash_unsafe, n_hash,
+  nested::map::{
+    skymap::{SkyMap, SkyMapValue},
+    HHash,
+  },
+  nside,
+};
 
 // Add read map from fits!!
 
@@ -31,7 +37,7 @@ pub fn write_implicit_skymap_fits<R: Write, T: SkyMapValue>(
       n_hash(depth)
     )));
   }
-  write_skymap_fits_header::<_, T>(&mut writer, depth)?;
+  write_implicit_skymap_fits_header::<_, T>(&mut writer, depth)?;
   for value in values {
     writer.write_all(value.to_be_bytes().as_ref())?;
   }
@@ -49,7 +55,7 @@ where
   I::Item: SkyMapValue,
 {
   let n_cells = n_hash(depth);
-  write_skymap_fits_header::<_, I::Item>(&mut writer, depth)?;
+  write_implicit_skymap_fits_header::<_, I::Item>(&mut writer, depth)?;
   let mut n = 0;
   for value in it {
     writer.write_all(value.to_be_bytes().as_ref())?;
@@ -62,6 +68,31 @@ where
     )));
   }
   write_final_padding(writer, n_cells as usize * I::Item::FITS_NAXIS1 as usize)
+}
+
+pub fn write_explicit_skymap_fits<'a, R, S>(mut writer: R, skymap: &'a S) -> Result<(), FitsError>
+where
+  R: Write,
+  S: SkyMap<'a>,
+{
+  let depth = skymap.depth();
+  let n_elems = skymap.len();
+  let naxis1 = (S::HashType::FITS_NAXIS1 + S::ValueType::FITS_NAXIS1) as usize;
+  write_explicit_skymap_fits_header(&mut writer, skymap)?;
+  let mut n = 0;
+  for (h, v) in skymap.entries() {
+    writer
+      .write_all(h.to_be_bytes().as_ref())
+      .and_then(|()| writer.write_all(v.to_be_bytes().as_ref()))?;
+    n += 1;
+  }
+  if n != n_elems {
+    return Err(FitsError::new_custom(format!(
+      "Wrong number of HEALPix cells writen at depth {}. Expected: {}. Actual: {}.",
+      depth, n_elems, n
+    )));
+  }
+  write_final_padding(writer, n_elems * naxis1)
 }
 
 /// Possible add blanks at the end of the FITS file to complete the last
@@ -140,7 +171,7 @@ pub(crate) fn write_primary_hdu_ioerr<R: Write>(writer: &mut R) -> Result<(), Io
   writer.write_all(&header_block[..])
 }
 
-fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
+fn write_implicit_skymap_fits_header<R: Write, T: SkyMapValue>(
   mut writer: R,
   depth: u8,
 ) -> Result<(), FitsError> {
@@ -159,17 +190,69 @@ fn write_skymap_fits_header<R: Write, T: SkyMapValue>(
   it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
   it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
   it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    1");
-  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'T       '");
+  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'PIXEL   '");
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::FITS_TFORM);
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
+  it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
+  it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"NSIDE   ", nside as u64);
+  it.next().unwrap()[0..30].copy_from_slice(b"FIRSTPIX=                    0");
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells - 1);
+  it.next().unwrap()[0..20].copy_from_slice(b"OBJECT  = 'FULLSKY '");
+  it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'C       '");
+  it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
+  write_keyword_record(
+    it.next().unwrap(),
+    b"CREATOR ",
+    format!(
+      "'Rust crate {} {}'",
+      env!("CARGO_PKG_NAME"),
+      env!("CARGO_PKG_VERSION")
+    )
+    .as_str(),
+  );
+  it.next().unwrap()[0..3].copy_from_slice(b"END");
+  // Do write the header
+  writer.write_all(&header_block[..]).map_err(FitsError::Io)
+}
+
+fn write_explicit_skymap_fits_header<'a, R, S>(
+  mut writer: R,
+  skymap: &'a S,
+) -> Result<(), FitsError>
+where
+  R: Write,
+  S: SkyMap<'a>,
+{
+  let nside = nside(skymap.depth());
+  let n_cells = skymap.len() as u64;
+
+  write_primary_hdu(&mut writer)?;
+  let mut header_block = [b' '; 2880];
+  let mut it = header_block.chunks_mut(80);
+  // Write BINTABLE specific keywords in the buffer
+  it.next().unwrap()[0..20].copy_from_slice(b"XTENSION= 'BINTABLE'");
+  it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8");
+  it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2");
+  write_uint_mandatory_keyword_record(
+    it.next().unwrap(),
+    b"NAXIS1  ",
+    (S::HashType::FITS_NAXIS1 + S::ValueType::FITS_NAXIS1) as u64,
+  );
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", n_cells);
+  it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
+  it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
+  it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    1");
+  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'PIXEL   '");
+  write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", S::HashType::FITS_TFORM);
+  write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM2  ", S::ValueType::FITS_TFORM);
+  it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
+  it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'EXPLICIT'");
   it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
   it.next().unwrap()[0..20].copy_from_slice(b"COORDSYS= 'C       '");
   it.next().unwrap()[0..20].copy_from_slice(b"EXTNAME = 'xtension'");
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NSIDE   ", nside as u64);
-  it.next().unwrap()[0..30].copy_from_slice(b"FIRSTPIX=                    0");
-  write_uint_mandatory_keyword_record(it.next().unwrap(), b"LASTPIX ", n_cells - 1);
-  it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
-  it.next().unwrap()[0..20].copy_from_slice(b"OBJECT  = 'FULLSKY '");
+  write_uint_mandatory_keyword_record(it.next().unwrap(), b"OBS_NPIX", n_cells);
   // it.next().unwrap()[0..28].copy_from_slice(b"CREATOR = 'CDS HEALPix Rust'");
   write_keyword_record(
     it.next().unwrap(),

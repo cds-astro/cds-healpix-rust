@@ -23,7 +23,7 @@ use thiserror::Error;
 
 use crate::nested::{
   get,
-  map::skymap::{CountMapU32, SkyMap},
+  map::skymap::{implicit::CountMapU32, SkyMap},
   n_hash, Layer,
 };
 
