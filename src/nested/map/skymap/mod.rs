@@ -23,7 +23,7 @@ use super::{
 use crate::nested::map::fits::write::write_explicit_skymap_fits;
 use crate::nested::map::skymap::explicit::ExplicitSkyMapBTree;
 use crate::nested::map::{
-  skymap::implicit::{CountMap, CountMapU32, DensityMap, ImplicitSkyMapArray},
+  skymap::implicit::{ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray},
   HHash,
 };
 use crate::nested::n_hash;
@@ -283,7 +283,7 @@ impl SkyMapEnum {
     }
   }
 
-  pub fn to_count_map(self) -> Result<CountMap, String> {
+  pub fn to_count_map(self) -> Result<ImplicitCountMap, String> {
     match self {
       Self::ImplicitU64I32(skymap) => Ok(
         ImplicitSkyMapArray::new(skymap.depth, unsafe {
@@ -310,7 +310,7 @@ impl SkyMapEnum {
     }
   }
 
-  pub fn to_count_map_u32(self) -> Result<CountMapU32, String> {
+  pub fn to_count_map_u32(self) -> Result<ImplicitCountMapU32, String> {
     match self {
       Self::ImplicitU64I32(skymap) => Ok(
         ImplicitSkyMapArray::new(skymap.depth, unsafe {
@@ -322,7 +322,7 @@ impl SkyMapEnum {
     }
   }
 
-  pub fn to_dens_map(self) -> Result<DensityMap, String> {
+  pub fn to_dens_map(self) -> Result<ImplicitDensityMap, String> {
     match self {
       Self::ImplicitU64F64(skymap) => {
         Ok(ImplicitSkyMapArray::new(skymap.depth, skymap.values).into())

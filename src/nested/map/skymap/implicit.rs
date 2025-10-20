@@ -214,13 +214,13 @@ impl<'a, H: HHash, V: SkyMapValue + Clone + 'a> SkyMap<'a> for ImplicitSkyMapArr
 
 /// SkyMap implementation use to store counts.
 #[derive(Debug)]
-pub struct CountMap(ImplicitSkyMapArray<u64, u32>);
-impl From<ImplicitSkyMapArray<u64, u32>> for CountMap {
+pub struct ImplicitCountMap(ImplicitSkyMapArray<u64, u32>);
+impl From<ImplicitSkyMapArray<u64, u32>> for ImplicitCountMap {
   fn from(value: ImplicitSkyMapArray<u64, u32>) -> Self {
     Self(value)
   }
 }
-impl CountMap {
+impl ImplicitCountMap {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u64, u32> {
     &self.0
   }
@@ -277,10 +277,10 @@ impl CountMap {
     self
   }
 
-  pub fn to_dens_map(&self) -> DensityMap {
+  pub fn to_dens_map(&self) -> ImplicitDensityMap {
     let depth = self.depth();
     let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    DensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -293,10 +293,10 @@ impl CountMap {
   }
 
   /// For custom thread pool, use `thread_pool.install(|| to_dens_map_par())`
-  pub fn to_dens_map_par(&self) -> DensityMap {
+  pub fn to_dens_map_par(&self) -> ImplicitDensityMap {
     let depth = self.depth();
     let on_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    DensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -407,7 +407,7 @@ impl CountMap {
   // to_png
   // to_fits
 }
-impl Add for CountMap {
+impl Add for ImplicitCountMap {
   type Output = Self;
 
   fn add(mut self, rhs: Self) -> Self::Output {
@@ -420,7 +420,7 @@ impl Add for CountMap {
     self
   }
 }
-impl<'a> SkyMap<'a> for CountMap {
+impl<'a> SkyMap<'a> for ImplicitCountMap {
   type HashType = u64;
   type ValueType = u32;
   type ValuesIt = Iter<'a, Self::ValueType>;
@@ -466,13 +466,13 @@ impl<'a> SkyMap<'a> for CountMap {
 
 /// SkyMap implementation use to store counts, rely on u32 HEALPix index instead of u64.
 #[derive(Debug)]
-pub struct CountMapU32(ImplicitSkyMapArray<u32, u32>);
-impl From<ImplicitSkyMapArray<u32, u32>> for CountMapU32 {
+pub struct ImplicitCountMapU32(ImplicitSkyMapArray<u32, u32>);
+impl From<ImplicitSkyMapArray<u32, u32>> for ImplicitCountMapU32 {
   fn from(value: ImplicitSkyMapArray<u32, u32>) -> Self {
     Self(value)
   }
 }
-impl CountMapU32 {
+impl ImplicitCountMapU32 {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, u32> {
     &self.0
   }
@@ -653,7 +653,7 @@ impl CountMapU32 {
       chunk
         .par_chunks((chunk.len() / (n_thread << 2)).max(10_000))
         .map(|elems| {
-          CountMapU32::from_hash_values(depth, elems.iter().filter_map(&hpx).map(|h| h as u32))
+          ImplicitCountMapU32::from_hash_values(depth, elems.iter().filter_map(&hpx).map(|h| h as u32))
         })
         .reduce_with(|mapl, mapr| mapl.par_add(mapr))
     };
@@ -710,10 +710,10 @@ impl CountMapU32 {
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
-  pub fn to_dens_map(&self) -> DensityMap {
+  pub fn to_dens_map(&self) -> ImplicitDensityMap {
     let depth = self.depth();
     let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    DensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -725,10 +725,10 @@ impl CountMapU32 {
     ))
   }
 
-  pub fn to_dens_map_par(&self) -> DensityMap {
+  pub fn to_dens_map_par(&self) -> ImplicitDensityMap {
     let depth = self.depth();
     let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    DensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMap(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -798,7 +798,7 @@ impl CountMapU32 {
   // to_png
   // to_fits
 }
-impl Add for CountMapU32 {
+impl Add for ImplicitCountMapU32 {
   type Output = Self;
 
   fn add(mut self, rhs: Self) -> Self::Output {
@@ -811,7 +811,7 @@ impl Add for CountMapU32 {
     self
   }
 }
-impl<'a> SkyMap<'a> for CountMapU32 {
+impl<'a> SkyMap<'a> for ImplicitCountMapU32 {
   type HashType = u32;
   type ValueType = u32;
   type ValuesIt = Iter<'a, Self::ValueType>;
@@ -857,13 +857,13 @@ impl<'a> SkyMap<'a> for CountMapU32 {
 
 /// SkyMap implementation use to store densities.
 #[derive(Debug)]
-pub struct DensityMap(ImplicitSkyMapArray<u32, f64>);
-impl From<ImplicitSkyMapArray<u32, f64>> for DensityMap {
+pub struct ImplicitDensityMap(ImplicitSkyMapArray<u32, f64>);
+impl From<ImplicitSkyMapArray<u32, f64>> for ImplicitDensityMap {
   fn from(value: ImplicitSkyMapArray<u32, f64>) -> Self {
     Self(value)
   }
 }
-impl DensityMap {
+impl ImplicitDensityMap {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, f64> {
     &self.0
   }

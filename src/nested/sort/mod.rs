@@ -23,7 +23,7 @@ use thiserror::Error;
 
 use crate::nested::{
   get,
-  map::skymap::{implicit::CountMapU32, SkyMap},
+  map::skymap::{implicit::ImplicitCountMapU32, SkyMap},
   n_hash, Layer,
 };
 
@@ -848,7 +848,7 @@ where
   let tstart = SystemTime::now();
   let params = sort_params.unwrap_or_default();
   let twice_dd = (29 - depth) << 1;
-  let count_map = CountMapU32::from_hash_values(
+  let count_map = ImplicitCountMapU32::from_hash_values(
     depth,
     iterator
       .enumerate()
@@ -905,7 +905,7 @@ where
       .create_tmp_dir()
       .and_then(|()| params.create_file_all())?;
     let mut bufw = BufWriter::new(tmp_file_all);
-    CountMapU32::from_hash_values(
+    ImplicitCountMapU32::from_hash_values(
       depth,
       stream
         .enumerate()
@@ -1228,7 +1228,7 @@ pub fn hpx_external_sort_csv_file_gen<IN: AsRef<Path>, W: Write, P: AsRef<Path>>
 
   let tstart = SystemTime::now();
   debug!("Start generating count map (first iteration on the full CSV file)...");
-  let count_map = CountMapU32::from_csv_it_par(
+  let count_map = ImplicitCountMapU32::from_csv_it_par(
     line_res_it,
     ilon,
     ilat,

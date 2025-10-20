@@ -13,7 +13,7 @@ use mapproj::{
 use hpxlib::nested::map::{
   img::{ColorMapFunctionType, PosConversion},
   mom::WritableMom,
-  skymap::{CountMapU32, SkyMapEnum},
+  skymap::{ImplicitCountMapU32, SkyMapEnum},
 };
 
 use super::{
@@ -82,14 +82,14 @@ impl Dens {
   }
 }
 
-fn build_count_map(depth: u8, input: PosListInput) -> Result<CountMapU32, Box<dyn Error>> {
+fn build_count_map(depth: u8, input: PosListInput) -> Result<ImplicitCountMapU32, Box<dyn Error>> {
   match input {
     PosListInput::List(e) => {
       struct Op {
         depth: u8,
       }
       impl PosItOperation for Op {
-        type R = CountMapU32;
+        type R = ImplicitCountMapU32;
         fn exec<I>(self, pos_it: I) -> Result<Self::R, Box<dyn Error>>
         where
           I: Iterator<Item = Result<(f64, f64), Box<dyn Error>>>,
@@ -101,7 +101,7 @@ fn build_count_map(depth: u8, input: PosListInput) -> Result<CountMapU32, Box<dy
               None
             }
           });
-          Ok(CountMapU32::from_positions(self.depth, it))
+          Ok(ImplicitCountMapU32::from_positions(self.depth, it))
         }
       }
       e.exec_op(Op { depth })
@@ -117,7 +117,7 @@ fn build_count_map(depth: u8, input: PosListInput) -> Result<CountMapU32, Box<dy
     }) => {
       let thread_pool = get_thread_pool(parallel);
       if input == PathBuf::from(r"-") {
-        CountMapU32::from_csv_stdin_par(
+        ImplicitCountMapU32::from_csv_stdin_par(
           lon - 1,
           lat - 1,
           Some(delimiter),
@@ -127,7 +127,7 @@ fn build_count_map(depth: u8, input: PosListInput) -> Result<CountMapU32, Box<dy
           &thread_pool,
         )
       } else {
-        CountMapU32::from_csv_file_par(
+        ImplicitCountMapU32::from_csv_file_par(
           input,
           lon - 1,
           lat - 1,
