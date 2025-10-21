@@ -170,7 +170,7 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
 
   // Check IndexSchema
   match skymap_kws.get::<IndexSchema>() {
-    Some(SkymapKeywords::IndexSchema(IndexSchema::Implicit)) => {
+    Some(SkymapKeywords::IndexSchema(IndexSchema::Implicit)) | None => {
       // IMPLICIT
 
       // Check number of columns
@@ -406,9 +406,9 @@ pub fn from_fits_skymap_internal<R: BufRead>(mut reader: R) -> Result<SkyMapEnum
       actual: IndexSchema::Sparse.to_fits_value(),
     }),
     Some(_) => unreachable!(),
-    None => Err(FitsError::MissingKeyword {
+    /*None => Err(FitsError::MissingKeyword {
       keyword: IndexSchema::keyword_string(),
-    }),
+    }),*/
   }
 }
 
