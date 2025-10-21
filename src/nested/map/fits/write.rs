@@ -190,7 +190,7 @@ fn write_implicit_skymap_fits_header<R: Write, T: SkyMapValue>(
   it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
   it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
   it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    1");
-  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'PIXEL   '");
+  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'VALUE   '");
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", T::FITS_TFORM);
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");
   it.next().unwrap()[0..20].copy_from_slice(b"INDXSCHM= 'IMPLICIT'");
@@ -242,8 +242,9 @@ where
   write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", n_cells);
   it.next().unwrap()[0..30].copy_from_slice(b"PCOUNT  =                    0");
   it.next().unwrap()[0..30].copy_from_slice(b"GCOUNT  =                    1");
-  it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    1");
+  it.next().unwrap()[0..30].copy_from_slice(b"TFIELDS =                    2");
   it.next().unwrap()[0..20].copy_from_slice(b"TTYPE1  = 'PIXEL   '");
+  it.next().unwrap()[0..20].copy_from_slice(b"TTYPE2  = 'VALUE   '");
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM1  ", S::HashType::FITS_TFORM);
   write_str_mandatory_keyword_record(it.next().unwrap(), b"TFORM2  ", S::ValueType::FITS_TFORM);
   it.next().unwrap()[0..20].copy_from_slice(b"PIXTYPE = 'HEALPIX '");

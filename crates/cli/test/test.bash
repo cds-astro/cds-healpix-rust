@@ -362,7 +362,56 @@ test_map_count(){
 }	
 test_map_count
 
+test_map_count_explicit(){
+  # Creates a first density maps from a generated sequence of points...
+  for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
+    | hpx nested center 1 list \
+    | hpx map count --explicit 2 count.d2.l.explicit.fits list
+  # ... and view it.
+  hpx map view --silent --color-map-fn linear count.d2.l.explicit.fits count.d2.l.explicit.png allsky 200
 
+  # Creates a second density maps from a generated sequence of points...
+  for n in $(seq 0 191); do for i in $(seq 0 $((191-${n}))); do echo "$n"; done; done \
+    | hpx nested center 2 list \
+    | hpx map count --explicit 2 count.d2.r.explicit.fits list
+  # ... and view it.
+  hpx map view --silent --color-map-fn linear count.d2.r.explicit.fits count.d2.r.explicit.png allsky 200
+
+  # Add the two maps...
+  hpx map op add count.d2.l.explicit.fits count.d2.r.explicit.fits count.d2.m.explicit.fits
+  # ... and view the result.
+  hpx map view --silent --color-map-fn linear count.d2.m.explicit.fits count.d2.m.explicit.png allsky 200
+
+  # Compare results
+  assert_eq count.d2.l.explicit.png.expect count.d2.l.explicit.png
+  assert_eq count.d2.r.explicit.png.expect count.d2.r.explicit.png
+  assert_eq count.d2.m.explicit.png.expect count.d2.m.explicit.png
+}
+test_map_count_explicit
+
+
+test_map_count_bestrepr(){
+  # In mem: implicit; In FITS: implicit
+  for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
+    | hpx nested center 1 list \
+    | hpx map count --ratio 4.0 2  count.d2.l.ii.fits list
+
+  # In mem: explicit; In FITS: implicit
+  for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
+    | hpx nested center 1 list \
+    | hpx map count --explicit --ratio 4.0 2  count.d2.l.ei.fits list
+
+  # In mem: implicit; In FITS: explicit
+  for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
+    | hpx nested center 1 list \
+    | hpx map count --ratio 2.0 2 count.d2.l.ie.fits list
+
+  # In mem: explicit; In FITS: explicit
+  for n in $(seq 0 47); do for i in $(seq 0 ${n}); do echo "$n"; done; done \
+    | hpx nested center 1 list \
+    | hpx map count --explicit --ratio 2.0 2 count.d2.l.ee.fits list
+}
+# test_map_count_bestrepr
 
 ######################
 # Test 'hpx mom ...' #

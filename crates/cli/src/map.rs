@@ -1,7 +1,8 @@
+use std::marker::PhantomData;
 use std::{error::Error, path::PathBuf};
 
 use clap::{Args, Subcommand, ValueEnum};
-use log::error;
+use log::{error, warn};
 
 use mapproj::{
   cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},
@@ -10,16 +11,16 @@ use mapproj::{
   zenithal::{air::Air, arc::Arc, feye::Feye, sin::Sin, stg::Stg, tan::Tan, zea::Zea},
 };
 
-use hpxlib::nested::map::{
-  img::{ColorMapFunctionType, PosConversion},
-  mom::WritableMom,
-  skymap::{ImplicitCountMapU32, SkyMapEnum},
-};
-
 use super::{
   get_thread_pool,
   input::pos::{PosCsvConsumed, PosItOperation, PosListInput},
   view::Mode,
+};
+use hpxlib::nested::map::{
+  img::{ColorMapFunctionType, PosConversion},
+  mom::WritableMom,
+  skymap::{explicit::ExplicitCountMap, implicit::ImplicitCountMapU32, SkyMap, SkyMapEnum},
+  HHash,
 };
 
 /// Create and manipulate HEALPix count and density maps.
@@ -51,38 +52,118 @@ pub struct Count {
   depth: u8,
   /// Count map destination FITS file.
   output: PathBuf,
+  #[arg(short = 'e', long)]
+  /// Use in-memory `explicit` representation instead of `implicit` (adapted for maps covering less that half the sky).
+  explicit: bool,
+  #[arg(short = 'r', long = "ratio")]
+  /// Limit on the ratio of the implicit over the explicit byte sizes for the FITS serialisation.
+  /// Above the limit, the explicit representation is chosen.
+  /// Below the limit, the implicit representation is chosen.
+  /// If unset, the in-memory representation is chosen.
+  implicit_over_explicit_ratio: Option<f64>,
   #[command(subcommand)]
   input: PosListInput,
 }
 impl Count {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
-    build_count_map(self.depth, self.input)
-      .and_then(|map| map.to_fits_file(self.output).map_err(|e| e.into()))
+    if self.explicit {
+      if self.depth < 13 {
+        build_count_map_explicit::<u32>(self.depth, self.input).and_then(|map| {
+          match self.implicit_over_explicit_ratio {
+            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
+              map.into_implicit_skymap().to_fits_file(self.output)
+            }
+            _ => map.to_fits_file(self.output),
+          }
+          .map_err(|e| e.into())
+        })
+      } else {
+        build_count_map_explicit::<u64>(self.depth, self.input).and_then(|map| {
+          match self.implicit_over_explicit_ratio {
+            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
+              map.into_implicit_skymap().to_fits_file(self.output)
+            }
+            _ => map.to_fits_file(self.output),
+          }
+          .map_err(|e| e.into())
+        })
+      }
+    } else {
+      build_count_map_implicit(self.depth, self.input).and_then(|map| {
+        match self.implicit_over_explicit_ratio {
+          Some(threshold) if !map.is_implicit_the_best_representation(threshold) => {
+            map.into_explicit_skymap().to_fits_file(self.output)
+          }
+          _ => map.to_fits_file(self.output),
+        }
+        .map_err(|e| e.into())
+      })
+    }
   }
 }
 
 /// Build a density map from a list of positions.
 #[derive(Debug, Args)]
 pub struct Dens {
-  /// Healpix depth (aka order) of the count map.
+  /// Healpix depth (aka order) of the count map. Max 12 for in-memory implicit maps.
   depth: u8,
   /// Density map destination FITS file.
   output: PathBuf,
+  #[arg(short = 'e', long)]
+  /// Use in-memory `explicit` representation instead of `implicit` (adapted for maps covering less that half the sky).
+  explicit: bool,
+  #[arg(short = 'r', long = "ratio")]
+  /// Limit on the ratio of the implicit over the explicit byte sizes for the FITS serialisation.
+  /// Above the limit, the explicit representation is chosen.
+  /// Below the limit, the implicit representation is chosen.
+  /// If unset, the in-memory representation is chosen.
+  implicit_over_explicit_ratio: Option<f64>,
   #[command(subcommand)]
   input: PosListInput,
 }
 impl Dens {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
-    build_count_map(self.depth, self.input).and_then(|map| {
-      map
-        .to_dens_map_par() // WARNING: this is performed in the global thread pool!!
-        .to_fits_file(self.output)
-        .map_err(|e| e.into())
-    })
+    if self.explicit {
+      if self.depth < 13 {
+        build_count_map_explicit::<u32>(self.depth, self.input).and_then(|map| {
+          let map = map.to_dens_map_par();
+          match self.implicit_over_explicit_ratio {
+            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
+              map.into_implicit_skymap().to_fits_file(self.output)
+            }
+            _ => map.to_fits_file(self.output),
+          }
+          .map_err(|e| e.into())
+        })
+      } else {
+        build_count_map_explicit::<u64>(self.depth, self.input).and_then(|map| {
+          let map = map.to_dens_map_par();
+          match self.implicit_over_explicit_ratio {
+            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
+              warn!("No implicit representation available for DensityMap of depth >= 13!");
+              // map.into_implicit_skymap().to_fits_file(self.output)
+              map.to_fits_file(self.output)
+            }
+            _ => map.to_fits_file(self.output),
+          }
+          .map_err(|e| e.into())
+        })
+      }
+    } else {
+      build_count_map_implicit(self.depth, self.input).and_then(|map| {
+        map
+          .to_dens_map_par() // WARNING: this is performed in the global thread pool!!
+          .to_fits_file(self.output)
+          .map_err(|e| e.into())
+      })
+    }
   }
 }
 
-fn build_count_map(depth: u8, input: PosListInput) -> Result<ImplicitCountMapU32, Box<dyn Error>> {
+fn build_count_map_implicit(
+  depth: u8,
+  input: PosListInput,
+) -> Result<ImplicitCountMapU32, Box<dyn Error>> {
   match input {
     PosListInput::List(e) => {
       struct Op {
@@ -128,6 +209,74 @@ fn build_count_map(depth: u8, input: PosListInput) -> Result<ImplicitCountMapU32
         )
       } else {
         ImplicitCountMapU32::from_csv_file_par(
+          input,
+          lon - 1,
+          lat - 1,
+          Some(delimiter),
+          header,
+          depth,
+          chunk_size,
+          &thread_pool,
+        )
+      }
+      .map_err(|e| e.into())
+    }
+  }
+}
+
+fn build_count_map_explicit<H: HHash>(
+  depth: u8,
+  input: PosListInput,
+) -> Result<ExplicitCountMap<H>, Box<dyn Error>> {
+  match input {
+    PosListInput::List(e) => {
+      struct Op<H: HHash> {
+        depth: u8,
+        _phantom: PhantomData<H>,
+      }
+      impl<H: HHash> PosItOperation for Op<H> {
+        type R = ExplicitCountMap<H>;
+        fn exec<I>(self, pos_it: I) -> Result<Self::R, Box<dyn Error>>
+        where
+          I: Iterator<Item = Result<(f64, f64), Box<dyn Error>>>,
+        {
+          let it = pos_it.filter_map(|r| match r {
+            Ok(t) => Some(t),
+            Err(e) => {
+              error!("Error reading/parsing line: {:?}", e);
+              None
+            }
+          });
+          Ok(ExplicitCountMap::from_positions(self.depth, it))
+        }
+      }
+      e.exec_op(Op {
+        depth,
+        _phantom: PhantomData,
+      })
+    }
+    PosListInput::Csv(PosCsvConsumed {
+      input,
+      lon,
+      lat,
+      delimiter,
+      header,
+      parallel,
+      chunk_size,
+    }) => {
+      let thread_pool = get_thread_pool(parallel);
+      if input == PathBuf::from(r"-") {
+        ExplicitCountMap::from_csv_stdin_par(
+          lon - 1,
+          lat - 1,
+          Some(delimiter),
+          header,
+          depth,
+          chunk_size,
+          &thread_pool,
+        )
+      } else {
+        ExplicitCountMap::from_csv_file_par(
           input,
           lon - 1,
           lat - 1,

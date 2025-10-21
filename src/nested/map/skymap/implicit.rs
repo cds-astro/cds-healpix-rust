@@ -1,3 +1,16 @@
+use std::{
+  collections::BTreeMap,
+  f64::consts::PI,
+  fs::File,
+  io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Write},
+  iter::{Enumerate, Map},
+  marker::PhantomData,
+  ops::{Add, AddAssign, Deref},
+  path::Path,
+  slice::Iter,
+  vec::IntoIter,
+};
+
 use itertools::Itertools;
 use rayon::{
   prelude::{
@@ -6,22 +19,8 @@ use rayon::{
   },
   ThreadPool,
 };
-use std::collections::BTreeMap;
-use std::{
-  f64::consts::PI,
-  fs::File,
-  io::{stdin, BufRead, BufReader, BufWriter, Error as IoError, Write},
-  iter::{Enumerate, Map},
-  marker::PhantomData,
-  ops::Add,
-  ops::{AddAssign, Deref},
-  path::Path,
-  slice::Iter,
-  vec::IntoIter,
-};
 
 use super::{SkyMap, SkyMapValue};
-use crate::nested::map::skymap::explicit::ExplicitSkyMapBTree;
 use crate::{
   n_hash,
   nested::{
@@ -32,6 +31,7 @@ use crate::{
         impls::zvec::MomVecImpl, new_chi2_count_ref_merger, new_chi2_density_ref_merger, Mom,
         ZUniqHashT,
       },
+      skymap::explicit::{ExplicitCountMap, ExplicitSkyMapBTree},
       HHash,
     },
     sort::get_hpx_opt,
@@ -68,7 +68,7 @@ impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
     }
   }
 
-  pub fn to_explicit_map(self) -> ExplicitSkyMapBTree<H, V> {
+  pub fn into_explicit_map(self) -> ExplicitSkyMapBTree<H, V> {
     let depth = self.depth;
     let btreemap: BTreeMap<H, V> = self
       .owned_entries()
@@ -227,6 +227,9 @@ impl ImplicitCountMap {
   pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u64, u32> {
     self.0
   }
+  pub fn into_explicit_skymap(self) -> ExplicitCountMap<u64> {
+    self.0.into_explicit_map().into()
+  }
   /// Build a count skymap from an iterator over HEALPix cells at the given depth.
   /// # Panics
   /// * if `depth > 12`.
@@ -253,26 +256,11 @@ impl ImplicitCountMap {
   where
     I: Iterator<Item = (f64, f64)>,
   {
-    assert!(
-      depth < 13,
-      "Wrong count map input depth. Expected: < 13. Actual: {}",
-      depth
-    );
     let layer = get(depth);
-    let mut counts = vec![0_u32; layer.n_hash as usize].into_boxed_slice();
-    for (l, b) in pos_it_rad {
-      counts[layer.hash(l, b) as usize] += 1;
-    }
-    Self(ImplicitSkyMapArray::new(depth, counts))
+    Self::from_hash_values(depth, pos_it_rad.map(|(l, b)| layer.hash(l, b) as u32))
   }
 
   pub fn par_add(mut self, rhs: Self) -> Self {
-    /*self
-    .0
-    .values
-    .par_iter_mut()
-    .zip_eq(rhs.0.values.into_par_iter())
-    .for_each(|(l, r)| *l += r)*/
     self.0 = self.0.par_add(rhs.0);
     self
   }
@@ -479,6 +467,9 @@ impl ImplicitCountMapU32 {
   pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u32, u32> {
     self.0
   }
+  pub fn into_explicit_skymap(self) -> ExplicitCountMap<u32> {
+    self.0.into_explicit_map().into()
+  }
   /// Build a count skymap from an iterator over HEALPix cells at the given depth.
   /// # Panics
   /// * if `depth > 12`.
@@ -653,7 +644,10 @@ impl ImplicitCountMapU32 {
       chunk
         .par_chunks((chunk.len() / (n_thread << 2)).max(10_000))
         .map(|elems| {
-          ImplicitCountMapU32::from_hash_values(depth, elems.iter().filter_map(&hpx).map(|h| h as u32))
+          ImplicitCountMapU32::from_hash_values(
+            depth,
+            elems.iter().filter_map(&hpx).map(|h| h as u32),
+          )
         })
         .reduce_with(|mapl, mapr| mapl.par_add(mapr))
     };

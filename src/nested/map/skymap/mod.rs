@@ -16,17 +16,22 @@ use mapproj::CanonicalProjection;
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::show_with_default_app;
-use super::{
-  fits::{error::FitsError, read::from_fits_skymap, write::write_implicit_skymap_fits},
-  img::{to_skymap_png, ColorMapFunctionType, PosConversion},
+use crate::nested::{
+  map::{
+    fits::{
+      error::FitsError,
+      read::from_fits_skymap,
+      write::{write_explicit_skymap_fits, write_implicit_skymap_fits},
+    },
+    img::{to_skymap_png, ColorMapFunctionType, PosConversion},
+    skymap::{
+      explicit::ExplicitSkyMapBTree,
+      implicit::{ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray},
+    },
+    HHash,
+  },
+  n_hash,
 };
-use crate::nested::map::fits::write::write_explicit_skymap_fits;
-use crate::nested::map::skymap::explicit::ExplicitSkyMapBTree;
-use crate::nested::map::{
-  skymap::implicit::{ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray},
-  HHash,
-};
-use crate::nested::n_hash;
 
 pub mod explicit;
 pub mod implicit;
@@ -245,29 +250,29 @@ impl SkyMapEnum {
       Self::ImplicitU64I64(_) => self,
       Self::ImplicitU64F32(_) => self,
       Self::ImplicitU64F64(_) => self,
-      Self::ExplicitU32U8(e) => Self::ImplicitU64U8(e.to_implicit_map().into()),
-      Self::ExplicitU32I16(e) => Self::ImplicitU64I16(e.to_implicit_map().into()),
-      Self::ExplicitU32I32(e) => Self::ImplicitU64I32(e.to_implicit_map().into()),
-      Self::ExplicitU32I64(e) => Self::ImplicitU64I64(e.to_implicit_map().into()),
-      Self::ExplicitU32F32(e) => Self::ImplicitU64F32(e.to_implicit_map().into()),
-      Self::ExplicitU32F64(e) => Self::ImplicitU64F64(e.to_implicit_map().into()),
-      Self::ExplicitU64U8(e) => Self::ImplicitU64U8(e.to_implicit_map()),
-      Self::ExplicitU64I16(e) => Self::ImplicitU64I16(e.to_implicit_map()),
-      Self::ExplicitU64I32(e) => Self::ImplicitU64I32(e.to_implicit_map()),
-      Self::ExplicitU64I64(e) => Self::ImplicitU64I64(e.to_implicit_map()),
-      Self::ExplicitU64F32(e) => Self::ImplicitU64F32(e.to_implicit_map()),
-      Self::ExplicitU64F64(e) => Self::ImplicitU64F64(e.to_implicit_map()),
+      Self::ExplicitU32U8(e) => Self::ImplicitU64U8(e.into_implicit_map().into()),
+      Self::ExplicitU32I16(e) => Self::ImplicitU64I16(e.into_implicit_map().into()),
+      Self::ExplicitU32I32(e) => Self::ImplicitU64I32(e.into_implicit_map().into()),
+      Self::ExplicitU32I64(e) => Self::ImplicitU64I64(e.into_implicit_map().into()),
+      Self::ExplicitU32F32(e) => Self::ImplicitU64F32(e.into_implicit_map().into()),
+      Self::ExplicitU32F64(e) => Self::ImplicitU64F64(e.into_implicit_map().into()),
+      Self::ExplicitU64U8(e) => Self::ImplicitU64U8(e.into_implicit_map()),
+      Self::ExplicitU64I16(e) => Self::ImplicitU64I16(e.into_implicit_map()),
+      Self::ExplicitU64I32(e) => Self::ImplicitU64I32(e.into_implicit_map()),
+      Self::ExplicitU64I64(e) => Self::ImplicitU64I64(e.into_implicit_map()),
+      Self::ExplicitU64F32(e) => Self::ImplicitU64F32(e.into_implicit_map()),
+      Self::ExplicitU64F64(e) => Self::ImplicitU64F64(e.into_implicit_map()),
     }
   }
 
   pub fn to_explicit(self) -> Self {
     match self {
-      Self::ImplicitU64U8(e) => Self::ExplicitU64U8(e.to_explicit_map()),
-      Self::ImplicitU64I16(e) => Self::ExplicitU64I16(e.to_explicit_map()),
-      Self::ImplicitU64I32(e) => Self::ExplicitU64I32(e.to_explicit_map()),
-      Self::ImplicitU64I64(e) => Self::ExplicitU64I64(e.to_explicit_map()),
-      Self::ImplicitU64F32(e) => Self::ExplicitU64F32(e.to_explicit_map()),
-      Self::ImplicitU64F64(e) => Self::ExplicitU64F64(e.to_explicit_map()),
+      Self::ImplicitU64U8(e) => Self::ExplicitU64U8(e.into_explicit_map()),
+      Self::ImplicitU64I16(e) => Self::ExplicitU64I16(e.into_explicit_map()),
+      Self::ImplicitU64I32(e) => Self::ExplicitU64I32(e.into_explicit_map()),
+      Self::ImplicitU64I64(e) => Self::ExplicitU64I64(e.into_explicit_map()),
+      Self::ImplicitU64F32(e) => Self::ExplicitU64F32(e.into_explicit_map()),
+      Self::ImplicitU64F64(e) => Self::ExplicitU64F64(e.into_explicit_map()),
       Self::ExplicitU32U8(_) => self,
       Self::ExplicitU32I16(_) => self,
       Self::ExplicitU32I32(_) => self,
@@ -333,9 +338,57 @@ impl SkyMapEnum {
 
   pub fn par_add(self, rhs: Self) -> Result<Self, FitsError> {
     match (self, rhs) {
+      // L Implicit, R Implicit
       (Self::ImplicitU64I32(l), Self::ImplicitU64I32(r)) => Ok(Self::ImplicitU64I32(l.par_add(r))),
       (Self::ImplicitU64F32(l), Self::ImplicitU64F32(r)) => Ok(Self::ImplicitU64F32(l.par_add(r))),
       (Self::ImplicitU64F64(l), Self::ImplicitU64F64(r)) => Ok(Self::ImplicitU64F64(l.par_add(r))),
+      // L Implicit, R Explicit U32
+      (Self::ImplicitU64I32(l), Self::ExplicitU32I32(r))
+      | (Self::ExplicitU32I32(r), Self::ImplicitU64I32(l)) => Ok(Self::ImplicitU64I32(
+        l.par_add(r.into_u64_hash().into_implicit_map()),
+      )),
+      (Self::ImplicitU64F32(l), Self::ExplicitU32F32(r))
+      | (Self::ExplicitU32F32(r), Self::ImplicitU64F32(l)) => Ok(Self::ImplicitU64F32(
+        l.par_add(r.into_u64_hash().into_implicit_map()),
+      )),
+      (Self::ImplicitU64F64(l), Self::ExplicitU32F64(r))
+      | (Self::ExplicitU32F64(r), Self::ImplicitU64F64(l)) => Ok(Self::ImplicitU64F64(
+        l.par_add(r.into_u64_hash().into_implicit_map()),
+      )),
+      // L Implicit, R Explicit U64
+      (Self::ImplicitU64I32(l), Self::ExplicitU64I32(r))
+      | (Self::ExplicitU64I32(r), Self::ImplicitU64I32(l)) => {
+        Ok(Self::ImplicitU64I32(l.par_add(r.into_implicit_map())))
+      }
+      (Self::ImplicitU64F32(l), Self::ExplicitU64F32(r))
+      | (Self::ExplicitU64F32(r), Self::ImplicitU64F32(l)) => {
+        Ok(Self::ImplicitU64F32(l.par_add(r.into_implicit_map())))
+      }
+      (Self::ImplicitU64F64(l), Self::ExplicitU64F64(r))
+      | (Self::ExplicitU64F64(r), Self::ImplicitU64F64(l)) => {
+        Ok(Self::ImplicitU64F64(l.par_add(r.into_implicit_map())))
+      }
+      // L Explicit U32, R Explicit U32
+      (Self::ExplicitU32I32(l), Self::ExplicitU32I32(r)) => Ok(Self::ExplicitU32I32(l.par_add(r))),
+      (Self::ExplicitU32F32(l), Self::ExplicitU32F32(r)) => Ok(Self::ExplicitU32F32(l.par_add(r))),
+      (Self::ExplicitU32F64(l), Self::ExplicitU32F64(r)) => Ok(Self::ExplicitU32F64(l.par_add(r))),
+      // L Explicit U64, R  Explicit U64
+      (Self::ExplicitU64I32(l), Self::ExplicitU64I32(r)) => Ok(Self::ExplicitU64I32(l.par_add(r))),
+      (Self::ExplicitU64F32(l), Self::ExplicitU64F32(r)) => Ok(Self::ExplicitU64F32(l.par_add(r))),
+      (Self::ExplicitU64F64(l), Self::ExplicitU64F64(r)) => Ok(Self::ExplicitU64F64(l.par_add(r))),
+      // L Explicit U64, R  Explicit U32
+      (Self::ExplicitU64I32(l), Self::ExplicitU32I32(r))
+      | (Self::ExplicitU32I32(r), Self::ExplicitU64I32(l)) => {
+        Ok(Self::ExplicitU64I32(l.par_add(r.into_u64_hash())))
+      }
+      (Self::ExplicitU64F32(l), Self::ExplicitU32F32(r))
+      | (Self::ExplicitU32F32(r), Self::ExplicitU64F32(l)) => {
+        Ok(Self::ExplicitU64F32(l.par_add(r.into_u64_hash())))
+      }
+      (Self::ExplicitU64F64(l), Self::ExplicitU32F64(r))
+      | (Self::ExplicitU32F64(r), Self::ExplicitU64F64(l)) => {
+        Ok(Self::ExplicitU64F64(l.par_add(r.into_u64_hash())))
+      }
       _ => Err(FitsError::Custom {
         msg: format!("Skymap type not supported or not the same in 'add' operation"),
       }),
