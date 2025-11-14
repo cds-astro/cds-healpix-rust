@@ -42,7 +42,7 @@ but improvement have been added while porting the code and new features are adde
 
 For information on HEALPix in general, see:
 
-* The [official web site](https://healpix.jpl.nasa.gov/)
+* The [official web site](https://irsa.ipac.caltech.edu/healpix/)
 * The [Wikipedia page](https://en.wikipedia.org/wiki/HEALPix)
 * The two main reference papers: [Gorski (2005)](http://adsabs.harvard.edu/abs/2005ApJ...622..759G)
   and [Calabretta (2007)](http://adsabs.harvard.edu/abs/2007MNRAS.381..865C)
