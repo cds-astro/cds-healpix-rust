@@ -1147,6 +1147,7 @@ impl FITSCIndex {
 pub trait FitsMMappedCIndex<'a> {
   type HCIndexType: 'a + HCIndex;
 
+  fn depth(&self) -> u8;
   fn get_fits_creation_date(&self) -> Option<&SystemTime>;
   fn get_indexed_file_name(&self) -> Option<&String>;
   fn get_indexed_file_len(&self) -> Option<u64>;
@@ -1209,6 +1210,8 @@ impl<T: HCIndexValue> FitsMMappedCIndexImplicit<T> {
 
 impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T> {
   type HCIndexType = BorrowedCIndex<'a, T>;
+
+  fn depth(&self) -> u8 { self.depth }
 
   fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
@@ -1452,6 +1455,8 @@ impl<H: HHash, T: HCIndexValue> FitsMMappedCIndexExplicit<H, T> {
 
 impl<'a, H: HHash, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexExplicit<H, T> {
   type HCIndexType = BorrowedCIndexExplicit<'a, H, T>;
+
+  fn depth(&self) -> u8 { self.depth }
 
   fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
