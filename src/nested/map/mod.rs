@@ -148,6 +148,6 @@ mod tests {
   fn test_read_skymap() {
     init_logger();
     let path = "test/resources/skymap/gaiadr3.nside64.densmap.fits";
-    let skymap = SkyMapEnum::from_fits_file(path).unwrap();
+    SkyMapEnum::from_fits_file(path).unwrap();
   }
 }

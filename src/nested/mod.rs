@@ -5188,8 +5188,7 @@ mod tests {
   #[test]
   fn testok_cone_approx_bmoc_2() {
     // From https://github.com/cds-astro/cds-healpix-rust/issues/21
-    let actual_res = cone_coverage_approx(1, 0.0, -0.3956593324046537, 0.00986851403158301);
-
+    //let actual_res = cone_coverage_approx(1, 0.0, -0.3956593324046537, 0.00986851403158301);
     let actual_res = cone_coverage_approx(10, 0.0, 0.0, (5f64 / 3600.0).to_radians());
     println!("@@@@@ FLAT VIEW");
     for cell in actual_res.flat_iter() {

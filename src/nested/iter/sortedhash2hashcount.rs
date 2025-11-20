@@ -255,9 +255,9 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::depth;
   use std::iter;
+
+  use super::*;
 
   #[test]
   fn test_count_iterators_ok() {
