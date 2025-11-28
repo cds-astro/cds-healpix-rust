@@ -37,7 +37,7 @@ pub mod explicit;
 pub mod implicit;
 
 /// Trait marking the type of the values writable in a FITS skymap.
-pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone + Zero {
+pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone + Zero + PartialEq {
   /// FITS size, in bytes, of a value.
   const FITS_NAXIS1: u8 = size_of::<Self>() as u8;
   /// FITS TFORM type of the value
@@ -125,12 +125,14 @@ pub trait SkyMap<'a> {
   }
 
   /// We assume that cell having a value = 0 are not written.
-  fn explicit_byte_size(&'a self) -> usize {
+  /// # Param
+  /// * `null_value` the value coding NULL (could be 0, NaN, u32::MAX_VALUE, ...)
+  fn explicit_byte_size(&'a self, null_value: Self::ValueType) -> usize {
     (size_of::<Self::HashType>() + size_of::<Self::ValueType>())
       * if self.is_implicit() {
         let mut n = 0;
         for v in self.values() {
-          if !v.is_zero() {
+          if null_value.ne(v) {
             n += 1;
           }
         }
@@ -149,9 +151,13 @@ pub trait SkyMap<'a> {
   ///     + below the limit, the implicit representation is chosen.
   /// (This allows to put a size limit on the explicit representation: looking to a value in 'explicit'
   /// requires a binary search, which is longer than the direct access allowed by `implicit`).
-  fn is_implicit_the_best_representation(&'a self, impl_over_expl_limit_ratio: f64) -> bool {
+  fn is_implicit_the_best_representation(
+    &'a self,
+    null_value: Self::ValueType,
+    impl_over_expl_limit_ratio: f64,
+  ) -> bool {
     (self.implicit_byte_size() as f64)
-      < self.explicit_byte_size() as f64 * impl_over_expl_limit_ratio
+      < self.explicit_byte_size(null_value) as f64 * impl_over_expl_limit_ratio
   }
 
   /// Returns the number of elements in the skymap.
@@ -170,6 +176,65 @@ pub trait SkyMap<'a> {
 
   /// In case we want to build a map from complex type that are costly to clone.
   fn owned_entries(self) -> Self::OwnedEntriesIt;
+}
+
+/// Provide NULL value for all types of SkyMaps
+/// # TIP
+/// If you expect a given SkyMap type, use:
+/// `let provider = NullValueProvider.default().set_null_value_xx(xx)`
+#[derive(Default)]
+pub struct NullValueProvider {
+  null_value_u8: u8,
+  null_value_i16: i16,
+  null_value_i32: i32,
+  null_value_i64: i64,
+  null_value_f32: f32,
+  null_value_f64: f64,
+}
+impl NullValueProvider {
+  pub fn set_null_value_u8(mut self, null_value_u8: u8) -> Self {
+    self.null_value_u8 = null_value_u8;
+    self
+  }
+  pub fn set_null_value_i16(mut self, null_value_i16: i16) -> Self {
+    self.null_value_i16 = null_value_i16;
+    self
+  }
+  pub fn set_null_value_i32(mut self, null_value_i32: i32) -> Self {
+    self.null_value_i32 = null_value_i32;
+    self
+  }
+  pub fn set_null_value_i64(mut self, null_value_i64: i64) -> Self {
+    self.null_value_i64 = null_value_i64;
+    self
+  }
+  pub fn set_null_value_f32(mut self, null_value_f32: f32) -> Self {
+    self.null_value_f32 = null_value_f32;
+    self
+  }
+  pub fn set_null_value_f64(mut self, null_value_f64: f64) -> Self {
+    self.null_value_f64 = null_value_f64;
+    self
+  }
+
+  pub fn null_value_u8(&self) -> u8 {
+    self.null_value_u8
+  }
+  pub fn null_value_i16(&self) -> i16 {
+    self.null_value_i16
+  }
+  pub fn null_value_i32(&self) -> i32 {
+    self.null_value_i32
+  }
+  pub fn null_value_i64(&self) -> i64 {
+    self.null_value_i64
+  }
+  pub fn null_value_f32(&self) -> f32 {
+    self.null_value_f32
+  }
+  pub fn null_value_f64(&self) -> f64 {
+    self.null_value_f64
+  }
 }
 
 #[derive(Debug)]
@@ -219,30 +284,88 @@ impl SkyMapEnum {
   ///     + below the limit, the implicit representation is chosen.
   /// (This allows to put a size limit on the explicit representation: looking to a value in 'explicit'
   /// requires a binary search, which is longer than the direct access allowed by `implicit`).
-  pub fn is_implicit_the_best_representation(&self, impl_over_expl_limit_ratio: f64) -> bool {
+  pub fn is_implicit_the_best_representation(
+    &self,
+    null_value_provided: NullValueProvider,
+    impl_over_expl_limit_ratio: f64,
+  ) -> bool {
     match &self {
-      Self::ImplicitU64U8(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ImplicitU64I16(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ImplicitU64I32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ImplicitU64I64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ImplicitU64F32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ImplicitU64F64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32U8(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32I16(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32I32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32I64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32F32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU32F64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64U8(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64I16(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64I32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64I64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64F32(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
-      Self::ExplicitU64F64(e) => e.is_implicit_the_best_representation(impl_over_expl_limit_ratio),
+      Self::ImplicitU64U8(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_u8,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ImplicitU64I16(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i16,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ImplicitU64I32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ImplicitU64I64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i64,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ImplicitU64F32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ImplicitU64F64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f64,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32U8(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_u8,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32I16(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i16,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32I32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32I64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i64,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32F32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU32F64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f64,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64U8(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_u8,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64I16(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i16,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64I32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64I64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_i64,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64F32(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f32,
+        impl_over_expl_limit_ratio,
+      ),
+      Self::ExplicitU64F64(e) => e.is_implicit_the_best_representation(
+        null_value_provided.null_value_f64,
+        impl_over_expl_limit_ratio,
+      ),
     }
   }
 
-  pub fn to_implicit(self) -> Self {
+  pub fn to_implicit(self, null_value_provided: NullValueProvider) -> Self {
     match self {
       Self::ImplicitU64U8(_) => self,
       Self::ImplicitU64I16(_) => self,
@@ -250,29 +373,71 @@ impl SkyMapEnum {
       Self::ImplicitU64I64(_) => self,
       Self::ImplicitU64F32(_) => self,
       Self::ImplicitU64F64(_) => self,
-      Self::ExplicitU32U8(e) => Self::ImplicitU64U8(e.into_implicit_map().into()),
-      Self::ExplicitU32I16(e) => Self::ImplicitU64I16(e.into_implicit_map().into()),
-      Self::ExplicitU32I32(e) => Self::ImplicitU64I32(e.into_implicit_map().into()),
-      Self::ExplicitU32I64(e) => Self::ImplicitU64I64(e.into_implicit_map().into()),
-      Self::ExplicitU32F32(e) => Self::ImplicitU64F32(e.into_implicit_map().into()),
-      Self::ExplicitU32F64(e) => Self::ImplicitU64F64(e.into_implicit_map().into()),
-      Self::ExplicitU64U8(e) => Self::ImplicitU64U8(e.into_implicit_map()),
-      Self::ExplicitU64I16(e) => Self::ImplicitU64I16(e.into_implicit_map()),
-      Self::ExplicitU64I32(e) => Self::ImplicitU64I32(e.into_implicit_map()),
-      Self::ExplicitU64I64(e) => Self::ImplicitU64I64(e.into_implicit_map()),
-      Self::ExplicitU64F32(e) => Self::ImplicitU64F32(e.into_implicit_map()),
-      Self::ExplicitU64F64(e) => Self::ImplicitU64F64(e.into_implicit_map()),
+      Self::ExplicitU32U8(e) => Self::ImplicitU64U8(
+        e.into_implicit_map(null_value_provided.null_value_u8)
+          .into(),
+      ),
+      Self::ExplicitU32I16(e) => Self::ImplicitU64I16(
+        e.into_implicit_map(null_value_provided.null_value_i16)
+          .into(),
+      ),
+      Self::ExplicitU32I32(e) => Self::ImplicitU64I32(
+        e.into_implicit_map(null_value_provided.null_value_i32)
+          .into(),
+      ),
+      Self::ExplicitU32I64(e) => Self::ImplicitU64I64(
+        e.into_implicit_map(null_value_provided.null_value_i64)
+          .into(),
+      ),
+      Self::ExplicitU32F32(e) => Self::ImplicitU64F32(
+        e.into_implicit_map(null_value_provided.null_value_f32)
+          .into(),
+      ),
+      Self::ExplicitU32F64(e) => Self::ImplicitU64F64(
+        e.into_implicit_map(null_value_provided.null_value_f64)
+          .into(),
+      ),
+      Self::ExplicitU64U8(e) => {
+        Self::ImplicitU64U8(e.into_implicit_map(null_value_provided.null_value_u8))
+      }
+      Self::ExplicitU64I16(e) => {
+        Self::ImplicitU64I16(e.into_implicit_map(null_value_provided.null_value_i16))
+      }
+      Self::ExplicitU64I32(e) => {
+        Self::ImplicitU64I32(e.into_implicit_map(null_value_provided.null_value_i32))
+      }
+      Self::ExplicitU64I64(e) => {
+        Self::ImplicitU64I64(e.into_implicit_map(null_value_provided.null_value_i64))
+      }
+      Self::ExplicitU64F32(e) => {
+        Self::ImplicitU64F32(e.into_implicit_map(null_value_provided.null_value_f32))
+      }
+      Self::ExplicitU64F64(e) => {
+        Self::ImplicitU64F64(e.into_implicit_map(null_value_provided.null_value_f64))
+      }
     }
   }
 
-  pub fn to_explicit(self) -> Self {
+  pub fn to_explicit(self, null_value_provided: NullValueProvider) -> Self {
     match self {
-      Self::ImplicitU64U8(e) => Self::ExplicitU64U8(e.into_explicit_map()),
-      Self::ImplicitU64I16(e) => Self::ExplicitU64I16(e.into_explicit_map()),
-      Self::ImplicitU64I32(e) => Self::ExplicitU64I32(e.into_explicit_map()),
-      Self::ImplicitU64I64(e) => Self::ExplicitU64I64(e.into_explicit_map()),
-      Self::ImplicitU64F32(e) => Self::ExplicitU64F32(e.into_explicit_map()),
-      Self::ImplicitU64F64(e) => Self::ExplicitU64F64(e.into_explicit_map()),
+      Self::ImplicitU64U8(e) => {
+        Self::ExplicitU64U8(e.into_explicit_map(null_value_provided.null_value_u8))
+      }
+      Self::ImplicitU64I16(e) => {
+        Self::ExplicitU64I16(e.into_explicit_map(null_value_provided.null_value_i16))
+      }
+      Self::ImplicitU64I32(e) => {
+        Self::ExplicitU64I32(e.into_explicit_map(null_value_provided.null_value_i32))
+      }
+      Self::ImplicitU64I64(e) => {
+        Self::ExplicitU64I64(e.into_explicit_map(null_value_provided.null_value_i64))
+      }
+      Self::ImplicitU64F32(e) => {
+        Self::ExplicitU64F32(e.into_explicit_map(null_value_provided.null_value_f32))
+      }
+      Self::ImplicitU64F64(e) => {
+        Self::ExplicitU64F64(e.into_explicit_map(null_value_provided.null_value_f64))
+      }
       Self::ExplicitU32U8(_) => self,
       Self::ExplicitU32I16(_) => self,
       Self::ExplicitU32I32(_) => self,
@@ -336,7 +501,11 @@ impl SkyMapEnum {
     }
   }
 
-  pub fn par_add(self, rhs: Self) -> Result<Self, FitsError> {
+  pub fn par_add(
+    self,
+    rhs: Self,
+    null_value_provider: NullValueProvider,
+  ) -> Result<Self, FitsError> {
     match (self, rhs) {
       // L Implicit, R Implicit
       (Self::ImplicitU64I32(l), Self::ImplicitU64I32(r)) => Ok(Self::ImplicitU64I32(l.par_add(r))),
@@ -345,29 +514,38 @@ impl SkyMapEnum {
       // L Implicit, R Explicit U32
       (Self::ImplicitU64I32(l), Self::ExplicitU32I32(r))
       | (Self::ExplicitU32I32(r), Self::ImplicitU64I32(l)) => Ok(Self::ImplicitU64I32(
-        l.par_add(r.into_u64_hash().into_implicit_map()),
+        l.par_add(
+          r.into_u64_hash()
+            .into_implicit_map(null_value_provider.null_value_i32),
+        ),
       )),
       (Self::ImplicitU64F32(l), Self::ExplicitU32F32(r))
       | (Self::ExplicitU32F32(r), Self::ImplicitU64F32(l)) => Ok(Self::ImplicitU64F32(
-        l.par_add(r.into_u64_hash().into_implicit_map()),
+        l.par_add(
+          r.into_u64_hash()
+            .into_implicit_map(null_value_provider.null_value_f32),
+        ),
       )),
       (Self::ImplicitU64F64(l), Self::ExplicitU32F64(r))
       | (Self::ExplicitU32F64(r), Self::ImplicitU64F64(l)) => Ok(Self::ImplicitU64F64(
-        l.par_add(r.into_u64_hash().into_implicit_map()),
+        l.par_add(
+          r.into_u64_hash()
+            .into_implicit_map(null_value_provider.null_value_f64),
+        ),
       )),
       // L Implicit, R Explicit U64
       (Self::ImplicitU64I32(l), Self::ExplicitU64I32(r))
-      | (Self::ExplicitU64I32(r), Self::ImplicitU64I32(l)) => {
-        Ok(Self::ImplicitU64I32(l.par_add(r.into_implicit_map())))
-      }
+      | (Self::ExplicitU64I32(r), Self::ImplicitU64I32(l)) => Ok(Self::ImplicitU64I32(
+        l.par_add(r.into_implicit_map(null_value_provider.null_value_i32)),
+      )),
       (Self::ImplicitU64F32(l), Self::ExplicitU64F32(r))
-      | (Self::ExplicitU64F32(r), Self::ImplicitU64F32(l)) => {
-        Ok(Self::ImplicitU64F32(l.par_add(r.into_implicit_map())))
-      }
+      | (Self::ExplicitU64F32(r), Self::ImplicitU64F32(l)) => Ok(Self::ImplicitU64F32(
+        l.par_add(r.into_implicit_map(null_value_provider.null_value_f32)),
+      )),
       (Self::ImplicitU64F64(l), Self::ExplicitU64F64(r))
-      | (Self::ExplicitU64F64(r), Self::ImplicitU64F64(l)) => {
-        Ok(Self::ImplicitU64F64(l.par_add(r.into_implicit_map())))
-      }
+      | (Self::ExplicitU64F64(r), Self::ImplicitU64F64(l)) => Ok(Self::ImplicitU64F64(
+        l.par_add(r.into_implicit_map(null_value_provider.null_value_f64)),
+      )),
       // L Explicit U32, R Explicit U32
       (Self::ExplicitU32I32(l), Self::ExplicitU32I32(r)) => Ok(Self::ExplicitU32I32(l.par_add(r))),
       (Self::ExplicitU32F32(l), Self::ExplicitU32F32(r)) => Ok(Self::ExplicitU32F32(l.par_add(r))),

@@ -53,11 +53,11 @@ impl<H: HHash, V: SkyMapValue> ExplicitSkyMapBTree<H, V> {
       _zero: V::zero(),
     }
   }
-  pub fn into_implicit_map(self) -> ImplicitSkyMapArray<H, V> {
+  pub fn into_implicit_map(self, null_value: V) -> ImplicitSkyMapArray<H, V> {
     // We may implement an "Implicit iterator" to write a very large map on the disk
     // (with an implicit map possibly larger that the RAM).
     let depth = self.depth;
-    let mut values = vec![V::zero(); n_hash(self.depth) as usize];
+    let mut values = vec![null_value; n_hash(self.depth) as usize];
     for (k, v) in self.entries {
       values[k.to_usize().unwrap()] = v;
     }
@@ -407,13 +407,13 @@ impl<H: HHash> ExplicitCountMap<H> {
   }
 }
 impl ExplicitCountMap<u32> {
-  pub fn into_implicit_skymap(self) -> ImplicitCountMapU32 {
-    self.0.into_implicit_map().into()
+  pub fn into_implicit_skymap(self, null_value: u32) -> ImplicitCountMapU32 {
+    self.0.into_implicit_map(null_value).into()
   }
 }
 impl ExplicitCountMap<u64> {
-  pub fn into_implicit_skymap(self) -> ImplicitCountMap {
-    self.0.into_implicit_map().into()
+  pub fn into_implicit_skymap(self, null_value: u32) -> ImplicitCountMap {
+    self.0.into_implicit_map(null_value).into()
   }
 }
 
@@ -625,8 +625,8 @@ impl ExplicitDensityMap<u64> {
   }
 }
 impl ExplicitDensityMap<u32> {
-  pub fn into_implicit_skymap(self) -> ImplicitDensityMap {
-    self.0.into_implicit_map().into()
+  pub fn into_implicit_skymap(self, null_value: f64) -> ImplicitDensityMap {
+    self.0.into_implicit_map(null_value).into()
   }
 }
 /*impl ExplicitDensityMap<u64> {

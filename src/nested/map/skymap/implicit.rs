@@ -68,11 +68,11 @@ impl<H: HHash, V: SkyMapValue> ImplicitSkyMapArray<H, V> {
     }
   }
 
-  pub fn into_explicit_map(self) -> ExplicitSkyMapBTree<H, V> {
+  pub fn into_explicit_map(self, null_value: V) -> ExplicitSkyMapBTree<H, V> {
     let depth = self.depth;
     let btreemap: BTreeMap<H, V> = self
       .owned_entries()
-      .filter(move |(_k, v)| !v.is_zero())
+      .filter(move |(_k, v)| null_value.ne(v))
       .collect();
     ExplicitSkyMapBTree::new(depth, btreemap)
   }
@@ -227,8 +227,8 @@ impl ImplicitCountMap {
   pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u64, u32> {
     self.0
   }
-  pub fn into_explicit_skymap(self) -> ExplicitCountMap<u64> {
-    self.0.into_explicit_map().into()
+  pub fn into_explicit_skymap(self, null_value: u32) -> ExplicitCountMap<u64> {
+    self.0.into_explicit_map(null_value).into()
   }
   /// Build a count skymap from an iterator over HEALPix cells at the given depth.
   /// # Panics
@@ -467,8 +467,8 @@ impl ImplicitCountMapU32 {
   pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u32, u32> {
     self.0
   }
-  pub fn into_explicit_skymap(self) -> ExplicitCountMap<u32> {
-    self.0.into_explicit_map().into()
+  pub fn into_explicit_skymap(self, null_value: u32) -> ExplicitCountMap<u32> {
+    self.0.into_explicit_map(null_value).into()
   }
   /// Build a count skymap from an iterator over HEALPix cells at the given depth.
   /// # Panics

@@ -70,8 +70,8 @@ impl Count {
       if self.depth < 13 {
         build_count_map_explicit::<u32>(self.depth, self.input).and_then(|map| {
           match self.implicit_over_explicit_ratio {
-            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
-              map.into_implicit_skymap().to_fits_file(self.output)
+            Some(threshold) if map.is_implicit_the_best_representation(0, threshold) => {
+              map.into_implicit_skymap(0).to_fits_file(self.output)
             }
             _ => map.to_fits_file(self.output),
           }
@@ -80,8 +80,8 @@ impl Count {
       } else {
         build_count_map_explicit::<u64>(self.depth, self.input).and_then(|map| {
           match self.implicit_over_explicit_ratio {
-            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
-              map.into_implicit_skymap().to_fits_file(self.output)
+            Some(threshold) if map.is_implicit_the_best_representation(0, threshold) => {
+              map.into_implicit_skymap(0).to_fits_file(self.output)
             }
             _ => map.to_fits_file(self.output),
           }
@@ -91,8 +91,8 @@ impl Count {
     } else {
       build_count_map_implicit(self.depth, self.input).and_then(|map| {
         match self.implicit_over_explicit_ratio {
-          Some(threshold) if !map.is_implicit_the_best_representation(threshold) => {
-            map.into_explicit_skymap().to_fits_file(self.output)
+          Some(threshold) if !map.is_implicit_the_best_representation(0, threshold) => {
+            map.into_explicit_skymap(0).to_fits_file(self.output)
           }
           _ => map.to_fits_file(self.output),
         }
@@ -128,8 +128,8 @@ impl Dens {
         build_count_map_explicit::<u32>(self.depth, self.input).and_then(|map| {
           let map = map.to_dens_map_par();
           match self.implicit_over_explicit_ratio {
-            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
-              map.into_implicit_skymap().to_fits_file(self.output)
+            Some(threshold) if map.is_implicit_the_best_representation(0.0, threshold) => {
+              map.into_implicit_skymap(0.0).to_fits_file(self.output)
             }
             _ => map.to_fits_file(self.output),
           }
@@ -139,7 +139,7 @@ impl Dens {
         build_count_map_explicit::<u64>(self.depth, self.input).and_then(|map| {
           let map = map.to_dens_map_par();
           match self.implicit_over_explicit_ratio {
-            Some(threshold) if map.is_implicit_the_best_representation(threshold) => {
+            Some(threshold) if map.is_implicit_the_best_representation(0.0, threshold) => {
               warn!("No implicit representation available for DensityMap of depth >= 13!");
               // map.into_implicit_skymap().to_fits_file(self.output)
               map.to_fits_file(self.output)
@@ -324,7 +324,7 @@ impl Operation {
       OpType::Add => {
         let thread_pool = get_thread_pool(self.parallel);
         thread_pool
-          .install(|| l.par_add(r))
+          .install(|| l.par_add(r, Default::default()))
           .and_then(|res| res.to_fits_file(self.output))
           .map_err(|e| e.into())
       }
