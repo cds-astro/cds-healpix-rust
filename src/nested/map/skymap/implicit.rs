@@ -155,6 +155,15 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> ImplicitSkyMapArrayRef<'a, H, V> {
     }
   }
 
+  pub fn into_explicit_map(self, null_value: V) -> ExplicitSkyMapBTree<H, V> {
+    let depth = self.depth;
+    let btreemap: BTreeMap<H, V> = self
+      .owned_entries()
+      .filter(move |(_k, v)| null_value.ne(v))
+      .collect();
+    ExplicitSkyMapBTree::new(depth, btreemap)
+  }
+
   /*pub fn par_add(mut self, rhs: Self, pool: &ThreadPool) -> Self {
     pool.install(|| {
       self
