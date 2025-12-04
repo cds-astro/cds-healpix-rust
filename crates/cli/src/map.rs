@@ -1,5 +1,4 @@
-use std::marker::PhantomData;
-use std::{error::Error, path::PathBuf};
+use std::{error::Error, path::PathBuf, marker::PhantomData};
 
 use clap::{Args, Subcommand, ValueEnum};
 use log::{error, warn};

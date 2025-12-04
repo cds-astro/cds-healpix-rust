@@ -18,7 +18,8 @@ use hpxlib::nested::{
     img::{ColorMapFunctionType, PosConversion, Val},
     mom::{
       impls::{bslice::FITSMom, zvec::MomVecImpl},
-      new_chi2_count_merger, Mom as MomTrait, ViewableMom, WritableMom,
+      new_chi2_count_merger_no_depth_threshold, new_chi2_count_merger_with_depth_threshold,
+      Mom as MomTrait, ViewableMom, WritableMom,
     },
     skymap::SkyMapValue,
   },
@@ -64,6 +65,9 @@ pub struct Count {
   /// Completeness of the chi2 distribution of 3 degrees of freedom.
   #[clap(default_value_t = 16.266)]
   threshold: f64,
+  /// Depth threshold
+  #[clap(short = 't', long, value_name = "DEPTH_MIN")]
+  depth_threshold: Option<u8>,
   /// Count MOM destination FITS file.
   output: PathBuf,
   #[clap(subcommand)]
@@ -71,7 +75,12 @@ pub struct Count {
 }
 impl Count {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
-    self.input.exec(self.depth, self.threshold, self.output)
+    self.input.exec(
+      self.depth,
+      self.threshold,
+      self.depth_threshold,
+      self.output,
+    )
   }
 }
 
@@ -89,10 +98,16 @@ enum PosOrHash {
   },
 }
 impl PosOrHash {
-  pub fn exec(self, depth: u8, threshold: f64, output: PathBuf) -> Result<(), Box<dyn Error>> {
+  pub fn exec(
+    self,
+    depth: u8,
+    threshold: f64,
+    depth_threshold: Option<u8>,
+    output: PathBuf,
+  ) -> Result<(), Box<dyn Error>> {
     match self {
-      Self::Pos { input } => build_count_mom_from_pos(depth, threshold, input),
-      Self::Hash { input } => build_count_mom_from_hash(depth, threshold, input),
+      Self::Pos { input } => build_count_mom_from_pos(depth, threshold, depth_threshold, input),
+      Self::Hash { input } => build_count_mom_from_hash(depth, threshold, depth_threshold, input),
     }
     .and_then(|mom| mom.to_fits_file(output, "DENSITY").map_err(|e| e.into()))
   }
@@ -100,11 +115,13 @@ impl PosOrHash {
 fn build_count_mom_from_pos(
   depth: u8,
   threshold: f64,
+  depth_threshold: Option<u8>,
   input: PosListInput,
 ) -> Result<MomVecImpl<u64, u32>, Box<dyn Error>> {
   struct Op {
     depth: u8,
     threshold: f64,
+    depth_threshold: Option<u8>,
   }
   impl PosItOperation for Op {
     type R = MomVecImpl<u64, u32>;
@@ -123,25 +140,37 @@ fn build_count_mom_from_pos(
         self.depth,
         SortedHashIt::new(self.depth, it),
       );
-      let chi2_merger = new_chi2_count_merger(self.threshold);
-      MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
-        self.depth,
-        hash_count_it,
-        chi2_merger,
-      )
+      match self.depth_threshold {
+        None => MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+          self.depth,
+          hash_count_it,
+          new_chi2_count_merger_no_depth_threshold(self.threshold),
+        ),
+        Some(depth_threshold) => MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+          self.depth,
+          hash_count_it,
+          new_chi2_count_merger_with_depth_threshold(self.threshold, depth_threshold),
+        ),
+      }
       .map_err(|e| e.into())
     }
   }
-  input.exec(Op { depth, threshold })
+  input.exec(Op {
+    depth,
+    threshold,
+    depth_threshold,
+  })
 }
 fn build_count_mom_from_hash(
   depth: u8,
   threshold: f64,
+  depth_threshold: Option<u8>,
   input: HashListInput,
 ) -> Result<MomVecImpl<u64, u32>, Box<dyn Error>> {
   struct Op {
     depth: u8,
     threshold: f64,
+    depth_threshold: Option<u8>,
   }
   impl HashItOperation for Op {
     type R = MomVecImpl<u64, u32>;
@@ -157,16 +186,26 @@ fn build_count_mom_from_hash(
         }
       });
       let hash_count_it = SortedHash2HashCountIncludingZeroIt::new_from_infallible(self.depth, it);
-      let chi2_merger = new_chi2_count_merger(self.threshold);
-      MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
-        self.depth,
-        hash_count_it,
-        chi2_merger,
-      )
+      match self.depth_threshold {
+        None => MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+          self.depth,
+          hash_count_it,
+          new_chi2_count_merger_no_depth_threshold(self.threshold),
+        ),
+        Some(depth_threshold) => MomVecImpl::<u64, u32>::from_hpx_sorted_entries_fallible(
+          self.depth,
+          hash_count_it,
+          new_chi2_count_merger_with_depth_threshold(self.threshold, depth_threshold),
+        ),
+      }
       .map_err(|e| e.into())
     }
   }
-  input.exec(Op { depth, threshold })
+  input.exec(Op {
+    depth,
+    threshold,
+    depth_threshold,
+  })
 }
 
 #[derive(Debug, Subcommand)]
@@ -229,6 +268,9 @@ pub enum OpType {
     /// Completeness of the chi2 distribution of 3 degrees of freedom below which cells are post-merged.
     #[clap(short, long, default_value_t = 16.266)]
     threshold: f64,
+    /// Depth threshold
+    #[clap(short = 't', long, value_name = "DEPTH_MIN")]
+    depth_threshold: Option<u8>,
   },
 }
 
@@ -257,6 +299,7 @@ impl Operation {
         cte,
         value_name,
         threshold,
+        depth_threshold,
       } => match (l, r) {
         (FITSMom::U32U32(_l), FITSMom::U32U32(_r)) => {
           Err(String::from("Method not available for integers").into())
@@ -267,6 +310,7 @@ impl Operation {
             r.get_mom(),
             cte as f32,
             threshold,
+            depth_threshold,
           )
           .to_fits_file(self.output, value_name)
           .map_err(|e| e.into())
@@ -277,6 +321,7 @@ impl Operation {
             r.get_mom(),
             cte,
             threshold,
+            depth_threshold,
           )
           .to_fits_file(self.output, value_name)
           .map_err(|e| e.into())
@@ -290,6 +335,7 @@ impl Operation {
             r.get_mom(),
             cte as f32,
             threshold,
+            depth_threshold,
           )
           .to_fits_file(self.output, value_name)
           .map_err(|e| e.into())
@@ -300,6 +346,7 @@ impl Operation {
             r.get_mom(),
             cte,
             threshold,
+            depth_threshold,
           )
           .to_fits_file(self.output, value_name)
           .map_err(|e| e.into())

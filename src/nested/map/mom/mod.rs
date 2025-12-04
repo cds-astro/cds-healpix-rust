@@ -656,6 +656,8 @@ impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
 /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
 /// from the same normal distribution which mean and variance comes from a poisson distribution.
+/// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
+///
 /// Here a few typical values corresponding the the given completeness:
 /// * Completeness = 90.0% =>  6.251
 /// * Completeness = 95.0% =>  7.815
@@ -667,8 +669,13 @@ pub fn new_chi2_density_merger<
   V: SkyMapValue + Float + FloatConst + FromPrimitive,
 >(
   chi2_of_3dof_threshold: f64,
+  depth_threshold: Option<u8>,
 ) -> impl Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]> {
-  let merger_ref = new_chi2_density_ref_merger(chi2_of_3dof_threshold);
+  let merger_ref = new_chi2_density_ref_merger_with_depth_threshold(
+    chi2_of_3dof_threshold,
+    depth_threshold.unwrap_or(0),
+  );
+
   move |depth: u8, hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
     merger_ref(
       depth,
@@ -679,7 +686,7 @@ pub fn new_chi2_density_merger<
   }
 }
 
-pub fn new_chi2_density_ref_merger<
+pub fn new_chi2_density_ref_merger_no_depth_threshold<
   Z: ZUniqHashT,
   V: SkyMapValue + Float + FloatConst + FromPrimitive,
 >(
@@ -722,21 +729,44 @@ pub fn new_chi2_density_ref_merger<
   }
 }
 
+/// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
+pub fn new_chi2_density_ref_merger_with_depth_threshold<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Float + FloatConst + FromPrimitive,
+>(
+  chi2_of_3dof_threshold: f64,
+  depth_threshold: u8,
+) -> impl Fn(u8, Z, [&V; 4]) -> Option<V> {
+  let merger = new_chi2_density_ref_merger_no_depth_threshold(chi2_of_3dof_threshold);
+  move |depth: u8, hash: Z, n: [&V; 4]| -> Option<V> {
+    if depth >= depth_threshold {
+      merger(depth, hash, n)
+    } else {
+      None
+    }
+  }
+}
+
 /// Provide a merger merging counts based on a chi-square criterion.
 /// # Params
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
 /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
 /// from the same normal distribution which mean and variance comes from a poisson distribution.
+/// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
+///
 /// Here a few typical values corresponding the the given completeness:
 /// * Completeness = 90.0% =>  6.251
 /// * Completeness = 95.0% =>  7.815
 /// * Completeness = 97.5% =>  9.348
 /// * Completeness = 99.0% => 11.345
 /// * Completeness = 99.9% => 16.266
-pub fn new_chi2_count_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPrimitive<f64>>(
+pub fn new_chi2_count_merger_no_depth_threshold<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Integer + AsPrimitive<f64>,
+>(
   chi2_of_3dof_threshold: f64,
 ) -> impl Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]> {
-  let merger_ref = new_chi2_count_ref_merger(chi2_of_3dof_threshold);
+  let merger_ref = new_chi2_count_ref_merger_no_depth_threshold(chi2_of_3dof_threshold);
   move |depth: u8, hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
     merger_ref(
       depth,
@@ -747,7 +777,29 @@ pub fn new_chi2_count_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPrimiti
   }
 }
 
-pub fn new_chi2_count_ref_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPrimitive<f64>>(
+pub fn new_chi2_count_merger_with_depth_threshold<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Integer + AsPrimitive<f64>,
+>(
+  chi2_of_3dof_threshold: f64,
+  depth_threshold: u8,
+) -> impl Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]> {
+  let merger_ref =
+    new_chi2_count_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold);
+  move |depth: u8, hash: Z, values: [V; 4]| -> Result<V, [V; 4]> {
+    merger_ref(
+      depth,
+      hash,
+      [&values[0], &values[1], &values[2], &values[3]],
+    )
+    .ok_or(values)
+  }
+}
+
+pub fn new_chi2_count_ref_merger_no_depth_threshold<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Integer + AsPrimitive<f64>,
+>(
   chi2_of_3dof_threshold: f64,
 ) -> impl Fn(u8, Z, [&V; 4]) -> Option<V> {
   move |_depth: u8, _hash: Z, [n0, n1, n2, n3]: [&V; 4]| -> Option<V> {
@@ -769,10 +821,27 @@ pub fn new_chi2_count_ref_merger<Z: ZUniqHashT, V: SkyMapValue + Integer + AsPri
   }
 }
 
+pub fn new_chi2_count_ref_merger_with_depth_threshold<
+  Z: ZUniqHashT,
+  V: SkyMapValue + Integer + AsPrimitive<f64>,
+>(
+  chi2_of_3dof_threshold: f64,
+  depth_threshold: u8,
+) -> impl Fn(u8, Z, [&V; 4]) -> Option<V> {
+  let merger = new_chi2_count_ref_merger_no_depth_threshold(chi2_of_3dof_threshold);
+  move |depth: u8, hash: Z, n: [&V; 4]| -> Option<V> {
+    if depth >= depth_threshold {
+      merger(depth, hash, n)
+    } else {
+      None
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use crate::nested::map::img::to_mom_png_file;
-  use crate::nested::map::mom::{new_chi2_count_ref_merger, LhsRhsBoth};
+  use crate::nested::map::mom::{new_chi2_count_ref_merger_no_depth_threshold, LhsRhsBoth};
   use mapproj::pseudocyl::mol::Mol;
 
   use super::{
@@ -793,9 +862,9 @@ mod tests {
     let skymap_gaia = SkyMapEnum::from_fits_file(path).unwrap();
     match (skymap_2mass, skymap_gaia) {
       (SkyMapEnum::ImplicitU64I32(iskymap_2mass), SkyMapEnum::ImplicitU64I32(iskymap_gaia_dr3)) => {
-        let chi2_merger = new_chi2_count_ref_merger(16.266);
+        let chi2_merger = new_chi2_count_ref_merger_no_depth_threshold(16.266);
         let mom_2mass = MomVecImpl::from_skymap_ref(&iskymap_2mass, chi2_merger);
-        let chi2_merger = new_chi2_count_ref_merger(16.266);
+        let chi2_merger = new_chi2_count_ref_merger_no_depth_threshold(16.266);
         let mom_gaia = MomVecImpl::from_skymap_ref(&iskymap_gaia_dr3, chi2_merger);
         // Transform count MOMs into PDF MOMs.
         let n_tot_2mass = mom_2mass.values().sum::<i32>() as f64;

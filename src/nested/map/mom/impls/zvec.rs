@@ -767,6 +767,8 @@ where
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
   /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
   /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
+  ///
   /// Here a few typical values corresponding the the given completeness:
   /// * Completeness = 90.0% =>  6.251
   /// * Completeness = 95.0% =>  7.815
@@ -778,6 +780,7 @@ where
     rhs: R,
     cte: V,
     chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
   ) -> Self
   where
     L: Mom<'s, ZUniqHType = Z, ValueType = V>,
@@ -796,7 +799,7 @@ where
       rhs,
       split,
       op,
-      new_chi2_density_merger(chi2_of_3dof_threshold),
+      new_chi2_density_merger(chi2_of_3dof_threshold, depth_threshold),
     )
   }
 }
@@ -811,7 +814,9 @@ mod tests {
     n_hash,
     nested::map::{
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-      mom::{impls::zvec::MomVecImpl, new_chi2_count_ref_merger, Mom, ZUniqHashT},
+      mom::{
+        impls::zvec::MomVecImpl, new_chi2_count_ref_merger_no_depth_threshold, Mom, ZUniqHashT,
+      },
       skymap::SkyMapEnum,
     },
   };
@@ -882,7 +887,7 @@ mod tests {
       SkyMapEnum::ImplicitU64I32(skymap) => {
         // println!("Skymap size: {}", skymap.len());
 
-        let merger = new_chi2_count_ref_merger(16.266);
+        let merger = new_chi2_count_ref_merger_no_depth_threshold(16.266);
         let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
         /*println!("Mom len: {}", mom.entries.len());
         for (z, v) in mom.entries {

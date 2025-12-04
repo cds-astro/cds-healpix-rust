@@ -24,7 +24,10 @@ use crate::{
     get,
     map::{
       fits::{error::FitsError, write::write_explicit_skymap_fits},
-      mom::{impls::zvec::MomVecImpl, new_chi2_density_ref_merger, Mom},
+      mom::{
+        impls::zvec::MomVecImpl, new_chi2_density_ref_merger_no_depth_threshold,
+        new_chi2_density_ref_merger_with_depth_threshold, Mom,
+      },
       skymap::{
         implicit::{
           ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray,
@@ -565,7 +568,7 @@ impl ExplicitDensityMap<u32> {
   ///     + Completeness = 97.5% =>  9.348
   ///     + Completeness = 99.0% => 11.345
   ///     + Completeness = 99.9% => 16.266
-  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
   pub fn to_chi2_mom(
     &self,
     chi2_of_3dof_threshold: f64,
@@ -573,18 +576,14 @@ impl ExplicitDensityMap<u32> {
   ) -> MomVecImpl<u32, f64> {
     // WARNING: result will bve different from to_chi2_mom on implicit map because
     // no value is different from value = 0.
-    let chi2_merger = new_chi2_density_ref_merger(chi2_of_3dof_threshold);
     match depth_threshold {
-      None => MomVecImpl::from_skymap_ref(&self.0, chi2_merger),
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_density_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
       Some(depth_threshold) => MomVecImpl::from_skymap_ref(
         &self.0,
-        |depth: u8, hash: u32, [n0, n1, n2, n3]: [&f64; 4]| -> Option<f64> {
-          if depth >= depth_threshold {
-            chi2_merger(depth, hash, [n0, n1, n2, n3])
-          } else {
-            None
-          }
-        },
+        new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     }
   }
@@ -608,18 +607,14 @@ impl ExplicitDensityMap<u64> {
   ) -> MomVecImpl<u64, f64> {
     // WARNING: result will bve different from to_chi2_mom on implicit map because
     // no value is different from value = 0.
-    let chi2_merger = new_chi2_density_ref_merger(chi2_of_3dof_threshold);
     match depth_threshold {
-      None => MomVecImpl::from_skymap_ref(&self.0, chi2_merger),
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_density_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
       Some(depth_threshold) => MomVecImpl::from_skymap_ref(
         &self.0,
-        |depth: u8, hash: u64, [n0, n1, n2, n3]: [&f64; 4]| -> Option<f64> {
-          if depth >= depth_threshold {
-            chi2_merger(depth, hash, [n0, n1, n2, n3])
-          } else {
-            None
-          }
-        },
+        new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     }
   }

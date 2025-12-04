@@ -28,8 +28,10 @@ use crate::{
     map::{
       fits::{error::FitsError, write::write_implicit_skymap_fits},
       mom::{
-        impls::zvec::MomVecImpl, new_chi2_count_ref_merger, new_chi2_density_ref_merger, Mom,
-        ZUniqHashT,
+        impls::zvec::MomVecImpl, new_chi2_count_ref_merger_no_depth_threshold,
+        new_chi2_count_ref_merger_with_depth_threshold,
+        new_chi2_density_ref_merger_no_depth_threshold,
+        new_chi2_density_ref_merger_with_depth_threshold, Mom, ZUniqHashT,
       },
       skymap::explicit::{ExplicitCountMap, ExplicitSkyMapBTree},
       HHash,
@@ -345,54 +347,14 @@ impl ImplicitCountMap {
     chi2_of_3dof_threshold: f64,
     depth_threshold: Option<u8>,
   ) -> MomVecImpl<u64, f64> {
-    /*let chi2_merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
-      // With Poisson distribution:
-      // * mu_i = source density in cell i
-      // * sigma_i = sqrt(mu_i)
-      // weight_i = 1 / sigma_i^2
-      // mu_e = weighted_mean = ( sum_{1=1}^4 weight_i * mu_i ) / ( sum_{1=1}^4 weight_i )
-      //                      = 4 / ( sum_{1=1}^4 1/mu_i )
-      // V_e^{-1} = sum_{1=1}^4 1/mu_i
-      // Applying Pineau et al. 2017:
-      // => sum_{1=1}^4 (mu_i - mu_e)^2 / mu_i = ... = (sum_{1=1}^4 mu_i) - 4 * mu_e
-      // Normal law product of 4 1D normal laws and apply Pineau 2017 to find the above equation:
-      // 1/sqrt(2 * pi) * exp[ -1/2 * sum_{i=1}^4 ( (x - mu_i)/sqrt(sigma_i) )^2] / sqrt(prod_{i=1}^4 sigma_i)
-
-      let mu0 = *n0 as f64;
-      let mu1 = *n1 as f64;
-      let mu2 = *n2 as f64;
-      let mu3 = *n3 as f64;
-
-      let sum = mu0 + mu1 + mu2 + mu3;
-      let weighted_var_inv =
-        1.0 / mu0.max(1.0) + 1.0 / mu1.max(1.0) + 1.0 / mu2.max(1.0) + 1.0 / mu3.max(1.0);
-      let weighted_mean = 4.0 / weighted_var_inv;
-      let chi2_of_3dof = sum - 4.0 * weighted_mean;
-
-      // chi2 3 dof:
-      // 90.0% =>  6.251
-      // 95.0% =>  7.815
-      // 97.5% =>  9.348
-      // 99.0% => 11.345
-      // 99.9% => 16.266
-      if chi2_of_3dof < chi2_of_3dof_threshold {
-        Some(*n0 + *n1 + *n2 + *n3)
-      } else {
-        None
-      }
-    };*/
-    let chi2_merger = new_chi2_count_ref_merger(chi2_of_3dof_threshold);
     let mom = match depth_threshold {
-      None => MomVecImpl::from_skymap_ref(&self.0, chi2_merger),
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_count_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
       Some(depth_threshold) => MomVecImpl::from_skymap_ref(
         &self.0,
-        |depth: u8, hash: u64, na: [&u32; 4]| -> Option<u32> {
-          if depth >= depth_threshold {
-            chi2_merger(depth, hash, na)
-          } else {
-            None
-          }
-        },
+        new_chi2_count_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     };
     // Create a new MOM transforming number of sources into densities.
@@ -910,18 +872,14 @@ impl ImplicitDensityMap {
     chi2_of_3dof_threshold: f64,
     depth_threshold: Option<u8>,
   ) -> MomVecImpl<u32, f64> {
-    let chi2_merger = new_chi2_density_ref_merger(chi2_of_3dof_threshold);
     match depth_threshold {
-      None => MomVecImpl::from_skymap_ref(&self.0, chi2_merger),
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_density_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
       Some(depth_threshold) => MomVecImpl::from_skymap_ref(
         &self.0,
-        |depth: u8, hash: u32, [n0, n1, n2, n3]: [&f64; 4]| -> Option<f64> {
-          if depth >= depth_threshold {
-            chi2_merger(depth, hash, [n0, n1, n2, n3])
-          } else {
-            None
-          }
-        },
+        new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     }
   }
