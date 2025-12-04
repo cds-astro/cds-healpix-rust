@@ -1,4 +1,5 @@
 use std::{
+  cmp::Ordering,
   error::Error,
   f64::consts::PI,
   fs::File,
@@ -388,6 +389,7 @@ where
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
+// TODO: take in input the value coding NULL
 pub fn to_skymap_img<'a, P, S>(
   skymap: &'a S,
   img_size: (u16, u16),
@@ -410,8 +412,24 @@ where
   let first_value = iter.next().unwrap();
   let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
     (
-      std::cmp::min_by(val, min, |a, b| a.partial_cmp(b).unwrap()),
-      std::cmp::max_by(val, max, |a, b| a.partial_cmp(b).unwrap()),
+      std::cmp::min_by(val, min, |a, b| {
+        a.partial_cmp(b).unwrap_or_else(move || {
+          if a != a {
+            Ordering::Greater
+          } else {
+            Ordering::Less
+          }
+        })
+      }),
+      std::cmp::max_by(val, max, |a, b| {
+        a.partial_cmp(b).unwrap_or_else(move || {
+          if a != a {
+            Ordering::Greater
+          } else {
+            Ordering::Less
+          }
+        })
+      }),
     )
   });
   let (min, max) = (min.to_f64(), max.to_f64());
@@ -550,6 +568,7 @@ where
 /// * `pos_convert`: to handle a different coordinate system between the skymap and the image.
 /// * `color_map`:
 /// * `color_map_func`: the color map fonction, build it using:
+// TODO: take in input the value coding NULL
 pub fn to_mom_img<'a, P, M>(
   mom: &'a M,
   img_size: (u16, u16),
@@ -572,8 +591,24 @@ where
   let first_value = iter.next().unwrap();
   let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
     (
-      std::cmp::min_by(val, min, |a, b| a.partial_cmp(b).unwrap()),
-      std::cmp::max_by(val, max, |a, b| a.partial_cmp(b).unwrap()),
+      std::cmp::min_by(val, min, |a, b| {
+        a.partial_cmp(b).unwrap_or_else(move || {
+          if a != a {
+            Ordering::Greater
+          } else {
+            Ordering::Less
+          }
+        })
+      }),
+      std::cmp::max_by(val, max, |a, b| {
+        a.partial_cmp(b).unwrap_or_else(move || {
+          if a != a {
+            Ordering::Greater
+          } else {
+            Ordering::Less
+          }
+        })
+      }),
     )
   });
   let (min, max) = (min.to_f64(), max.to_f64());
