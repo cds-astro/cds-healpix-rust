@@ -298,6 +298,7 @@ gtest "test_nested_tozuniq_multidepth_csv" "Comute zuniq from CSV, multidepth"
 #######################
 
 test_sort(){
+  echo "* test_sort..."
   # Sort a file
   hpx sort --header -d , -o hipmain.sorted.csv  hipmain.csv
   # Ensure is sorted (explicitely computing the HEALPi index):
@@ -314,22 +315,60 @@ test_sort
 # Test 'hpx qhcidx ...' #
 #########################
 
-test_hcidx_qhicid(){
+test_hcidx_qhicid_implimpl(){
+  echo "* test_hcidx_qhicid_implimpl..."
   hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx is not empty!"; exit 1; }
+  [[ "$?" != "0" ]] && { echo "Diff on qhcidx impl/impl is not empty!"; exit 1; }
 }
-test_hcidx_qhicid
+test_hcidx_qhicid_implimpl
+
+test_hcidx_qhicid_implexpl(){
+  echo "* test_hcidx_qhicid_implexpl..."
+  hpx hcidx --header -d , --depth 5 --ratio 0.10 -o hipmain.sorted.hci.fits hipmain.sorted.csv
+  diff <(tail -n +2 hipmain.sorted.csv) \
+       <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
+  [[ "$?" != "0" ]] && { echo "Diff on qhcid impl/expl explicit is not empty!"; exit 1; }
+}
+test_hcidx_qhicid_implexpl
 
 
-test_hcidx_qhicid_explicit(){
+test_hcidx_qhicid_explexpl(){
+  echo "* test_hcidx_qhicid_explexpl..."
   hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits --explicit hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx is not empty!"; exit 1; }
+  [[ "$?" != "0" ]] && { echo "Diff on qhcidx expl/expl is not empty!"; exit 1; }
 }
-test_hcidx_qhicid
+test_hcidx_qhicid_explexpl
+
+test_hcidx_qhicid_explimpl(){
+  echo "* test_hcidx_qhicid_explimpl..."
+  hpx hcidx --header -d , --depth 5 --ratio 10.0 -o hipmain.sorted.hci.fits --explicit hipmain.sorted.csv
+  diff <(tail -n +2 hipmain.sorted.csv) \
+       <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
+  [[ "$?" != "0" ]] && { echo "Diff on qhcidx expl/impl is not empty!"; exit 1; }
+}
+test_hcidx_qhicid_explimpl
+
+
+#hpx hcidx --header -d , --depth 5                         -o hipmain.sorted.ii.hci.fits hipmain.sorted.csv
+#hpx hcidx --header -d , --depth 5            --ratio 0.10 -o hipmain.sorted.ie.hci.fits hipmain.sorted.csv
+#hpx hcidx --header -d , --depth 5 --explicit              -o hipmain.sorted.ee.hci.fits hipmain.sorted.csv
+#hpx hcidx --header -d , --depth 5 --explicit --ratio 10.0 -o hipmain.sorted.ei.hci.fits hipmain.sorted.csv
+
+# fitstable head hipmain.sorted.ii.hci.fits
+# fitstable head hipmain.sorted.ie.hci.fits
+# fitstable head hipmain.sorted.ee.hci.fits
+# fitstable head hipmain.sorted.ei.hci.fits
+
+#hpx qhcidx hipmain.sorted.ii.hci.fits cell 0 4 | hpx nested hash 0 csv --header -d , | uniq
+#hpx qhcidx hipmain.sorted.ie.hci.fits cell 0 4 | hpx nested hash 0 csv --header -d , | uniq
+#hpx qhcidx hipmain.sorted.ee.hci.fits cell 0 4 | hpx nested hash 0 csv --header -d , | uniq
+#hpx qhcidx hipmain.sorted.ei.hci.fits cell 0 4 | hpx nested hash 0 csv --header -d , | uniq
+ 
+
 
 ######################
 # Test 'hpx map ...' #

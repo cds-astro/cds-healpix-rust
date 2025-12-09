@@ -7,11 +7,10 @@ use std::{
 
 use clap::Args;
 
-use hpxlib::nested::sort::cindex::OwnedCIndexExplicit;
 use hpxlib::nested::{
   get, n_hash,
   sort::{
-    cindex::{HCIndex, HCIndexShape, OwnedCIndex},
+    cindex::{HCIndex, HCIndexShape, OwnedCIndex, OwnedCIndexExplicit},
     get_hpx,
   },
 };
@@ -95,14 +94,16 @@ impl HealpixCumulIndex {
           );
         }
         // Push only the starting byte of the first row having a given cell number.
-        entries.push((icell, n_bytes_read as u64));
+        if icell > prev_icell {
+          entries.push((icell, n_bytes_read as u64));
+        }
         n_bytes_read += n_bytes;
         irow += 1;
         line.clear();
         n_bytes = reader.read_line(&mut line)?;
         prev_icell = icell;
       }
-      entries.push((prev_icell, n_bytes_read as u64));
+      entries.push((prev_icell + 1, n_bytes_read as u64));
       // Write the cumulative map
       let explicit_index = OwnedCIndexExplicit::new_unchecked(self.depth, entries);
       self.write_index(explicit_index)
@@ -153,7 +154,13 @@ impl HealpixCumulIndex {
     let best_repr = self
       .implicit_over_explicit_ratio
       .map(|ratio| cindex.best_representation(ratio))
-      .unwrap_or(HCIndexShape::Implicit);
+      .unwrap_or_else(|| {
+        if self.explicit {
+          HCIndexShape::Explicit
+        } else {
+          HCIndexShape::Implicit
+        }
+      });
     match best_repr {
       HCIndexShape::Implicit => cindex.to_fits_implicit(
         out_fits_write,

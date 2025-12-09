@@ -1,6 +1,7 @@
 use std::{
   array::TryFromSliceError,
   fmt::{Debug, Display},
+  ops::AddAssign,
 };
 
 use num_traits::{AsPrimitive, FromBytes, PrimInt, ToBytes};
@@ -14,7 +15,7 @@ pub mod skymap;
 /// `HHash` stands for HEALPix Hash.
 pub trait HHash:
 // 'static mean that Idx does not contains any reference
-'static + PrimInt + AsPrimitive<usize> + Send + Sync + Debug + Display + Clone + ToBytes
+'static + PrimInt + AsPrimitive<usize> + AddAssign + Send + Sync + Debug + Display + Clone + ToBytes
 + FromBytes<Bytes: for<'a> TryFrom<&'a [u8], Error=TryFromSliceError>>
 {
   /// FITS size, in bytes, of a value.

@@ -14,6 +14,11 @@
 // * e.g. pour 2.10^9 sources, si on fait prend n = 2_000 lignes, ca fait 1_000_000 ligne d'index,
 //   soit moins de 8 MB (idx29 sur u64).
 
+use chrono::{DateTime, SecondsFormat, Utc};
+use log::debug;
+use memmap2::{Mmap, MmapOptions};
+use num_traits::{FromBytes, ToBytes, Zero};
+use std::io::{Seek, SeekFrom};
 use std::{
   array::TryFromSliceError,
   cmp::Ordering,
@@ -30,11 +35,6 @@ use std::{
   str,
   time::SystemTime,
 };
-
-use chrono::{DateTime, SecondsFormat, Utc};
-use log::debug;
-use memmap2::{Mmap, MmapOptions};
-use num_traits::{FromBytes, ToBytes, Zero};
 
 use crate::{
   depth_from_n_hash_unsafe, n_hash,
@@ -281,7 +281,7 @@ pub trait HCIndex {
   }
 
   #[allow(clippy::too_many_arguments)]
-  fn to_fits<W: Write>(
+  fn to_fits<W: Write + Seek>(
     &self,
     writer: W,
     shape: HCIndexShape,
@@ -443,8 +443,9 @@ pub trait HCIndex {
   /// * `IDXF_LMD`, optional: last modification date of the indexed file if the HCI is a file row index.
   /// * `IDXC_LON`, optional: name, in the indexed file, of the column containing the longitudes used to compute HEALPix index.
   /// * `IDXC_LAT`, optional: name, in the indexed file, of the column containing the latitudes used to compute HEALPix index.
+  // Seek needed to overwrite NAXIS2
   #[allow(clippy::too_many_arguments)]
-  fn to_fits_explicit<W: Write>(
+  fn to_fits_explicit<W: Write + Seek>(
     &self,
     mut writer: W,
     indexed_file_name: Option<&str>,
@@ -454,25 +455,22 @@ pub trait HCIndex {
     indexed_colname_lon: Option<&str>,
     indexed_colname_lat: Option<&str>,
   ) -> Result<(), FitsError> {
+    let start_position = writer.stream_position()?;
     let use_u32 = self.depth() <= 13;
     let (size_of_h, h_type) = if use_u32 {
       (size_of::<u32>(), u32::FITS_DATATYPE)
     } else {
       (size_of::<u64>(), u64::FITS_DATATYPE)
     };
-    let n_values = n_hash(self.depth()) + 1;
+    let n_bytes_per_row = size_of_h + size_of::<Self::V>();
     // Perpare the header
     let mut header_block = [b' '; 2880];
     let mut it = header_block.chunks_mut(80);
     it.next().unwrap()[0..30].copy_from_slice(b"SIMPLE  =                    T"); // Conform to FITS standard
     it.next().unwrap()[0..30].copy_from_slice(b"BITPIX  =                    8"); // We work on bytes, i.e. 8 bits
     it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                    2"); // Number of data axis
-    write_uint_mandatory_keyword_record(
-      it.next().unwrap(),
-      b"NAXIS1  ",
-      (size_of_h + size_of::<Self::V>()) as u64,
-    ); // Len of data axis 1 = number of bytes in dataype
-    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS2  ", n_values); // Len of data axis 2 = n_hash(depth)+1
+    write_uint_mandatory_keyword_record(it.next().unwrap(), b"NAXIS1  ", n_bytes_per_row as u64); // Len of data axis 1 = number of bytes in dataype
+    it.next().unwrap()[0..30].copy_from_slice(b"NAXIS   =                  XXX"); //  Len of data axis 2 , TO BE OVERWRITTEN
     it.next().unwrap()[0..30].copy_from_slice(b"EXTEND  =                    F"); // No extension allowed
     it.next().unwrap()[0..31].copy_from_slice(b"PRODTYPE= 'HEALPIX CUMUL INDEX'"); // Product type
     it.next().unwrap()[0..20].copy_from_slice(b"ORDERING= 'NESTED  '");
@@ -495,9 +493,23 @@ pub trait HCIndex {
     writer.write_all(&header_block[..]).map_err(FitsError::Io)?;
     // Write the data part
     self
-      .write_all_values_implicit(&mut writer)
+      .write_all_values_explicit(&mut writer)
       .map_err(FitsError::Io)
-      .and_then(|n_bytes_written| write_final_padding(writer, n_bytes_written))
+      .and_then(|n_bytes_written| {
+        write_final_padding(&mut writer, n_bytes_written).and_then(|()| {
+          // Overwrite NAXIS2
+          let mut buff = [b' '; 80];
+          write_uint_mandatory_keyword_record(
+            &mut buff,
+            b"NAXIS2  ",
+            (n_bytes_written / n_bytes_per_row) as u64,
+          );
+          writer
+            .seek(SeekFrom::Start(start_position + 80 * 4))
+            .and_then(|_| writer.write_all(&buff))
+            .map_err(FitsError::Io)
+        })
+      })
   }
 }
 
@@ -774,24 +786,28 @@ fn write_all_values_implicit_from_explicit<H: HHash, T: HCIndexValue, I, W: Writ
 where
   I: Iterator<Item = (H, T)>,
 {
-  let mut curr_h = 0;
+  // curr_h correspond to h of the no-yet-written value
+  let mut curr_h = H::zero();
   let mut curr_v = T::zero();
-  let end = n_hash(depth);
+  let end = H::from_u64(n_hash(depth) + 1);
   for (h, v) in it {
-    let to = HHash::to_u64(&h);
+    assert!(curr_h <= h);
     // Fill missing values by current value.
-    while curr_h < to {
+    while curr_h < h {
       writer.write_all(curr_v.to_le_bytes().as_ref())?;
+      curr_h += H::one();
     }
     // Write current value
     writer.write_all(v.to_le_bytes().as_ref())?;
+    curr_h = h + H::one();
     curr_v = v;
-    curr_h = to;
   }
   while curr_h < end {
+    // (end + 1) elems in Implicit
     writer.write_all(curr_v.to_le_bytes().as_ref())?;
+    curr_h += H::one();
   }
-  Ok(end as usize * size_of::<T>())
+  Ok(end.as_() * size_of::<T>())
 }
 
 impl<'a, T: HCIndexValue> BorrowedCIndex<'a, T> {
@@ -844,7 +860,6 @@ impl FITSCIndex {
           check_keyword_and_parse_uint_val::<u64>(raw_cards_it.next().unwrap(), b"NAXIS2  ")
             .map(move |n_rows| (n_bytes, n_rows))
         })?;
-    let depth = depth_from_n_hash_unsafe(n_rows - 1);
     // Parse other keywords
     let mut end_found = false;
     let mut prodtype_found = false;
@@ -928,19 +943,24 @@ impl FITSCIndex {
         "'END' keyword not found in the first 36 primary header cards.",
       )));
     }
-    if !(prodtype_found & ordering_found & indxschm_found & indxcov_found & dtendian_found) {
+    if !(prodtype_found & ordering_found & indxschm_found & dtendian_found) {
       return Err(FitsError::new_custom(String::from(
         "One of the HEALPIX CUMULATIVE INDEX mandatory cards is missing on the FITS header!",
       )));
     }
-    match hpxoder {
+    let depth = match hpxoder {
       Some(order) => {
-        if order == depth {
-          Ok(())
+        if !is_ndxschm_explicit {
+          let depth = depth_from_n_hash_unsafe(n_rows - 1);
+          if order == depth {
+            Ok(order)
+          } else {
+            Err(FitsError::new_custom(String::from(
+              "Number of rows does not match the value of HPXORDER",
+            )))
+          }
         } else {
-          Err(FitsError::new_custom(String::from(
-            "Number of rows does not match the value of HPXORDER",
-          )))
+          Ok(order)
         }
       }
       None => Err(FitsError::new_custom(String::from(
@@ -1211,7 +1231,9 @@ impl<T: HCIndexValue> FitsMMappedCIndexImplicit<T> {
 impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T> {
   type HCIndexType = BorrowedCIndex<'a, T>;
 
-  fn depth(&self) -> u8 { self.depth }
+  fn depth(&self) -> u8 {
+    self.depth
+  }
 
   fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
@@ -1251,6 +1273,12 @@ impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T>
 
 // EXPLICIT INDEX
 
+/// The structure is made to contain an explicit cumulative index.
+/// The main usage is the indexation of an HEALPix sorted file of rows.
+/// The key is the HEALPix index of a (group of) row(s), and the value is the
+/// starting byte of the first row in the HEALPix cell.
+/// A last element (last HEALpix index + 1) contains the index of last byte of the last row (+1).
+///
 // P.S.: to index a HPX sorted CSV file, the best thing to do would be to return an
 // iterator on (hpx, starting_byte) and to create a `cds-bstree-file-readonly-rust` structure
 // (from an already sorted iterator).
@@ -1433,10 +1461,6 @@ impl<H: HHash, T: HCIndexValue> FitsMMappedCIndexExplicit<H, T> {
     depth: u8,
     mmap: Mmap,
   ) -> Self {
-    assert_eq!(
-      (n_hash(depth) + 1) * size_of::<T>() as u64,
-      mmap.len() as u64
-    );
     Self {
       fits_creation_date,
       indexed_file_name,
@@ -1456,7 +1480,9 @@ impl<H: HHash, T: HCIndexValue> FitsMMappedCIndexExplicit<H, T> {
 impl<'a, H: HHash, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexExplicit<H, T> {
   type HCIndexType = BorrowedCIndexExplicit<'a, H, T>;
 
-  fn depth(&self) -> u8 { self.depth }
+  fn depth(&self) -> u8 {
+    self.depth
+  }
 
   fn get_fits_creation_date(&self) -> Option<&SystemTime> {
     self.fits_creation_date.as_ref()
