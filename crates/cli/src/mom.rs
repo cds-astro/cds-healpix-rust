@@ -63,10 +63,10 @@ pub struct Count {
   #[clap(value_parser = clap::value_parser!(u8).range(0..=29))]
   depth: u8,
   /// Completeness of the chi2 distribution of 3 degrees of freedom.
-  #[clap(default_value_t = 16.266)]
+  #[clap(short = 't', long, default_value_t = 16.266)]
   threshold: f64,
   /// Depth threshold
-  #[clap(short = 't', long, value_name = "DEPTH_MIN")]
+  #[clap(short = 'd', long, value_name = "DEPTH_MIN")]
   depth_threshold: Option<u8>,
   /// Count MOM destination FITS file.
   output: PathBuf,
