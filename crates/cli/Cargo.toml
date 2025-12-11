@@ -25,6 +25,7 @@ mapproj = { workspace = true }
 memmap2 = { workspace = true }
 rayon = { workspace = true }
 thiserror = { workspace = true }
+colorous = { workspace = true }
 # Specific to hpx-cli
 clap = { version = "4.5", features = ["derive"] }
 env_logger = "0.11"

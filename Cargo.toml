@@ -41,6 +41,8 @@ rayon = "1.10"
 mapproj = "0.4"
 memmap2 = "0.9"
 thiserror = "2.0"
+colorous = "1.0"
+
 
 [dependencies]
 log = { workspace = true }
@@ -48,6 +50,8 @@ mapproj = { workspace = true }  # Projection to wiew skymaps/MOMs
 memmap2 = { workspace = true }  # Skymaps/MOMs
 rayon = { workspace = true }    # Parallelism (sort)
 thiserror = { workspace = true } # Error handling
+colorous = { workspace = true }  # Color map for PNG skymap/MOM
+
 katex-doc = "0.1.0"
 # MOC specific
 base64 = "0.22"     # Added for Compressed MOC
@@ -55,7 +59,6 @@ num = "0.4"         # Added for MOC
 num-traits = "0.2"  # Added for MOC
 # Skymaps
 byteorder = "1.5"
-colorous = "1.0"
 png = "0.17"
 # Compression/decompression
 flate2 = "1.0"

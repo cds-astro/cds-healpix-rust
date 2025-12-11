@@ -15,7 +15,7 @@ use hpxlib::nested::{
     sortedcoo2sortedhash::SortedHashIt, sortedhash2hashcount::SortedHash2HashCountIncludingZeroIt,
   },
   map::{
-    img::{ColorMapFunctionType, PosConversion, Val},
+    img::{PosConversion, Val},
     mom::{
       impls::{bslice::FITSMom, zvec::MomVecImpl},
       new_chi2_count_merger_no_depth_threshold, new_chi2_count_merger_with_depth_threshold,
@@ -30,7 +30,7 @@ use crate::{
     hash::{HashItOperation, HashListInput},
     pos::{PosItOperation, PosListInput},
   },
-  map::ColorMapFunction,
+  map::{ColorMap, ColorMapFunction},
   view::Mode,
 };
 
@@ -371,6 +371,13 @@ pub struct View {
   #[clap(short = 's', long = "silent")]
   hide: bool,
 
+  /// Show the MAP in equatorial instead of Galactic
+  #[clap(short = 'e', long = "equatorial")]
+  equatorial: bool,
+
+  /// Color map
+  #[clap(long, value_enum, default_value_t = ColorMap::Turbo)]
+  color_map: ColorMap,
   /// Color map function
   #[clap(short, long, value_enum, default_value_t = ColorMapFunction::LinearLog)]
   color_map_fn: ColorMapFunction,
@@ -386,18 +393,26 @@ impl View {
       mode: Mode,
       output: PathBuf,
       hide: bool,
+      equatorial: bool,
+      color_map: ColorMap,
       color_map_fn: ColorMapFunction,
     ) -> Result<(), Box<dyn Error>> {
-      let color_map_fn_type = color_map_fn.get();
+      let pos_conv = if equatorial {
+        None
+      } else {
+        Some(PosConversion::EqMap2GalImg)
+      };
+      let color_map = Some(color_map.get());
+      let color_map_fn_type = Some(color_map_fn.get());
       match mode {
         Mode::AllSky { y_size } => mom.to_mom_png_file::<_, _>(
           (y_size << 1, y_size),
           Some(Mol::new()),
           None,
           None,
-          Some(PosConversion::EqMap2GalImg),
-          None,
-          Some(color_map_fn_type),
+          pos_conv,
+          color_map,
+          color_map_fn_type,
           output,
           !hide,
         ),
@@ -426,9 +441,9 @@ impl View {
                 Some(Car::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -439,9 +454,9 @@ impl View {
                 Some(Cea::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(ColorMapFunctionType::LinearLog),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -452,9 +467,9 @@ impl View {
                 Some(Cyp::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -465,9 +480,9 @@ impl View {
                 Some(Mer::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -479,9 +494,9 @@ impl View {
                 Some(Hpx::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -493,9 +508,9 @@ impl View {
                 Some(Ait::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -506,9 +521,9 @@ impl View {
                 Some(Mol::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -519,9 +534,9 @@ impl View {
                 Some(Par::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -532,9 +547,9 @@ impl View {
                 Some(Sfl::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -546,9 +561,9 @@ impl View {
                 Some(Air::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -559,9 +574,9 @@ impl View {
                 Some(Arc::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -572,9 +587,9 @@ impl View {
                 Some(Feye::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -585,9 +600,9 @@ impl View {
                 Some(Sin::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -598,9 +613,9 @@ impl View {
                 Some(Stg::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -611,9 +626,9 @@ impl View {
                 Some(Tan::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -624,9 +639,9 @@ impl View {
                 Some(Zea::new()),
                 center,
                 proj_bounds,
-                Some(PosConversion::EqMap2GalImg),
-                None,
-                Some(color_map_fn_type),
+                pos_conv,
+                color_map,
+                color_map_fn_type,
                 output,
                 !hide,
               )
@@ -643,6 +658,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
       FITSMom::U32F32(fits_mom) => to_png_file(
@@ -650,6 +667,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
       FITSMom::U32F64(fits_mom) => to_png_file(
@@ -657,6 +676,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
       FITSMom::U64U32(fits_mom) => to_png_file(
@@ -664,6 +685,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
       FITSMom::U64F32(fits_mom) => to_png_file(
@@ -671,6 +694,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
       FITSMom::U64F64(fits_mom) => to_png_file(
@@ -678,6 +703,8 @@ impl View {
         self.mode,
         self.output,
         self.hide,
+        self.equatorial,
+        self.color_map,
         self.color_map_fn,
       ),
     }

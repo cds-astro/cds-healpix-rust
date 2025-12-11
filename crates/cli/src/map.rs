@@ -1,6 +1,7 @@
-use std::{error::Error, path::PathBuf, marker::PhantomData};
+use std::{error::Error, marker::PhantomData, path::PathBuf};
 
 use clap::{Args, Subcommand, ValueEnum};
+use colorous;
 use log::{error, warn};
 
 use mapproj::{
@@ -15,6 +16,7 @@ use super::{
   input::pos::{PosCsvConsumed, PosItOperation, PosListInput},
   view::Mode,
 };
+use hpxlib::nested::map::img::Gradient;
 use hpxlib::nested::map::{
   img::{ColorMapFunctionType, PosConversion},
   mom::WritableMom,
@@ -415,6 +417,38 @@ impl Convert {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum ColorMap {
+  Turbo,
+  Viridis,
+  Inferno,
+  Magma,
+  Plasma,
+  Cividis,
+  Warm,
+  Cool,
+  CubeHelix,
+  YellowGreenBlue,
+  YellowOrangeRed,
+}
+impl ColorMap {
+  pub fn get(&self) -> Gradient {
+    match self {
+      Self::Turbo => colorous::TURBO,
+      Self::Viridis => colorous::VIRIDIS,
+      Self::Inferno => colorous::INFERNO,
+      Self::Magma => colorous::MAGMA,
+      Self::Plasma => colorous::PLASMA,
+      Self::Cividis => colorous::CIVIDIS,
+      Self::Warm => colorous::WARM,
+      Self::Cool => colorous::COOL,
+      Self::CubeHelix => colorous::CUBEHELIX,
+      Self::YellowGreenBlue => colorous::YELLOW_GREEN_BLUE,
+      Self::YellowOrangeRed => colorous::YELLOW_ORANGE_RED,
+    }
+  }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum ColorMapFunction {
   Linear,
   LinearLog,
@@ -456,6 +490,13 @@ pub struct View {
   #[clap(short = 's', long = "silent")]
   hide: bool,
 
+  /// Show the MAP in equatorial instead of Galactic
+  #[clap(short = 'e', long = "equatorial")]
+  equatorial: bool,
+
+  /// Color map
+  #[clap(long, value_enum, default_value_t = ColorMap::Turbo)]
+  color_map: ColorMap,
   /// Color map function
   #[clap(short, long, value_enum, default_value_t = ColorMapFunction::LinearLog)]
   color_map_fn: ColorMapFunction,
@@ -467,16 +508,22 @@ pub struct View {
 impl View {
   pub fn exec(self) -> Result<(), Box<dyn Error>> {
     let skymap = SkyMapEnum::from_fits_file(self.input)?;
-    let color_map_fn_type = self.color_map_fn.get();
+    let pos_conv = if self.equatorial {
+      None
+    } else {
+      Some(PosConversion::EqMap2GalImg)
+    };
+    let color_map = Some(self.color_map.get());
+    let color_map_fn_type = Some(self.color_map_fn.get());
     match self.mode {
       Mode::AllSky { y_size } => skymap.to_skymap_png_file::<_, _>(
         (y_size << 1, y_size),
         Some(Mol::new()),
         None,
         None,
-        Some(PosConversion::EqMap2GalImg),
-        None,
-        Some(color_map_fn_type),
+        pos_conv,
+        color_map,
+        color_map_fn_type,
         self.output,
         !self.hide,
       ),
@@ -505,9 +552,9 @@ impl View {
               Some(Car::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -518,9 +565,9 @@ impl View {
               Some(Cea::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -531,9 +578,9 @@ impl View {
               Some(Cyp::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -544,9 +591,9 @@ impl View {
               Some(Mer::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -558,9 +605,9 @@ impl View {
               Some(Hpx::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -572,9 +619,9 @@ impl View {
               Some(Ait::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -585,9 +632,9 @@ impl View {
               Some(Mol::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -598,9 +645,9 @@ impl View {
               Some(Par::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -611,9 +658,9 @@ impl View {
               Some(Sfl::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -625,9 +672,9 @@ impl View {
               Some(Air::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -638,9 +685,9 @@ impl View {
               Some(Arc::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -651,9 +698,9 @@ impl View {
               Some(Feye::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -664,9 +711,9 @@ impl View {
               Some(Sin::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -677,9 +724,9 @@ impl View {
               Some(Stg::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -690,9 +737,9 @@ impl View {
               Some(Tan::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
@@ -703,9 +750,9 @@ impl View {
               Some(Zea::new()),
               center,
               proj_bounds,
-              Some(PosConversion::EqMap2GalImg),
-              None,
-              Some(color_map_fn_type),
+              pos_conv,
+              color_map,
+              color_map_fn_type,
               self.output,
               !self.hide,
             )
