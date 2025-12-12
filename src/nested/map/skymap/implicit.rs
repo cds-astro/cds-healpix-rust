@@ -20,7 +20,7 @@ use rayon::{
   ThreadPool,
 };
 
-use super::{SkyMap, SkyMapValue};
+use super::{DegradableBySumming, SkyMap, SkyMapValue};
 use crate::{
   n_hash,
   nested::{
@@ -130,6 +130,34 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ImplicitSkyMapArray<H, V>
     Box::into_iter(self.values)
       .enumerate()
       .map(move |(h, v)| (H::from_usize(h), v))
+  }
+}
+
+impl<H: HHash, V: SkyMapValue + Send + Sync + Add> DegradableBySumming
+  for ImplicitSkyMapArray<H, V>
+{
+  type Degraded = Self;
+
+  fn degrade_sum(self, new_depth: u8) -> Self::Degraded {
+    if new_depth >= self.depth {
+      self
+    } else {
+      let twice_dd = (self.depth - new_depth) << 1;
+      let values = self
+        .values
+        .chunks_exact(1 << twice_dd)
+        .map(|chunk| {
+          chunk
+            .iter()
+            .cloned()
+            .reduce(|acc, e| acc + e)
+            .unwrap_or(V::zero())
+        })
+        .collect::<Vec<V>>()
+        .into_boxed_slice();
+      assert_eq!(values.len(), n_hash(new_depth) as usize);
+      Self::new(new_depth, values)
+    }
   }
 }
 

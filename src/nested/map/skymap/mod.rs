@@ -178,6 +178,13 @@ pub trait SkyMap<'a> {
   fn owned_entries(self) -> Self::OwnedEntriesIt;
 }
 
+pub trait DegradableBySumming {
+  /// Type obtained degrading the object.
+  type Degraded: Sized;
+
+  fn degrade_sum(self, new_depth: u8) -> Self::Degraded;
+}
+
 /// Provide NULL value for all types of SkyMaps
 /// # TIP
 /// If you expect a given SkyMap type, use:
@@ -570,6 +577,32 @@ impl SkyMapEnum {
       _ => Err(FitsError::Custom {
         msg: format!("Skymap type not supported or not the same in 'add' operation"),
       }),
+    }
+  }
+
+  pub fn degraded_sum(self, depth: u8) -> Self {
+    match self {
+      // Implicit
+      Self::ImplicitU64U8(s) => Self::ImplicitU64U8(s.degrade_sum(depth)),
+      Self::ImplicitU64I16(s) => Self::ImplicitU64I16(s.degrade_sum(depth)),
+      Self::ImplicitU64I32(s) => Self::ImplicitU64I32(s.degrade_sum(depth)),
+      Self::ImplicitU64I64(s) => Self::ImplicitU64I64(s.degrade_sum(depth)),
+      Self::ImplicitU64F32(s) => Self::ImplicitU64F32(s.degrade_sum(depth)),
+      Self::ImplicitU64F64(s) => Self::ImplicitU64F64(s.degrade_sum(depth)),
+      // Explicit U32
+      Self::ExplicitU32U8(s) => Self::ExplicitU32U8(s.degrade_sum(depth)),
+      Self::ExplicitU32I16(s) => Self::ExplicitU32I16(s.degrade_sum(depth)),
+      Self::ExplicitU32I32(s) => Self::ExplicitU32I32(s.degrade_sum(depth)),
+      Self::ExplicitU32I64(s) => Self::ExplicitU32I64(s.degrade_sum(depth)),
+      Self::ExplicitU32F32(s) => Self::ExplicitU32F32(s.degrade_sum(depth)),
+      Self::ExplicitU32F64(s) => Self::ExplicitU32F64(s.degrade_sum(depth)),
+      // Explicit U64
+      Self::ExplicitU64U8(s) => Self::ExplicitU64U8(s.degrade_sum(depth)),
+      Self::ExplicitU64I16(s) => Self::ExplicitU64I16(s.degrade_sum(depth)),
+      Self::ExplicitU64I32(s) => Self::ExplicitU64I32(s.degrade_sum(depth)),
+      Self::ExplicitU64I64(s) => Self::ExplicitU64I64(s.degrade_sum(depth)),
+      Self::ExplicitU64F32(s) => Self::ExplicitU64F32(s.degrade_sum(depth)),
+      Self::ExplicitU64F64(s) => Self::ExplicitU64F64(s.degrade_sum(depth)),
     }
   }
 

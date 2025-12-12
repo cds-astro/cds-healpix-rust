@@ -18,6 +18,7 @@ use rayon::{
   ThreadPool,
 };
 
+use crate::nested::map::skymap::DegradableBySumming;
 use crate::{
   n_hash,
   nested::{
@@ -168,6 +169,38 @@ impl<'a, H: HHash, V: SkyMapValue + 'a> SkyMap<'a> for ExplicitSkyMapBTree<H, V>
 
   fn owned_entries(self) -> Self::OwnedEntriesIt {
     BTreeMap::into_iter(self.entries)
+  }
+}
+
+impl<H: HHash, V: SkyMapValue + Send + Sync + AddAssign> DegradableBySumming
+  for ExplicitSkyMapBTree<H, V>
+{
+  type Degraded = Self;
+
+  fn degrade_sum(self, new_depth: u8) -> Self::Degraded {
+    if new_depth >= self.depth {
+      self
+    } else {
+      let twice_dd = ((self.depth - new_depth) << 1) as usize;
+      let mut entries = BTreeMap::new();
+      let mut it = self.owned_entries();
+      if let Some((k, v)) = it.next() {
+        let mut prev_k = k << twice_dd;
+        let mut prev_v = v;
+        for (k, v) in it {
+          let curr_k = k << twice_dd;
+          if curr_k == prev_k {
+            prev_v += v;
+          } else {
+            entries.insert(prev_k, prev_v);
+            prev_k = curr_k;
+            prev_v = v;
+          }
+        }
+        entries.insert(prev_k, prev_v);
+      }
+      Self::new(new_depth, entries)
+    }
   }
 }
 
