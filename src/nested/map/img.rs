@@ -1,5 +1,6 @@
 use std::{
   cmp::Ordering,
+  collections::HashSet,
   error::Error,
   f64::consts::PI,
   fs::File,
@@ -9,7 +10,6 @@ use std::{
 };
 
 pub use colorous::Gradient;
-
 use mapproj::{
   img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, pseudocyl::mol::Mol,
   CanonicalProjection, CenteredProjection, ImgXY, LonLat,
@@ -71,11 +71,15 @@ impl PosConversion {
 
 pub trait Val: PartialOrd + Copy {
   fn to_f64(&self) -> f64;
+  fn to_bits_repr(&self) -> u64;
 }
 
 impl Val for u8 {
   fn to_f64(&self) -> f64 {
     *self as f64
+  }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
   }
 }
 
@@ -83,11 +87,17 @@ impl Val for u16 {
   fn to_f64(&self) -> f64 {
     *self as f64
   }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
+  }
 }
 
 impl Val for u32 {
   fn to_f64(&self) -> f64 {
     *self as f64
+  }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
   }
 }
 
@@ -95,11 +105,17 @@ impl Val for u64 {
   fn to_f64(&self) -> f64 {
     *self as f64
   }
+  fn to_bits_repr(&self) -> u64 {
+    *self
+  }
 }
 
 impl Val for i8 {
   fn to_f64(&self) -> f64 {
     *self as f64
+  }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
   }
 }
 
@@ -107,11 +123,17 @@ impl Val for i16 {
   fn to_f64(&self) -> f64 {
     *self as f64
   }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
+  }
 }
 
 impl Val for i32 {
   fn to_f64(&self) -> f64 {
     *self as f64
+  }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
   }
 }
 
@@ -119,17 +141,26 @@ impl Val for i64 {
   fn to_f64(&self) -> f64 {
     *self as f64
   }
+  fn to_bits_repr(&self) -> u64 {
+    *self as u64
+  }
 }
 
 impl Val for f32 {
   fn to_f64(&self) -> f64 {
     *self as f64
   }
+  fn to_bits_repr(&self) -> u64 {
+    self.to_bits() as u64
+  }
 }
 
 impl Val for f64 {
   fn to_f64(&self) -> f64 {
     *self
+  }
+  fn to_bits_repr(&self) -> u64 {
+    self.to_bits()
   }
 }
 
@@ -335,8 +366,6 @@ impl ColorMapFunction {
   }
 }
 
-// MOM: passer une liste de (NUNIQ, Val) ?
-
 /// Returns an RGBA array (each pixel is made of 4 successive u8: RGBA) using the Mollweide projection.
 ///
 /// # Params
@@ -405,34 +434,47 @@ where
   S: SkyMap<'a>,
   S::ValueType: Val,
 {
+  const N_VAL_MAX: usize = 25; // 255 distinct color values
   let depth = skymap.depth();
 
-  // Unwrap is ok here since we already tested 'n_cell' which must be > 0.
-  let mut iter = skymap.values();
-  let first_value = iter.next().unwrap();
-  let (min, max) = iter.fold((first_value, first_value), |(min, max), val| {
-    (
-      std::cmp::min_by(val, min, |a, b| {
-        a.partial_cmp(b).unwrap_or_else(move || {
-          if a != a {
-            Ordering::Greater
-          } else {
-            Ordering::Less
-          }
-        })
-      }),
-      std::cmp::max_by(val, max, |a, b| {
-        a.partial_cmp(b).unwrap_or_else(move || {
-          if a != a {
-            Ordering::Greater
-          } else {
-            Ordering::Less
-          }
-        })
-      }),
-    )
-  });
-  let (min, max) = (min.to_f64(), max.to_f64());
+  // We remove from value 0s and NaNs
+  let mut iter = skymap.values().filter(|v| v == v && v.to_f64() != 0.0);
+  let (min, max) = if let Some(first_value) = iter.next() {
+    let mut value_set = HashSet::with_capacity(N_VAL_MAX);
+    value_set.insert(first_value.to_bits_repr());
+    let (min, max, value_set) = iter.fold(
+      (first_value, first_value, value_set),
+      |(min, max, mut value_set), val| {
+        if value_set.len() < N_VAL_MAX {
+          value_set.insert(val.to_bits_repr());
+        }
+        // unwrap() are ok since we removed NaN above
+        (
+          std::cmp::min_by(val, min, |a, b| a.partial_cmp(b).unwrap()),
+          std::cmp::max_by(val, max, |a, b| a.partial_cmp(b).unwrap()),
+          value_set,
+        )
+      },
+    );
+    let (mut min, max) = (min.to_f64(), max.to_f64());
+    // We do this so that the min value does not lead to the 0.0 value in the color map,
+    // if we hace less than N_VAL_MAX distinct values.
+    if min == max {
+      debug_assert_eq!(value_set.len(), 1);
+      min -= 1.0;
+    } else if (1..=N_VAL_MAX).contains(&value_set.len()) {
+      if min > 0.0 {
+        min = 0.0_f64.max(min - (max - min) / value_set.len() as f64)
+      } else {
+        min -= (max - min) / value_set.len() as f64;
+      }
+    }
+    (min, max)
+  } else {
+    // To avoid / by 0
+    (0.0, 1.0)
+  };
+
   let color_map_func = ColorMapFunction::new_from(color_map_func_type, min, max);
 
   let (size_x, size_y) = img_size;
@@ -488,9 +530,10 @@ where
     }
   }
   // But, in case of sparse map with cells smaller than img pixels
+  let color0 = color_map.eval_continuous(0.0);
   for (idx, val) in skymap.entries().filter_map(|(idx, val)| {
     let val = val.to_f64();
-    if val > 0.0 {
+    if val == val && val != 0.0 {
       Some((idx.to_u64(), val))
     } else {
       None
@@ -502,13 +545,15 @@ where
       let ix = xy.x() as u16;
       let iy = xy.y() as u16;
       if ix < img_size.0 && iy < img_size.1 {
-        let from = (xy.y() as usize * size_x as usize + ix as usize) << 2; // <<2 <=> *4
-        if v[from] == 0 {
+        // <<2 <=> *4
+        let from = (xy.y() as usize * size_x as usize + ix as usize) << 2;
+        // If pixel was associated to value 0.0
+        if v[from] == color0.r && v[from + 1] == color0.g && v[from + 2] == color0.b {
           let color = color_map.eval_continuous(color_map_func.value(val));
           v[from] = color.r;
           v[from + 1] = color.g;
           v[from + 2] = color.b;
-          v[from + 3] = 128;
+          v[from + 3] = 255;
         }
       }
     }
