@@ -606,6 +606,32 @@ impl SkyMapEnum {
     }
   }
 
+  pub fn depth(&self) -> u8 {
+    match &self {
+      // Implicit
+      Self::ImplicitU64U8(s) => s.depth(),
+      Self::ImplicitU64I16(s) => s.depth(),
+      Self::ImplicitU64I32(s) => s.depth(),
+      Self::ImplicitU64I64(s) => s.depth(),
+      Self::ImplicitU64F32(s) => s.depth(),
+      Self::ImplicitU64F64(s) => s.depth(),
+      // Explicit U32
+      Self::ExplicitU32U8(s) => s.depth(),
+      Self::ExplicitU32I16(s) => s.depth(),
+      Self::ExplicitU32I32(s) => s.depth(),
+      Self::ExplicitU32I64(s) => s.depth(),
+      Self::ExplicitU32F32(s) => s.depth(),
+      Self::ExplicitU32F64(s) => s.depth(),
+      // Explicit U64
+      Self::ExplicitU64U8(s) => s.depth(),
+      Self::ExplicitU64I16(s) => s.depth(),
+      Self::ExplicitU64I32(s) => s.depth(),
+      Self::ExplicitU64I64(s) => s.depth(),
+      Self::ExplicitU64F32(s) => s.depth(),
+      Self::ExplicitU64F64(s) => s.depth(),
+    }
+  }
+
   pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
     match &self {
       // Implicit
