@@ -18,7 +18,6 @@ use rayon::{
   ThreadPool,
 };
 
-use crate::nested::map::skymap::DegradableBySumming;
 use crate::{
   n_hash,
   nested::{
@@ -33,7 +32,7 @@ use crate::{
         implicit::{
           ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray,
         },
-        SkyMap, SkyMapValue,
+        DegradableBySumming, SkyMap, SkyMapValue,
       },
       HHash,
     },

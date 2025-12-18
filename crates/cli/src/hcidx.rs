@@ -94,7 +94,7 @@ impl HealpixCumulIndex {
           );
         }
         // Push only the starting byte of the first row having a given cell number.
-        if icell > prev_icell {
+        if icell > prev_icell || (icell == 0 && entries.is_empty()) {
           entries.push((icell, n_bytes_read as u64));
         }
         n_bytes_read += n_bytes;
