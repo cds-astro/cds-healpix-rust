@@ -459,7 +459,29 @@ impl From<MomVecImpl<u64, f64>> for DensMom {
     Self::U64(value)
   }
 }
+impl From<CountMom> for DensMom {
+  fn from(value: CountMom) -> Self {
+    match value {
+      CountMom::U32(cmom) => MomVecImpl::<u32, f64>::from_counts_to_densities(&cmom).into(),
+      CountMom::U64(cmom) => MomVecImpl::<u64, f64>::from_counts_to_densities(&cmom).into(),
+    }
+  }
+}
 impl DensMom {
+  pub fn unwrap_u32(self) -> MomVecImpl<u32, f64> {
+    match self {
+      Self::U32(cmom) => cmom,
+      Self::U64(_) => panic!("Wrong DensMom type. Expected: u32. Actual: u64."),
+    }
+  }
+
+  pub fn unwrap_u64(self) -> MomVecImpl<u64, f64> {
+    match self {
+      Self::U32(_) => panic!("Wrong DensMom type. Expected: u32. Actual: u64."),
+      Self::U64(cmom) => cmom,
+    }
+  }
+
   /// # Params
   /// * `value_name`: the name of the value so we know the king of quantity this map stores.
   pub fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(

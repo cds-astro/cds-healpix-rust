@@ -17,7 +17,7 @@ mod tests {
       img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
       mom::{
         impls::{bslice::FITSMom, zvec::MomVecImpl},
-        Mom, WritableMom, ZUniqHashT,
+        DensMom, Mom, WritableMom, ZUniqHashT,
       },
       skymap::SkyMapEnum,
     },
@@ -33,15 +33,16 @@ mod tests {
     // Read map
     let count_map = SkyMapEnum::from_fits_file(path)
       .unwrap()
-      .to_count_map_u32()
+      .to_count_map()
       .unwrap();
     // Chi2 merge to MOM
-    let count_mom = count_map.to_chi2_mom(16.266);
+    let count_mom = count_map.to_chi2_mom(16.266, None);
     // Count MOM to Dens MOM
-    let dens_mom = MomVecImpl::<u32, f64>::from_map(count_mom, |z, count| {
+    let dens_mom = DensMom::from(count_mom);
+    /*let dens_mom = MomVecImpl::<u32, f64>::from_map(count_mom, |z, count| {
       let one_over_area = (n_hash(u32::depth_from_zuniq(z)) >> 2) as f64 / PI;
       count as f64 * one_over_area
-    });
+    });*/
     // Write MOM in FITS
     dens_mom
       .to_fits_file("test/resources/skymap/skymap.mom.density.fits", "density")
@@ -66,6 +67,7 @@ mod tests {
 
         let mut n_comp = 0;
         for (i, (e1, e2)) in dens_mom
+          .unwrap_u32()
           .owned_entries()
           .zip_eq(fits_mom.get_mom().owned_entries())
           .enumerate()
