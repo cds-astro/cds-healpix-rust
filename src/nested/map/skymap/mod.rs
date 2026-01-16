@@ -1,6 +1,7 @@
 //! For the Skymap FITS file convention, see [this document](https://healpix.sourceforge.io/data/examples/healpix_fits_specs.pdf).
 
 use std::{
+  collections::BTreeMap,
   error::Error,
   fs::File,
   io::{BufReader, BufWriter, Read, Seek, Write},
@@ -24,9 +25,13 @@ use crate::nested::{
       write::{write_explicit_skymap_fits, write_implicit_skymap_fits},
     },
     img::{to_skymap_png, ColorMapFunctionType, PosConversion},
+    mom::{CountMom, DensMom},
     skymap::{
-      explicit::ExplicitSkyMapBTree,
-      implicit::{ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray},
+      explicit::{ExplicitCountMap, ExplicitDensityMap, ExplicitSkyMapBTree},
+      implicit::{
+        ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitDensityMapU32,
+        ImplicitSkyMapArray,
+      },
     },
     HHash,
   },
@@ -460,7 +465,11 @@ impl SkyMapEnum {
     }
   }
 
-  pub fn to_count_map(self) -> Result<ImplicitCountMap, String> {
+  pub fn to_count_map(self) -> Result<CountMap, String> {
+    self.try_into()
+  }
+
+  /*pub fn to_count_map(self) -> Result<ImplicitCountMap, String> {
     match self {
       Self::ImplicitU64I32(skymap) => Ok(
         ImplicitSkyMapArray::new(skymap.depth, unsafe {
@@ -497,7 +506,7 @@ impl SkyMapEnum {
       ),
       _ => Err(String::from("Unable to convert to count map.")),
     }
-  }
+  }*/
 
   pub fn to_dens_map(self) -> Result<ImplicitDensityMap, String> {
     match self {
@@ -913,6 +922,281 @@ impl SkyMapEnum {
         color_map_func_type,
         writer,
       ),
+    }
+  }
+}
+
+// Buid from a SkyMapEnum
+pub enum CountMap {
+  /// Implicit count map for which the hash is a u32 (the count is a u32)
+  ImplicitU32(ImplicitCountMapU32),
+  /// Implicit count map for which the hash is a u64 (the count is a u32)
+  Implicit(ImplicitCountMap),
+  /// Explicit count map for which the hash is a u32 (the count is a u32)
+  ExplicitU32(ExplicitCountMap<u32>),
+  /// Explicit count map for which the hash is a u64 (the count is a u32)
+  Explicit(ExplicitCountMap<u64>),
+}
+
+impl CountMap {
+  pub fn to_dens_map(&self) -> DensMap {
+    match self {
+      Self::ImplicitU32(cmap) => cmap.to_dens_map().into(),
+      Self::Implicit(cmap) => cmap.to_dens_map().into(),
+      Self::ExplicitU32(cmap) => cmap.to_dens_map().into(),
+      Self::Explicit(cmap) => cmap.to_dens_map().into(),
+    }
+  }
+
+  /// For custom thread pool, use `thread_pool.install(|| to_dens_map_par())`
+  pub fn to_dens_map_par(&self) -> DensMap {
+    match self {
+      Self::ImplicitU32(cmap) => cmap.to_dens_map_par().into(),
+      Self::Implicit(cmap) => cmap.to_dens_map_par().into(),
+      Self::ExplicitU32(cmap) => cmap.to_dens_map_par().into(),
+      Self::Explicit(cmap) => cmap.to_dens_map_par().into(),
+    }
+  }
+
+  pub fn to_upper_count_threshold_mom(self, upper_count_threshold: u32) -> CountMom {
+    match self {
+      Self::ImplicitU32(m) => m.to_upper_count_threshold_mom(upper_count_threshold).into(),
+      Self::Implicit(m) => m.to_upper_count_threshold_mom(upper_count_threshold).into(),
+      Self::ExplicitU32(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_upper_count_threshold_mom(upper_count_threshold)
+        .into(),
+      Self::Explicit(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_upper_count_threshold_mom(upper_count_threshold)
+        .into(),
+    }
+  }
+
+  pub fn to_chi2_mom(self, chi2_of_3dof_threshold: f64, depth_threshold: Option<u8>) -> CountMom {
+    match self {
+      Self::ImplicitU32(m) => m
+        .to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::Implicit(m) => m
+        .to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::ExplicitU32(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::Explicit(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+    }
+  }
+
+  pub fn to_chi2_dens_mom(
+    self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
+  ) -> DensMom {
+    match self {
+      Self::ImplicitU32(m) => m
+        .to_chi2_dens_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::Implicit(m) => m
+        .to_chi2_dens_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::ExplicitU32(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_chi2_dens_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+      Self::Explicit(m) => m
+        .into_implicit_skymap(0_u32)
+        .to_chi2_dens_mom(chi2_of_3dof_threshold, depth_threshold)
+        .into(),
+    }
+  }
+
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    match self {
+      Self::ImplicitU32(m) => m.to_fits(writer),
+      Self::Implicit(m) => m.to_fits(writer),
+      Self::ExplicitU32(m) => m.to_fits(writer),
+      Self::Explicit(m) => m.to_fits(writer),
+    }
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    match self {
+      Self::ImplicitU32(m) => m.to_fits_file(path),
+      Self::Implicit(m) => m.to_fits_file(path),
+      Self::ExplicitU32(m) => m.to_fits_file(path),
+      Self::Explicit(m) => m.to_fits_file(path),
+    }
+  }
+}
+impl From<ImplicitSkyMapArray<u64, u32>> for CountMap {
+  fn from(value: ImplicitSkyMapArray<u64, u32>) -> Self {
+    Self::Implicit(value.into())
+  }
+}
+impl From<ImplicitSkyMapArray<u32, u32>> for CountMap {
+  fn from(value: ImplicitSkyMapArray<u32, u32>) -> Self {
+    Self::ImplicitU32(value.into())
+  }
+}
+impl From<ExplicitSkyMapBTree<u64, u32>> for CountMap {
+  fn from(value: ExplicitSkyMapBTree<u64, u32>) -> Self {
+    Self::Explicit(value.into())
+  }
+}
+impl From<ExplicitSkyMapBTree<u32, u32>> for CountMap {
+  fn from(value: ExplicitSkyMapBTree<u32, u32>) -> Self {
+    Self::ExplicitU32(value.into())
+  }
+}
+impl TryFrom<SkyMapEnum> for CountMap {
+  type Error = String;
+
+  fn try_from(value: SkyMapEnum) -> Result<Self, Self::Error> {
+    match value {
+      // Implicit part
+      SkyMapEnum::ImplicitU64I32(skymap) => {
+        let values = unsafe { std::mem::transmute::<Box<[i32]>, Box<[u32]>>(skymap.values) };
+        Ok(if skymap.depth <= 13 {
+          ImplicitSkyMapArray::<u32, u32>::new(skymap.depth, values).into()
+        } else {
+          ImplicitSkyMapArray::<u64, u32>::new(skymap.depth, values).into()
+        })
+      }
+      SkyMapEnum::ImplicitU64I64(skymap) => {
+        warn!("Transforms i64 skymap into u32 skymap without checking possible overflow!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        Ok(if skymap.depth <= 13 {
+          ImplicitSkyMapArray::<u32, u32>::new(skymap.depth, values).into()
+        } else {
+          ImplicitSkyMapArray::<u64, u32>::new(skymap.depth, values).into()
+        })
+      }
+      /*SkyMapEnum::ImplicitU64F32(skymap) => {
+        warn!("Transforms f32 skymap into u32 skymap assuming integer values!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        if skymap.depth <= 13 {
+          ImplicitSkyMapArray::<u32, u32>::new(skymap.depth, values).into()
+        } else {
+          ImplicitSkyMapArray::<u64, u32>::new(skymap.depth, values).into()
+        }
+      }
+      SkyMapEnum::ImplicitU64F64(skymap) => {
+        warn!("Transforms f64 skymap into u32 skymap assuming integer values!");
+        let values = skymap.values.iter().map(|&v| v as u32).collect();
+        if skymap.depth <= 13 {
+          ImplicitSkyMapArray::<u32, u32>::new(skymap.depth, values).into()
+        } else {
+          ImplicitSkyMapArray::<u64, u32>::new(skymap.depth, values).into()
+        }
+      }*/,
+      // Explicit part
+      SkyMapEnum::ExplicitU64I32(skymap) => {
+        let depth = skymap.depth();
+        let btree = unsafe { std::mem::transmute::<_, BTreeMap<u64, u32>>(skymap.entries) };
+        Ok(ExplicitSkyMapBTree::new(depth, btree).into())
+      }
+      SkyMapEnum::ExplicitU64I64(skymap) => {
+        warn!("Transforms i64 skymap into u32 skymap without checking possible overflow!");
+        let depth = skymap.depth();
+        let btree = skymap
+          .owned_entries()
+          .map(|(k, v)| (k, v as u32))
+          .collect::<BTreeMap<u64, u32>>();
+        Ok(ExplicitSkyMapBTree::new(depth, btree).into())
+      }
+      SkyMapEnum::ExplicitU32I32(skymap) => {
+        let depth = skymap.depth();
+        let btree = unsafe { std::mem::transmute::<_, BTreeMap<u32, u32>>(skymap.entries) };
+        Ok(ExplicitSkyMapBTree::new(depth, btree).into())
+      }
+      SkyMapEnum::ExplicitU32I64(skymap) => {
+        warn!("Transforms i64 skymap into u32 skymap without checking possible overflow!");
+        let depth = skymap.depth();
+        let btree = skymap
+          .owned_entries()
+          .map(|(k, v)| (k, v as u32))
+          .collect::<BTreeMap<u32, u32>>();
+        Ok(ExplicitSkyMapBTree::new(depth, btree).into())
+      }
+      _ => Err(String::from(
+        "Unable to convert skymap to countmap (incompatible types).",
+      )),
+    }
+  }
+}
+
+pub enum DensMap {
+  /// Implicit density map for which the hash is a u32 (the count is a f64)
+  ImplicitU32(ImplicitDensityMapU32),
+  /// Implicit density map for which the hash is a u64 (the count is a f64)
+  Implicit(ImplicitDensityMap),
+  /// Explicit density map for which the hash is a u32 (the count is a f64)
+  ExplicitU32(ExplicitDensityMap<u32>),
+  /// Explicit density map for which the hash is a u64 (the count is a f64)
+  Explicit(ExplicitDensityMap<u64>),
+}
+impl From<ImplicitDensityMapU32> for DensMap {
+  fn from(value: ImplicitDensityMapU32) -> Self {
+    Self::ImplicitU32(value)
+  }
+}
+impl From<ImplicitDensityMap> for DensMap {
+  fn from(value: ImplicitDensityMap) -> Self {
+    Self::Implicit(value)
+  }
+}
+impl From<ExplicitDensityMap<u32>> for DensMap {
+  fn from(value: ExplicitDensityMap<u32>) -> Self {
+    Self::ExplicitU32(value)
+  }
+}
+impl From<ExplicitDensityMap<u64>> for DensMap {
+  fn from(value: ExplicitDensityMap<u64>) -> Self {
+    Self::Explicit(value)
+  }
+}
+
+impl From<ImplicitSkyMapArray<u64, f64>> for DensMap {
+  fn from(value: ImplicitSkyMapArray<u64, f64>) -> Self {
+    Self::Implicit(value.into())
+  }
+}
+impl From<ImplicitSkyMapArray<u32, f64>> for DensMap {
+  fn from(value: ImplicitSkyMapArray<u32, f64>) -> Self {
+    Self::ImplicitU32(value.into())
+  }
+}
+impl From<ExplicitSkyMapBTree<u64, f64>> for DensMap {
+  fn from(value: ExplicitSkyMapBTree<u64, f64>) -> Self {
+    Self::Explicit(value.into())
+  }
+}
+impl From<ExplicitSkyMapBTree<u32, f64>> for DensMap {
+  fn from(value: ExplicitSkyMapBTree<u32, f64>) -> Self {
+    Self::ExplicitU32(value.into())
+  }
+}
+impl DensMap {
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    match self {
+      Self::ImplicitU32(m) => m.to_fits(writer),
+      Self::Implicit(m) => m.to_fits(writer),
+      Self::ExplicitU32(m) => m.to_fits(writer),
+      Self::Explicit(m) => m.to_fits(writer),
+    }
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    match self {
+      Self::ImplicitU32(m) => m.to_fits_file(path),
+      Self::Implicit(m) => m.to_fits_file(path),
+      Self::ExplicitU32(m) => m.to_fits_file(path),
+      Self::Explicit(m) => m.to_fits_file(path),
     }
   }
 }

@@ -24,13 +24,10 @@ use crate::{
     get,
     map::{
       fits::{error::FitsError, write::write_explicit_skymap_fits},
-      mom::{
-        impls::zvec::MomVecImpl, new_chi2_density_ref_merger_no_depth_threshold,
-        new_chi2_density_ref_merger_with_depth_threshold, Mom,
-      },
       skymap::{
         implicit::{
-          ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitSkyMapArray,
+          ImplicitCountMap, ImplicitCountMapU32, ImplicitDensityMap, ImplicitDensityMapU32,
+          ImplicitSkyMapArray,
         },
         DegradableBySumming, SkyMap, SkyMapValue,
       },
@@ -45,7 +42,7 @@ use crate::{
 #[derive(Debug)]
 pub struct ExplicitSkyMapBTree<H: HHash, V: SkyMapValue> {
   depth: u8,
-  entries: BTreeMap<H, V>,
+  pub(crate) entries: BTreeMap<H, V>,
   _zero: V,
 }
 impl<H: HHash, V: SkyMapValue> ExplicitSkyMapBTree<H, V> {
@@ -590,6 +587,7 @@ impl<H: HHash> ExplicitDensityMap<H> {
 }
 
 impl ExplicitDensityMap<u32> {
+  /* PREFER CONVERTING FIRST INTO IMPLICIT!!
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
   /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
@@ -606,7 +604,7 @@ impl ExplicitDensityMap<u32> {
     chi2_of_3dof_threshold: f64,
     depth_threshold: Option<u8>,
   ) -> MomVecImpl<u32, f64> {
-    // WARNING: result will bve different from to_chi2_mom on implicit map because
+    // WARNING: result will have different from to_chi2_mom on implicit map because
     // no value is different from value = 0.
     match depth_threshold {
       None => MomVecImpl::from_skymap_ref(
@@ -618,9 +616,14 @@ impl ExplicitDensityMap<u32> {
         new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     }
+  }*/
+
+  pub fn into_implicit_skymap(self, null_value: f64) -> ImplicitDensityMapU32 {
+    self.0.into_implicit_map(null_value).into()
   }
 }
 impl ExplicitDensityMap<u64> {
+  /* PREFER CONVERTING FIRST INTO IMPLICIT!!
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
   /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
@@ -637,7 +640,7 @@ impl ExplicitDensityMap<u64> {
     chi2_of_3dof_threshold: f64,
     depth_threshold: Option<u8>,
   ) -> MomVecImpl<u64, f64> {
-    // WARNING: result will bve different from to_chi2_mom on implicit map because
+    // WARNING: result will have different from to_chi2_mom on implicit map because
     // no value is different from value = 0.
     match depth_threshold {
       None => MomVecImpl::from_skymap_ref(
@@ -649,18 +652,12 @@ impl ExplicitDensityMap<u64> {
         new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
     }
-  }
-}
-impl ExplicitDensityMap<u32> {
+  }*/
+
   pub fn into_implicit_skymap(self, null_value: f64) -> ImplicitDensityMap {
     self.0.into_implicit_map(null_value).into()
   }
 }
-/*impl ExplicitDensityMap<u64> {
-  pub fn into_implicit_skymap(self) -> ImplicitDensityMap {
-    self.0.into_implicit_map().into()
-  }
-}*/
 
 impl<'a, H: HHash> SkyMap<'a> for ExplicitDensityMap<H> {
   type HashType = H;

@@ -24,6 +24,7 @@ use super::{
   skymap::{SkyMap, SkyMapValue},
   HHash,
 };
+use crate::nested::map::mom::impls::zvec::MomVecImpl;
 use crate::nested::{
   map::{
     fits::{
@@ -400,6 +401,90 @@ pub trait Mom<'a>: Sized {
       Self::ZUniqHType,
       [Self::ValueType; 4],
     ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
+}
+
+pub enum CountMom {
+  U32(MomVecImpl<u32, u32>),
+  U64(MomVecImpl<u64, u32>),
+}
+impl From<MomVecImpl<u32, u32>> for CountMom {
+  fn from(value: MomVecImpl<u32, u32>) -> Self {
+    Self::U32(value)
+  }
+}
+impl From<MomVecImpl<u64, u32>> for CountMom {
+  fn from(value: MomVecImpl<u64, u32>) -> Self {
+    Self::U64(value)
+  }
+}
+impl CountMom {
+  /// # Params
+  /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  pub fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(
+    &self,
+    path: P,
+    value_name: T,
+  ) -> Result<(), FitsError> {
+    match self {
+      Self::U32(mom) => mom.to_fits_file(path, value_name),
+      Self::U64(mom) => mom.to_fits_file(path, value_name),
+    }
+  }
+
+  /// # Params
+  /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  pub fn to_fits<T: AsRef<str>, W: Write>(
+    &self,
+    writer: W,
+    value_name: T,
+  ) -> Result<(), FitsError> {
+    match self {
+      Self::U32(mom) => mom.to_fits(writer, value_name),
+      Self::U64(mom) => mom.to_fits(writer, value_name),
+    }
+  }
+}
+
+pub enum DensMom {
+  U32(MomVecImpl<u32, f64>),
+  U64(MomVecImpl<u64, f64>),
+}
+impl From<MomVecImpl<u32, f64>> for DensMom {
+  fn from(value: MomVecImpl<u32, f64>) -> Self {
+    Self::U32(value)
+  }
+}
+impl From<MomVecImpl<u64, f64>> for DensMom {
+  fn from(value: MomVecImpl<u64, f64>) -> Self {
+    Self::U64(value)
+  }
+}
+impl DensMom {
+  /// # Params
+  /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  pub fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(
+    &self,
+    path: P,
+    value_name: T,
+  ) -> Result<(), FitsError> {
+    match self {
+      Self::U32(mom) => mom.to_fits_file(path, value_name),
+      Self::U64(mom) => mom.to_fits_file(path, value_name),
+    }
+  }
+
+  /// # Params
+  /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  pub fn to_fits<T: AsRef<str>, W: Write>(
+    &self,
+    writer: W,
+    value_name: T,
+  ) -> Result<(), FitsError> {
+    match self {
+      Self::U32(mom) => mom.to_fits(writer, value_name),
+      Self::U64(mom) => mom.to_fits(writer, value_name),
+    }
+  }
 }
 
 pub trait ViewableMom<'a>: Mom<'a>

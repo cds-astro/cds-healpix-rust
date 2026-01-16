@@ -336,9 +336,9 @@ impl Operation {
 // #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 #[derive(Debug, Subcommand)]
 pub enum Conversion {
-  /// Transforms a count map into a density map.
+  /// Transform a count map into a density map.
   Count2dens,
-  /// Transforms a count map into a MOM based on a chi2 merge algorithm.
+  /// Transform a count map into a count MOM based on a chi2 merge algorithm.
   Count2chi2mom {
     /// Completeness of the chi2 distribution of 3 degrees of freedom.
     #[clap(default_value_t = 16.266)]
@@ -347,12 +347,22 @@ pub enum Conversion {
     #[clap(short, long, value_name = "DEPTH_MIN")]
     depth_threshold: Option<u8>,
   },
+  /// Transform a count map into a density MOM based on a chi2 merge algorithm.
+  Count2chi2densmom {
+    /// Completeness of the chi2 distribution of 3 degrees of freedom.
+    #[clap(default_value_t = 16.266)]
+    threshold: f64,
+    /// Depth threshold
+    #[clap(short, long, value_name = "DEPTH_MIN")]
+    depth_threshold: Option<u8>,
+  },
+  /// Transform a count map into a MOM of maximum *threshold* counts per cell
   Count2mom {
     /// Upper value on a cell count
     #[clap(value_name = "COUNT_MAX")]
     threshold: u32,
   },
-  /// Transforms a density map into a MOM based on a chi2 merge algorithm.
+  /// Transform a density map into a MOM based on a chi2 merge algorithm.
   Dens2chi2mom {
     /// Completeness of the chi2 distribution of 3 degrees of freedom.
     #[clap(default_value_t = 16.266)]
@@ -396,6 +406,14 @@ impl Convert {
         let count_map = skymap.to_count_map()?;
         let mom = count_map.to_chi2_mom(threshold, depth_threshold);
         mom.to_fits_file(self.output, "count")
+      }
+      Conversion::Count2chi2densmom {
+        threshold,
+        depth_threshold,
+      } => {
+        let count_map = skymap.to_count_map()?;
+        let mom = count_map.to_chi2_dens_mom(threshold, depth_threshold);
+        mom.to_fits_file(self.output, "density")
       }
       Conversion::Count2mom { threshold } => {
         let count_map = skymap.to_count_map()?;

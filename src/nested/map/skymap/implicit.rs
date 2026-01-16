@@ -370,12 +370,12 @@ impl ImplicitCountMap {
   ///     + Completeness = 99.0% => 11.345
   ///     + Completeness = 99.9% => 16.266
   /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
-  pub fn to_chi2_mom(
+  pub fn to_chi2_count_mom(
     &self,
     chi2_of_3dof_threshold: f64,
     depth_threshold: Option<u8>,
-  ) -> MomVecImpl<u64, f64> {
-    let mom = match depth_threshold {
+  ) -> MomVecImpl<u64, u32> {
+    match depth_threshold {
       None => MomVecImpl::from_skymap_ref(
         &self.0,
         new_chi2_count_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
@@ -384,7 +384,26 @@ impl ImplicitCountMap {
         &self.0,
         new_chi2_count_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
       ),
-    };
+    }
+  }
+
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  ///     + Completeness = 90.0% =>  6.251
+  ///     + Completeness = 95.0% =>  7.815
+  ///     + Completeness = 97.5% =>  9.348
+  ///     + Completeness = 99.0% => 11.345
+  ///     + Completeness = 99.9% => 16.266
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
+  pub fn to_chi2_dens_mom(
+    &self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
+  ) -> MomVecImpl<u64, f64> {
+    let mom = self.to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold);
     // Create a new MOM transforming number of sources into densities.
     MomVecImpl::from_map(mom, |z, v| {
       v as f64 / (4.0 * PI / (n_hash(u64::depth_from_zuniq(z))) as f64)
@@ -703,10 +722,10 @@ impl ImplicitCountMapU32 {
       .and_then(|file| self.to_fits(BufWriter::new(file)))
   }
 
-  pub fn to_dens_map(&self) -> ImplicitDensityMap {
+  pub fn to_dens_map(&self) -> ImplicitDensityMapU32 {
     let depth = self.depth();
     let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    ImplicitDensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMapU32(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -718,10 +737,10 @@ impl ImplicitCountMapU32 {
     ))
   }
 
-  pub fn to_dens_map_par(&self) -> ImplicitDensityMap {
+  pub fn to_dens_map_par(&self) -> ImplicitDensityMapU32 {
     let depth = self.depth();
     let one_over_area = (n_hash(depth) >> 2) as f64 / PI;
-    ImplicitDensityMap(ImplicitSkyMapArray::new(
+    ImplicitDensityMapU32(ImplicitSkyMapArray::new(
       depth,
       self
         .0
@@ -733,6 +752,7 @@ impl ImplicitCountMapU32 {
     ))
   }
 
+  /*
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
   /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
@@ -786,6 +806,72 @@ impl ImplicitCountMapU32 {
       v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
     })*/
     MomVecImpl::from_skymap_ref(&self.0, chi2_merger)
+  }
+  ICI*/
+
+  /// Merge sibling cells till the sum of their counts remains lower than
+  /// the given threshold.
+  pub fn to_upper_count_threshold_mom(&self, upper_count_threshold: u32) -> MomVecImpl<u32, u32> {
+    let merger = |_depth: u8, _hash: u32, [n0, n1, n2, n3]: [&u32; 4]| -> Option<u32> {
+      let sum = *n0 + *n1 + *n2 + *n3;
+      if sum < upper_count_threshold {
+        Some(sum)
+      } else {
+        None
+      }
+    };
+    MomVecImpl::from_skymap_ref(&self.0, merger)
+  }
+
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  ///     + Completeness = 90.0% =>  6.251
+  ///     + Completeness = 95.0% =>  7.815
+  ///     + Completeness = 97.5% =>  9.348
+  ///     + Completeness = 99.0% => 11.345
+  ///     + Completeness = 99.9% => 16.266
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
+  pub fn to_chi2_count_mom(
+    &self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
+  ) -> MomVecImpl<u32, u32> {
+    match depth_threshold {
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_count_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
+      Some(depth_threshold) => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_count_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
+      ),
+    }
+  }
+
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  ///     + Completeness = 90.0% =>  6.251
+  ///     + Completeness = 95.0% =>  7.815
+  ///     + Completeness = 97.5% =>  9.348
+  ///     + Completeness = 99.0% => 11.345
+  ///     + Completeness = 99.9% => 16.266
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
+  pub fn to_chi2_dens_mom(
+    &self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
+  ) -> MomVecImpl<u32, f64> {
+    let mom = self.to_chi2_count_mom(chi2_of_3dof_threshold, depth_threshold);
+    // Create a new MOM transforming number of sources into densities.
+    MomVecImpl::from_map(mom, |z, v| {
+      v as f64 / (4.0 * PI / (n_hash(u32::depth_from_zuniq(z))) as f64)
+    })
   }
 
   // to_png
@@ -850,13 +936,90 @@ impl<'a> SkyMap<'a> for ImplicitCountMapU32 {
 
 /// SkyMap implementation use to store densities.
 #[derive(Debug)]
-pub struct ImplicitDensityMap(ImplicitSkyMapArray<u32, f64>);
-impl From<ImplicitSkyMapArray<u32, f64>> for ImplicitDensityMap {
-  fn from(value: ImplicitSkyMapArray<u32, f64>) -> Self {
+pub struct ImplicitDensityMap(ImplicitSkyMapArray<u64, f64>);
+impl From<ImplicitSkyMapArray<u64, f64>> for ImplicitDensityMap {
+  fn from(value: ImplicitSkyMapArray<u64, f64>) -> Self {
     Self(value)
   }
 }
 impl ImplicitDensityMap {
+  pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u64, f64> {
+    &self.0
+  }
+  pub fn into_implicit_skymap_array(self) -> ImplicitSkyMapArray<u64, f64> {
+    self.0
+  }
+  /// Build a count skymap from an iterator over position ( (ra, dec), in radian).
+  /// # Panics
+  /// * if `depth > 12`.
+  pub fn from_positions<I>(depth: u8, pos_it_rad: I) -> Self
+  where
+    I: Iterator<Item = (f64, f64)>,
+  {
+    assert!(
+      depth < 13,
+      "Wrong count map input depth. Expected: < 13. Actual: {}",
+      depth
+    );
+    let layer = get(depth);
+    let mut densities = vec![0_f64; layer.n_hash as usize].into_boxed_slice();
+    let one_over_cell_area = layer.n_hash as f64 / (4.0 * PI);
+    for (l, b) in pos_it_rad {
+      densities[layer.hash(l, b) as usize] += one_over_cell_area;
+    }
+    Self(ImplicitSkyMapArray::new(depth, densities))
+  }
+
+  /// # Params
+  /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
+  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  /// Here a few typical values corresponding the the given completeness:
+  ///     + Completeness = 90.0% =>  6.251
+  ///     + Completeness = 95.0% =>  7.815
+  ///     + Completeness = 97.5% =>  9.348
+  ///     + Completeness = 99.0% => 11.345
+  ///     + Completeness = 99.9% => 16.266
+  /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells
+  pub fn to_chi2_mom(
+    &self,
+    chi2_of_3dof_threshold: f64,
+    depth_threshold: Option<u8>,
+  ) -> MomVecImpl<u64, f64> {
+    match depth_threshold {
+      None => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_density_ref_merger_no_depth_threshold(chi2_of_3dof_threshold),
+      ),
+      Some(depth_threshold) => MomVecImpl::from_skymap_ref(
+        &self.0,
+        new_chi2_density_ref_merger_with_depth_threshold(chi2_of_3dof_threshold, depth_threshold),
+      ),
+    }
+  }
+
+  pub fn to_fits<W: Write>(&self, writer: W) -> Result<(), FitsError> {
+    write_implicit_skymap_fits(writer, self.as_implicit_skymap_array().values.deref())
+  }
+
+  pub fn to_fits_file<P: AsRef<Path>>(&self, path: P) -> Result<(), FitsError> {
+    File::create(path)
+      .map_err(FitsError::Io)
+      .and_then(|file| self.to_fits(BufWriter::new(file)))
+  }
+
+  // to_png
+}
+
+/// SkyMap implementation use to store densities.
+#[derive(Debug)]
+pub struct ImplicitDensityMapU32(ImplicitSkyMapArray<u32, f64>);
+impl From<ImplicitSkyMapArray<u32, f64>> for ImplicitDensityMapU32 {
+  fn from(value: ImplicitSkyMapArray<u32, f64>) -> Self {
+    Self(value)
+  }
+}
+impl ImplicitDensityMapU32 {
   pub fn as_implicit_skymap_array(&self) -> &ImplicitSkyMapArray<u32, f64> {
     &self.0
   }
