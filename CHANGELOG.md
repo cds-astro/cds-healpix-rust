@@ -1,8 +1,37 @@
 # `cdshealpix` Change Log
 
+## 0.9.0
+
+Released 2026-01-22
+
+### Changed
+
+* Add `depth_threshold` option in `toc_chi2_mom` methods.
+* Make `BMOC::create_unsage` public
+* Put implicit skymaps in a sub-module
+
+### Added
+
+* Add enum `CountMap`, `CountMom` and `DensMom` supporting various types (u32, u64) ad both EXPLICIT and IMPLICIT
+* Add `DegradableBySumming` trait for SkyMaps
+* Add support for value meaning NULL in implicit skymaps
+* Add EXPLICIT skymaps
+* Add EXPLICIT in addition to IMPLICIT to Healpix Cumulative Index
+* Add Sampled Cumulative Index
+* Add `iterator` module
+* Add creation en chi2 MOMs, ..., from streams, i.e. from sorted hash (fallible or not) iterators
+
+### Fixed
+
+* Add a test in `special_point_finder` to skip 2 points having the same longitude (issue #20)
+* Remove duplicate Primary HDU in MOM BINTABLEs
+* LITTLE ENDIAN instead of BIG ENDIAN in BMOC BINTABLEs
+* BMOC BINTABLE FITS issues
+
 ## 0.8.1
 
-Released 2025-06-02
+q
+Released 2025-06-02 (not on crates.io, see git tag `cli-0.1.1`)
 
 ### Changed
 
@@ -13,15 +42,14 @@ Released 2025-06-02
 
 * Add countmap2chi2mom with depth threshold: add countmap2countmom (HATS structure)
 
-
 ## 0.8.0
 
-Released 2025-03-21
+Released 2025-03-21  (not on crates.io, see git tag `cli-0.1.1`)
 
 ### Changed
 
 * MOM bintable serialization: columns `depth` and `ipix` replaced by `zuniq` to visually see that
-  the MOM is ordered according to the `zuniq` insigned integer natural ordering. 
+  the MOM is ordered according to the `zuniq` insigned integer natural ordering.
 
 ### Added
 
@@ -30,7 +58,7 @@ Released 2025-03-21
     + methods `hpx_external_sort_csv_file`, `hpx_external_sort_csv_file_gen`
 * Add cumulative index (+its FITS ser/deserialization) to index HEALPix sorted files
 * BMOC serialization and deserialisation in FITS
-* MOM  serialization and deserialisation in FITS
+* MOM serialization and deserialisation in FITS
 * Nested `kth_neighbours` and `kth_neighbourhood` methods
 * Add DensityMap and CountMap and CoutnMapU32
     + plus parallelisation to CountMap from CSV
@@ -38,7 +66,6 @@ Released 2025-03-21
 ### Fixed
 
 * Fix an issue in MOM from Skymap
-
 
 ## 0.7.3
 
@@ -50,9 +77,8 @@ Released 2024-11-19
     + revert the modification introduced in v0.7.1
       solving a problem but creating new ones
     + improve the `zone_coverage` algorithm to 1- solve issues
-      on very wide zones and 2- remove spurious cells when a 
+      on very wide zones and 2- remove spurious cells when a
       zone vertex is on the edge of an HEALPix cell
-
 
 ## 0.7.2
 
@@ -60,11 +86,10 @@ Released 2024-11-12
 
 ### Bug correction
 
-* Wrong parameter (`cos(lon)` instead of `cos(lat)`) 
-  in `h_to_h_and_shs` method leading to possibly miss 
-  cells in cone/ring coverage in case of  cones/ring 
-  much smaller than requested HEALPix cells. 
-
+* Wrong parameter (`cos(lon)` instead of `cos(lat)`)
+  in `h_to_h_and_shs` method leading to possibly miss
+  cells in cone/ring coverage in case of cones/ring
+  much smaller than requested HEALPix cells.
 
 ## 0.7.1
 
@@ -78,7 +103,6 @@ Released 2024-11-08
 
 * Upper left corner of `zone_coverage` no more included in the output MOC
 
-
 ## 0.7.0
 
 Released 2024-10-16
@@ -91,8 +115,7 @@ Released 2024-10-16
 * First support for zuniq based MOMs
     + build from Skymap
     + merge operation
-    + display in PNG 
-
+    + display in PNG
 
 ## 0.6.10
 
@@ -103,8 +126,7 @@ Released 2024-07-19
 * Values in `SMALLER_EDGE2OPEDGE_DIST` (used in `best_starting_depth`) were
   slightly overestimated due to a "moving" reference point for depth >= 2,
   see github issue #10.
-  The error on the values should now be below the microarcsec. 
-
+  The error on the values should now be below the microarcsec.
 
 ## 0.6.9
 
@@ -113,8 +135,6 @@ Released 2024-05-28
 ### Add
 
 * Add `intersect_great_circle` as needed in Aladin Lite
-
-
 
 ## 0.6.8
 
@@ -128,10 +148,9 @@ Released 2024-05-14
 ### Bug correction
 
 * Fix a bug in `BMOC.to_flagged_ranges`: remove possible spurious flag 'not_full'
-  on the first returned range 
+  on the first returned range
 
 --------------------------------------------------------------------------------
-
 
 ## 0.6.7
 
@@ -147,7 +166,6 @@ Released 2023-12-19
 
 --------------------------------------------------------------------------------
 
-
 ## 0.6.6
 
 Released 2023-06-29
@@ -157,7 +175,6 @@ Released 2023-06-29
 * Method `is_empty` and traits `Copy, Clone, Eq, ...` on `OrdinalSet` and `CardinalSet`
 
 --------------------------------------------------------------------------------
-
 
 ## 0.6.5
 
@@ -178,9 +195,7 @@ Released 2023-06-28
 * fix numerical issue in 'intersect_small_circle' when great circle arc is small
   (<1 arcsec) by resorting to locally flat approximation
 
-
 --------------------------------------------------------------------------------
-
 
 ## 0.6.4
 
@@ -188,7 +203,7 @@ Released 2022-10-17
 
 ### Add
 
-* Add latitude check in `bilinear_interpolation` 
+* Add latitude check in `bilinear_interpolation`
 * Add computation of lat=cte small circle intersection with polygon edges (great circle arcs)
 * Add Sph geom polygon/parallel intersection
 * Update dependencies
@@ -197,19 +212,16 @@ Released 2022-10-17
 
 --------------------------------------------------------------------------------
 
-
-
 ## 0.6.3
 
 Released 2022-04-11
 
 ### Add
 
-* Add `into_flat_iter` in BMOC (to be able to flatten an iterator of BMOC `flat_iter`) 
+* Add `into_flat_iter` in BMOC (to be able to flatten an iterator of BMOC `flat_iter`)
 * Remove a few warnings
 
 --------------------------------------------------------------------------------
-
 
 ## 0.6.2
 
@@ -217,13 +229,12 @@ Released 2022-04-01
 
 ### Bug correction
 
-* In the computation of constants in `ConstantsC2V`, 
-  impacting the `largest_center_to_vertex_distance` family methods: 
-  wrong contant 4/pi instead of pi/4 leading to overestimating the 
+* In the computation of constants in `ConstantsC2V`,
+  impacting the `largest_center_to_vertex_distance` family methods:
+  wrong contant 4/pi instead of pi/4 leading to overestimating the
   `largest_center_to_vertex_distance`
 
 --------------------------------------------------------------------------------
-
 
 ## 0.6.1
 
@@ -235,7 +246,6 @@ Released 2022-03-22
 
 --------------------------------------------------------------------------------
 
-
 ## 0.6.0
 
 Released 2022-01-25
@@ -245,10 +255,10 @@ Released 2022-01-25
 * Method `cone_coverage_fullin`: returns HEALPix nested cells fully covered by the given cone
 * Method `cone_coverage_centers`: returns HEALPix nested cells having their center in the given cone
 * Method `ring_coverage_approx`: returns HEALPix nested cells overlapped by a ring
-* Method `ring_coverage_approx_custom`: returns HEALPix nested cells overlapped by a ring (with a custom delta depth for better precision)
+* Method `ring_coverage_approx_custom`: returns HEALPix nested cells overlapped by a ring (with a custom delta depth for
+  better precision)
 
 --------------------------------------------------------------------------------
-
 
 ## 0.5.5
 
@@ -260,14 +270,13 @@ Released 2020-08-05
 
 ### Bug correction
 
-* In polygon: contrary to the Java code (which was correct) a cell was added to the 
+* In polygon: contrary to the Java code (which was correct) a cell was added to the
   moc if its 4 vertices where in the polygon (without testing possible intersection with the polygon).
   This may lead to wrong coverages in the case of self-intersecting polygons
   (see `nested::testok_polygone_exact_fxp`).
-* Fix benches  
+* Fix benches
 
 --------------------------------------------------------------------------------
-
 
 ## 0.5.4
 
@@ -284,7 +293,6 @@ Released 2020-11-02
 
 --------------------------------------------------------------------------------
 
-
 ## 0.5.3
 
 Released 2020-06-25.
@@ -297,19 +305,17 @@ Released 2020-06-25.
 
 --------------------------------------------------------------------------------
 
-
 ## 0.5.2
 
 Released 2020-06-22.
 
 ### Bug correction
 
-* When Newton-Raphson method fails when looking for "special points" in polygons 
+* When Newton-Raphson method fails when looking for "special points" in polygons
   (due to divergence or too slow convergence) the method failed.
   Now returns None (i.e. no special point found).
 
 --------------------------------------------------------------------------------
-
 
 ## 0.5.1
 
@@ -321,9 +327,7 @@ Released 2020-05-25.
   polygon. We now decided that for large polygons the gravity center should be inside
   the polygon.
 
-
 --------------------------------------------------------------------------------
-
 
 ## 0.5.0
 
@@ -339,7 +343,6 @@ Released 2020-03-04.
 
 --------------------------------------------------------------------------------
 
-
 ## 0.4.1
 
 Released 2020-02-11.
@@ -350,24 +353,21 @@ Released 2020-02-11.
 * Add an enum implementing the `ZOrderCurve` trait to allow...
 * ... the usage of a `const fn` to compute `Layers` structs at compile time.
 * Replace a few constants by the ones defined in the Rust standard library
- 
+
 ### Added
 
-* `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle 
+* `to_uniq`, `from_uniq`, `to_uniq_ivo` and `from_uniq_ivoa` to handle
   uniq hash notation (i.e. uniq value for all possible (depth, hash) tuples).
 * Add BMOC lossy compression/decompression
-
 
 ### Bug correction
 
 * Fix `polygon_coverage` bug due to a bug in `great_circle_arcs_are_overlapping_in_lon`
   when a great circle crosses the RA=0 meridian.
 
-
 --------------------------------------------------------------------------------
 
-
-## 0.4.0 
+## 0.4.0
 
 Released 2019-11-14.
 
@@ -383,8 +383,7 @@ Released 2019-11-14.
 
 --------------------------------------------------------------------------------
 
-
-## 0.3.2 
+## 0.3.2
 
 Released 2019-09-05.
 
@@ -399,12 +398,11 @@ Released 2019-09-05.
 ### Bug correction
 
 * Fix NESTED `bilinear_interpolation`: ~1/4 of cases in which 2 out of 4 HEALPix
- cell numbers where swapped
+  cell numbers where swapped
 
 --------------------------------------------------------------------------------
 
-
-## 0.3.1 
+## 0.3.1
 
 Released 2019-08-19.
 
@@ -414,8 +412,7 @@ Released 2019-08-19.
 
 --------------------------------------------------------------------------------
 
-
-## 0.3.0 
+## 0.3.0
 
 Released 2019-06-25.
 
@@ -432,21 +429,21 @@ Released 2019-06-25.
     + `to_ring`: convert a NESTED index into a RING index
     + `from_ring`: convert a RING index into a NESTED index
 * Starts supporting the RING scheme
-   + `hash`: compute the RING number from (lon, lat) coordinates
-   + `hash_with_dxdy`: compute the RING number from (lon, lat) coordinates and additionally provide the offsets (dx, dy) in the cell
-   + `center`: get the coordiates of the center of a RING cell
-   + `center_of_projected_cell`: like center, but coordinates are gicen in the Euclidean projection plane
-   + `sph_coo`: get a coordinate on the sphere from a cell and a position (dx, dy) in the cell
-   + `vertices`: provide the 4 vertices of a given cell 
+    + `hash`: compute the RING number from (lon, lat) coordinates
+    + `hash_with_dxdy`: compute the RING number from (lon, lat) coordinates and additionally provide the offsets (dx,
+      dy) in the cell
+    + `center`: get the coordiates of the center of a RING cell
+    + `center_of_projected_cell`: like center, but coordinates are gicen in the Euclidean projection plane
+    + `sph_coo`: get a coordinate on the sphere from a cell and a position (dx, dy) in the cell
+    + `vertices`: provide the 4 vertices of a given cell
 * All
-   + `base_cell_from_proj_coo`: experiment to be tested 
+    + `base_cell_from_proj_coo`: experiment to be tested
 
 ### Bug correction
 
 * Fix polygon potential bug (see method `is_in_lon_range`)
 
 --------------------------------------------------------------------------------
-
 
 ## 0.2.0
 
@@ -463,11 +460,10 @@ Released 2019-05-10.
 ### Bug correction
 
 * Fix elliptical cone
-* Fix numerical precision of hash (cell number from coordinates) in NE border of North Polar Cap base cells 
+* Fix numerical precision of hash (cell number from coordinates) in NE border of North Polar Cap base cells
 * Fix numerical precision of angular distances computation near from PI
 
 --------------------------------------------------------------------------------
-
 
 ## 0.1.6
 
@@ -481,11 +477,9 @@ Released 2019-03-14.
 
 --------------------------------------------------------------------------------
 
-
 ## 0.1.5
 
 Released 2019-03-06.
-
 
 ### Bug correction
 
@@ -496,7 +490,6 @@ Released 2019-03-06.
 * add support to elliptical cones
 
 --------------------------------------------------------------------------------
-
 
 ## 0.1.4
 
@@ -521,16 +514,18 @@ Released 2019-01-31.
 ### Bug correction
 
 * fix BMOC logical operations (`not`, `and`, `or`, `xor`)
-* fix method `MOCBuilderUnsafe::to_lower_depth` in module `cdshealpix::nested::bmoc`: first cell was ignored when not part of a larger cell.
+* fix method `MOCBuilderUnsafe::to_lower_depth` in module `cdshealpix::nested::bmoc`: first cell was ignored when not
+  part of a larger cell.
 
 ### Added
 
 * first version of the exacy polygon algorithm
-* `flat iterator returning cells (containing flags) in  BMOC
+* `flat iterator returning cells (containing flags) in BMOC
 * `BMOCBuilderFixedDepth` to build a BMOC from a list of cells at the MOC depth
-* posibility to add LaTeX formula in the documentation (using the crate [katex-doc](https://crates.io/crates/katex-doc)).
+* posibility to add LaTeX formula in the documentation (using the
+  crate [katex-doc](https://crates.io/crates/katex-doc)).
 * add sub-direcotry containing tests on MOCs (in a sub-module not to add the
-  `serde` and `serde-json` dependencies in the man crate) 
+  `serde` and `serde-json` dependencies in the man crate)
 * add sub-directory containing an example of usage of cdshealpix-python
 
 ### API changes
