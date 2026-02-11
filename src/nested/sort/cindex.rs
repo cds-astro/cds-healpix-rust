@@ -14,27 +14,30 @@
 // * e.g. pour 2.10^9 sources, si on fait prend n = 2_000 lignes, ca fait 1_000_000 ligne d'index,
 //   soit moins de 8 MB (idx29 sur u64).
 
-use chrono::{DateTime, SecondsFormat, Utc};
-use log::debug;
-use memmap2::{Mmap, MmapOptions};
-use num_traits::{FromBytes, ToBytes, Zero};
-use std::io::{Seek, SeekFrom};
 use std::{
   array::TryFromSliceError,
   cmp::Ordering,
-  collections::BTreeMap,
+  collections::{btree_map, BTreeMap},
   convert::{TryFrom, TryInto},
+  fmt::Display,
   fs::File,
-  io::{BufWriter, Error as IoError, Write},
+  io::{BufWriter, Error as IoError, Seek, SeekFrom, Write},
+  iter::{Cloned, Enumerate, Map},
   marker::PhantomData,
   mem::align_of,
   ops::{AddAssign, Range, Sub},
   path::Path,
   ptr::slice_from_raw_parts,
-  slice::{from_raw_parts, ChunksMut},
+  slice::Iter,
+  slice::{from_raw_parts, Chunks, ChunksMut},
   str,
   time::SystemTime,
 };
+
+use chrono::{DateTime, SecondsFormat, Utc};
+use log::debug;
+use memmap2::{Mmap, MmapOptions};
+use num_traits::{FromBytes, ToBytes, Zero};
 
 use crate::{
   depth_from_n_hash_unsafe, n_hash,
@@ -66,6 +69,7 @@ pub trait HCIndexValue:
   + Clone
   + Copy
   + PartialEq
+  + Display
   + 'static
 {
   const FITS_DATATYPE: &'static str;
@@ -135,12 +139,18 @@ pub enum HCIndexShape {
 pub trait HCIndex {
   /// Type of value the index contains.
   type V: HCIndexValue;
+  type EntriesIt<'a>: Iterator<Item = (u64, Self::V)>
+  where
+    Self: 'a;
+
   const SIZE_OF_V: usize = size_of::<Self::V>();
 
   fn shape(&self) -> HCIndexShape;
 
   /// Returns the HEALPix depth of the index.
   fn depth(&self) -> u8;
+
+  fn entries(&self) -> Self::EntriesIt<'_>;
 
   /// Returns the cumulative value associated to the given index.
   /// The starting cumulative value associated to a HEALPix cell of index `i` is obtained by `get(i)`
@@ -511,6 +521,15 @@ pub trait HCIndex {
         })
       })
   }
+
+  fn to_csv<W: Write>(&self, mut writer: W) -> Result<(), FitsError> {
+    writeln!(&mut writer, "# depth: {}", self.depth())
+      .and_then(|()| writeln!(&mut writer, "hash,starting_byte"))?;
+    for (h, byte) in self.entries() {
+      writeln!(&mut writer, "{},{}", h, byte)?;
+    }
+    Ok(())
+  }
 }
 
 fn append_optional_card(
@@ -588,6 +607,8 @@ impl<T: HCIndexValue> OwnedCIndex<T> {
 }
 impl<T: HCIndexValue> HCIndex for OwnedCIndex<T> {
   type V = T;
+  type EntriesIt<'a> =
+    Map<Enumerate<Cloned<Iter<'a, Self::V>>>, fn((usize, Self::V)) -> (u64, Self::V)>;
 
   fn shape(&self) -> HCIndexShape {
     HCIndexShape::Implicit
@@ -595,6 +616,15 @@ impl<T: HCIndexValue> HCIndex for OwnedCIndex<T> {
 
   fn depth(&self) -> u8 {
     self.depth
+  }
+
+  fn entries(&self) -> Self::EntriesIt<'_> {
+    self
+      .values
+      .iter()
+      .cloned()
+      .enumerate()
+      .map(|(h, b)| (h as u64, b))
   }
 
   fn get(&self, hash: u64) -> Self::V {
@@ -642,12 +672,26 @@ pub struct BorrowedCIndex<'a, T: HCIndexValue> {
 }
 impl<T: HCIndexValue> HCIndex for BorrowedCIndex<'_, T> {
   type V = T;
+  type EntriesIt<'h>
+    = Map<Enumerate<Cloned<Iter<'h, Self::V>>>, fn((usize, Self::V)) -> (u64, Self::V)>
+  where
+    Self: 'h;
+
   fn shape(&self) -> HCIndexShape {
     HCIndexShape::Implicit
   }
   fn depth(&self) -> u8 {
     self.depth
   }
+  fn entries(&self) -> Self::EntriesIt<'_> {
+    self
+      .values
+      .iter()
+      .cloned()
+      .enumerate()
+      .map(|(h, b)| (h as u64, b))
+  }
+
   fn get(&self, hash: u64) -> T {
     self.values[hash as usize]
   }
@@ -1164,8 +1208,10 @@ impl FITSCIndex {
   }
 }
 
-pub trait FitsMMappedCIndex<'a> {
-  type HCIndexType: 'a + HCIndex;
+pub trait FitsMMappedCIndex {
+  type HCIndexType<'a>: HCIndex
+  where
+    Self: 'a;
 
   fn depth(&self) -> u8;
   fn get_fits_creation_date(&self) -> Option<&SystemTime>;
@@ -1177,7 +1223,7 @@ pub trait FitsMMappedCIndex<'a> {
   fn get_indexed_colname_lat(&self) -> Option<&String>;
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
-  fn get_hcindex(&'a self) -> Self::HCIndexType;
+  fn get_hcindex(&self) -> Self::HCIndexType<'_>;
 }
 
 /// The result of reading a FITS file, containing a memory map on the data, and from which we can obtain
@@ -1228,8 +1274,8 @@ impl<T: HCIndexValue> FitsMMappedCIndexImplicit<T> {
   }
 }
 
-impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T> {
-  type HCIndexType = BorrowedCIndex<'a, T>;
+impl<T: HCIndexValue> FitsMMappedCIndex for FitsMMappedCIndexImplicit<T> {
+  type HCIndexType<'a> = BorrowedCIndex<'a, T>;
 
   fn depth(&self) -> u8 {
     self.depth
@@ -1258,7 +1304,7 @@ impl<'a, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexImplicit<T>
   }
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
-  fn get_hcindex(&self) -> Self::HCIndexType {
+  fn get_hcindex(&self) -> Self::HCIndexType<'_> {
     let offset = self.mmap.as_ptr().align_offset(align_of::<T>());
     if offset != 0 {
       // I assume we never enter here, but the assumption had to be tested!
@@ -1294,6 +1340,7 @@ impl<H: HHash, T: HCIndexValue> OwnedCIndexExplicit<H, T> {
 }
 impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicit<H, T> {
   type V = T;
+  type EntriesIt<'a> = Map<Cloned<Iter<'a, (H, Self::V)>>, fn((H, Self::V)) -> (u64, Self::V)>;
 
   fn shape(&self) -> HCIndexShape {
     HCIndexShape::Explicit
@@ -1301,6 +1348,14 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicit<H, T> {
 
   fn depth(&self) -> u8 {
     self.depth
+  }
+
+  fn entries(&self) -> Self::EntriesIt<'_> {
+    self
+      .entries
+      .iter()
+      .cloned()
+      .map(|(h, b)| (HHash::to_u64(&h), b))
   }
 
   fn get(&self, hash: u64) -> Self::V {
@@ -1347,6 +1402,7 @@ impl<H: HHash, T: HCIndexValue> OwnedCIndexExplicitBTree<H, T> {
 }
 impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicitBTree<H, T> {
   type V = T;
+  type EntriesIt<'a> = Map<btree_map::Iter<'a, H, Self::V>, fn((&H, &Self::V)) -> (u64, Self::V)>;
 
   fn shape(&self) -> HCIndexShape {
     HCIndexShape::Explicit
@@ -1354,6 +1410,13 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicitBTree<H, T> {
 
   fn depth(&self) -> u8 {
     self.depth
+  }
+
+  fn entries(&self) -> Self::EntriesIt<'_> {
+    self
+      .entries
+      .iter()
+      .map(|(h, b)| (HHash::to_u64(h), b.clone()))
   }
 
   fn get(&self, hash: u64) -> Self::V {
@@ -1476,8 +1539,8 @@ impl<H: HHash, T: HCIndexValue> FitsMMappedCIndexExplicit<H, T> {
   }
 }
 
-impl<'a, H: HHash, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexExplicit<H, T> {
-  type HCIndexType = BorrowedCIndexExplicit<'a, H, T>;
+impl<H: HHash, T: HCIndexValue> FitsMMappedCIndex for FitsMMappedCIndexExplicit<H, T> {
+  type HCIndexType<'a> = BorrowedCIndexExplicit<'a, H, T>;
 
   fn depth(&self) -> u8 {
     self.depth
@@ -1506,7 +1569,7 @@ impl<'a, H: HHash, T: HCIndexValue> FitsMMappedCIndex<'a> for FitsMMappedCIndexE
   }
 
   /// Get the actual Healpix Cumulative Index on the MMapped data.
-  fn get_hcindex(&'a self) -> Self::HCIndexType {
+  fn get_hcindex(&self) -> Self::HCIndexType<'_> {
     BorrowedCIndexExplicit::new(self.depth, self.mmap.as_ref())
   }
 }
@@ -1598,6 +1661,10 @@ impl<'a, H: HHash, T: HCIndexValue> BorrowedCIndexExplicit<'a, H, T> {
 
 impl<'a, H: HHash, T: HCIndexValue> HCIndex for BorrowedCIndexExplicit<'a, H, T> {
   type V = T;
+  type EntriesIt<'h>
+    = Map<Chunks<'h, u8>, fn(&'h [u8]) -> (u64, Self::V)>
+  where
+    Self: 'h;
 
   fn shape(&self) -> HCIndexShape {
     HCIndexShape::Explicit
@@ -1605,6 +1672,30 @@ impl<'a, H: HHash, T: HCIndexValue> HCIndex for BorrowedCIndexExplicit<'a, H, T>
 
   fn depth(&self) -> u8 {
     self.depth
+  }
+
+  fn entries(&self) -> Self::EntriesIt<'_> {
+    if self.depth <= 13 {
+      self
+        .bytes
+        .chunks(size_of::<u32>() + size_of::<T>())
+        .map(|slice| {
+          (
+            u32::from_le_bytes(slice[..size_of::<u32>()].try_into().unwrap()) as u64,
+            T::from_le_bytes(&slice[size_of::<u32>()..].try_into().unwrap()),
+          )
+        })
+    } else {
+      self
+        .bytes
+        .chunks(size_of::<u64>() + size_of::<T>())
+        .map(|slice| {
+          (
+            u64::from_le_bytes(slice[..size_of::<u64>()].try_into().unwrap()),
+            T::from_le_bytes(&slice[size_of::<u64>()..].try_into().unwrap()),
+          )
+        })
+    }
   }
 
   fn get(&self, hash: u64) -> Self::V {

@@ -16,6 +16,8 @@ use hpxlib::nested::{
 /// Type of the query (HEALPix cell or BMOC).
 #[derive(Debug, Subcommand)]
 pub enum QueryType {
+  /// Convert the binary index into CSV for inspection.
+  Inspect,
   /// Query a given HEALPix cell
   Cell {
     /// Depth of the queried HEALPix cell.
@@ -35,7 +37,7 @@ impl QueryType {
   pub fn exec<'a, H, T>(self, fits_hci: &'a T) -> Result<(), Box<dyn Error>>
   where
     H: HCIndex<V = u64>,
-    T: FitsMMappedCIndex<'a, HCIndexType = H> + 'a,
+    T: FitsMMappedCIndex<HCIndexType<'a> = H> + 'a,
   {
     let csv_name = fits_hci
       .get_indexed_file_name()
@@ -48,6 +50,10 @@ impl QueryType {
     let hci = fits_hci.get_hcindex();
     let hci_depth = hci.depth();
     match self {
+      Self::Inspect => {
+        let mut stdout = std::io::stdout();
+        hci.to_csv(&mut stdout).map_err(|e| e.into())
+      }
       Self::Cell { depth, ipix } => {
         if hci_depth < depth {
           return Err(
