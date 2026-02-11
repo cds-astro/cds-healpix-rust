@@ -1362,7 +1362,7 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicit<H, T> {
     let hash = H::from_u64(hash);
     match self.entries.binary_search_by_key(&hash, |&(h, _)| h) {
       Ok(i) => self.entries[i].1,
-      Err(i) => self.entries[i.max(1) - 1].1,
+      Err(i) => self.entries[i.min(self.entries.len() - 1)].1,
     }
   }
   fn write_all_values_implicit<W: Write>(&self, writer: W) -> Result<usize, IoError> {
@@ -1421,17 +1421,14 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicitBTree<H, T> {
 
   fn get(&self, hash: u64) -> Self::V {
     let hash = H::from_u64(hash);
-    match self.entries.get(&hash) {
-      Some(v) => *v,
-      None => match self.entries.range(..hash).next_back() {
-        Some((_h, v)) => *v,
-        None => self
-          .entries
-          .iter()
-          .next()
-          .map(|e| *e.1)
-          .unwrap_or(T::zero()),
-      },
+    match self.entries.range(hash..).next() {
+      Some((_k, v)) => *v,
+      // Unwrap only if the tree is empty
+      None => self
+        .entries
+        .last_key_value()
+        .map(|(_k, v)| *v)
+        .unwrap_or(T::zero()),
     }
   }
 
@@ -1702,12 +1699,12 @@ impl<'a, H: HHash, T: HCIndexValue> HCIndex for BorrowedCIndexExplicit<'a, H, T>
     if self.depth <= 13 {
       match self.binary_search_get_u32(hash as u32) {
         Ok(i) => self.get_entry::<u32>(i).1,
-        Err(i) => self.get_entry::<u32>(i.max(1) - 1).1,
+        Err(i) => self.get_entry::<u32>(i.min(self.len() - 1)).1,
       }
     } else {
       match self.binary_search_get_u64(hash) {
         Ok(i) => self.get_entry::<u64>(i).1,
-        Err(i) => self.get_entry::<u64>(i.max(1) - 1).1,
+        Err(i) => self.get_entry::<u64>(i.min(self.len() - 1) - 1).1,
       }
     }
   }
