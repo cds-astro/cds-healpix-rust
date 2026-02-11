@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-#1:expected filename; 2: actual filename
+#1: expected filename; 2: actual filename
 assert_eq(){
   local diff=$(diff $1 $2)
   if [[ ${diff} != "" ]]; then
@@ -21,6 +21,7 @@ gtest(){
   local actual="${name}.actual"
   echo -n "* ${name}: $2... "
   $1 > ${actual}
+  # Yes, we do have to inspect manually the "expect" file the first time it is created!
   [[ ! -f ${expect} ]] && { cp ${actual} ${expect}; }
   assert_eq ${expect} ${actual}
   echo "ok!"
@@ -316,39 +317,71 @@ test_sort
 #########################
 
 test_hcidx_qhicid_implimpl(){
-  echo "* test_hcidx_qhicid_implimpl..."
+  echo -n "* test_hcidx_qhicid_implimpl..."
   hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx impl/impl is not empty!"; exit 1; }
+  [[ $? != 0 ]] && { echo "Diff on qhcidx impl/impl is not empty!"; exit 1; }
+
+  for i in $(seq 0 11); do
+    let h=$(hpx qhcidx hipmain.sorted.hci.fits cell 0 $i | tail -n +2 | hpx nested hash 0 list -d , | uniq | tr -d ' ')
+    [[ "${h}" != "${i}" ]] && { echo "Diff on qhcidx impl/impl. Expected: ${i}: Actual: ${h}"; exit 1; }
+  done
+  echo "ok!"
 }
 test_hcidx_qhicid_implimpl
 
 test_hcidx_qhicid_implexpl(){
-  echo "* test_hcidx_qhicid_implexpl..."
+  echo -n "* test_hcidx_qhicid_implexpl..."
   hpx hcidx --header -d , --depth 5 --ratio 0.10 -o hipmain.sorted.hci.fits hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcid impl/expl explicit is not empty!"; exit 1; }
+  [[ $? != 0 ]] && { echo "Diff on qhcid impl/expl explicit is not empty!"; exit 1; }
+
+  for i in $(seq 0 11); do
+    let h=$(hpx qhcidx hipmain.sorted.hci.fits cell 0 $i | tail -n +2 | hpx nested hash 0 list -d , | uniq | tr -d ' ')
+    [[ "${h}" != "${i}" ]] && { echo "Diff on qhcidx impl/expl. Expected: ${i}: Actual: ${h}"; exit 1; }
+  done
+  echo "ok!"
 }
 test_hcidx_qhicid_implexpl
 
 
 test_hcidx_qhicid_explexpl(){
-  echo "* test_hcidx_qhicid_explexpl..."
+  echo -n "* test_hcidx_qhicid_explexpl..."
   hpx hcidx --header -d , --depth 5 -o hipmain.sorted.hci.fits --explicit hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx expl/expl is not empty!"; exit 1; }
+  [[ $? != 0 ]] && { echo "Diff on qhcidx expl/expl is not empty!"; exit 1; }
+
+  for i in $(seq 0 11); do
+    let h=$(hpx qhcidx hipmain.sorted.hci.fits cell 0 $i | tail -n +2 | hpx nested hash 0 list -d , | uniq | tr -d ' ')
+    [[ "${h}" != "${i}" ]] && { echo "Diff on qhcidx expl/expl. Expected: ${i}: Actual: ${h}"; exit 1; }
+  done
+
+  # CSV header: 18 char (including \n) <= head -1 hipmain.csv | wc
+  # Then each line is 26 char long (including \n) <= head -2 hipmain.csv | tail -1 | wc
+  diff <(hpx qhcidx hipmain.sorted.hci.fits inspect | tail -n +3 | cut -d , -f 2) \
+       <(cumul=18; echo "${cumul}"; hpx nested hash 5 csv -d , --header hipmain.sorted.csv | uniq -c | sed -r 's/^ +//' | cut -d ' ' -f 1 | while read n; do cumul=$((cumul+n*26)); echo "${cumul}"; done)
+  [[ $? != 0 ]] && { echo "Diff on qhcidx expl/expl is not empty!"; exit 1; }
+
+
+  echo "ok!"
 }
 test_hcidx_qhicid_explexpl
 
 test_hcidx_qhicid_explimpl(){
-  echo "* test_hcidx_qhicid_explimpl..."
+  echo -n "* test_hcidx_qhicid_explimpl..."
   hpx hcidx --header -d , --depth 5 --ratio 10.0 -o hipmain.sorted.hci.fits --explicit hipmain.sorted.csv
   diff <(tail -n +2 hipmain.sorted.csv) \
        <(for i in $(seq 0 11); do hpx qhcidx hipmain.sorted.hci.fits cell 0 $i; done | egrep "^[0-9]")
-  [[ "$?" != "0" ]] && { echo "Diff on qhcidx expl/impl is not empty!"; exit 1; }
+  [[ $? != 0 ]] && { echo "Diff on qhcidx expl/impl is not empty!"; exit 1; }
+
+  for i in $(seq 0 11); do
+    let h=$(hpx qhcidx hipmain.sorted.hci.fits cell 0 $i | tail -n +2 | hpx nested hash 0 list -d , | uniq | tr -d ' ')
+    [[ "${h}" != "${i}" ]] && { echo "Diff on qhcidx expl/impl. Expected: ${i}: Actual: ${h}"; exit 1; }
+  done
+  echo "ok!"
 }
 test_hcidx_qhicid_explimpl
 
