@@ -113,10 +113,14 @@ impl HealpixCumulIndex {
       let mut map: Vec<u64> = Vec::with_capacity(len as usize);
       // Read line by line
       let mut irow = 0;
+      // Push the starting byte
+      map.push(n_bytes_read as u64);
       while n_bytes > 0 {
         line.pop(); // removes the ending '\n'
         let icell = hpx(&line);
-        if icell + 1 < map.len() as u64 {
+        // current icell = map.len() - 1
+        // We now want the starting byte of the new icell
+        if icell < (map.len() - 1) as u64 {
           return Err(
             format!(
               "HEALPix error at row {}: the file seems not to be sorted!",
@@ -125,7 +129,7 @@ impl HealpixCumulIndex {
             .into(),
           );
         }
-        // Push only the starting byte of the first row having a given cell number.
+        // Push only the starting byte of the first row having a the next cell number.
         // Copy the value for all empty cells between two non-empty cells.
         for _ in map.len() as u64..=icell {
           //info!("Push row: {}; bytes: {:?}", irow, &byte_range);
@@ -141,7 +145,7 @@ impl HealpixCumulIndex {
         map.push(n_bytes_read as u64);
       }
       // Write the cumulative map
-      let implicit_index = OwnedCIndex::new_unchecked(self.depth, map.into_boxed_slice());
+      let implicit_index = OwnedCIndex::new_unsafe(self.depth, map.into_boxed_slice());
       self.write_index(implicit_index)
     }
   }

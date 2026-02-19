@@ -131,10 +131,10 @@ pub enum HCIndexShape {
 /// and to provide with a FITS serialization allowing to attach some metadata to those index while providing
 /// direct mapping to the structure on the disk without byte re-ordering manipulations.
 ///
-/// It although offer a very quick way to provide the number of rows (or or bytes) covered by a given
+/// It although offers a very quick way to provide the number of rows (or bytes) covered by a given
 /// MOC, without having to sum over all values in a given range.
 ///
-/// It could also be used with cumulative probabilities to quickly compute the taol probability covered
+/// It could also be used with cumulative probabilities to quickly compute the tatol probability covered
 ///by an input MOC, on possibly large proba skymap, without having to load the full file in memory.
 pub trait HCIndex {
   /// Type of value the index contains.
@@ -599,7 +599,12 @@ pub struct OwnedCIndex<T: HCIndexValue> {
   values: Box<[T]>,
 }
 impl<T: HCIndexValue> OwnedCIndex<T> {
-  pub fn new_unchecked(depth: u8, values: Box<[T]>) -> Self {
+  /// WARNING: this is unsafe because you externally must ensure that the 'values':
+  /// *  are cumulatives
+  /// * but also, is a non-cumulative value at index 'i' is followed by a 0 non-cumulative value,
+  ///   the next cumulative value at index 'i+1' **must be** the next cumulative value different from
+  ///   the cumulative value at index 'i'!
+  pub fn new_unsafe(depth: u8, values: Box<[T]>) -> Self {
     let len = n_hash(depth) + 1; // + 1 to get the total number of rows in the file at index `n_hash`
     assert_eq!(len as usize, values.len());
     Self { depth, values }
@@ -660,7 +665,8 @@ impl<'a, T: 'a + HCIndexValue, S: SkyMap<'a, ValueType = T>> From<&'a S> for Own
       acc.add_assign(*v);
     }
     res.push(acc);
-    Self::new_unchecked(depth, res.into_boxed_slice())
+    // Here we are goog because we cumul and number of rows (thus the 'ending' values)
+    Self::new_unsafe(depth, res.into_boxed_slice())
   }
 }
 
@@ -751,20 +757,26 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
   if depth <= 13 {
     let mut it = values.iter().enumerate();
     if let Some((i, v)) = it.next() {
-      let mut prev = *v;
-      writer
+      let mut prev_i = i;
+      let mut prev_v = *v;
+      /*writer
         .write_all((i as u32).to_le_bytes().as_ref())
         .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
-      len += 1;
+      len += 1;*/
       for (i, v) in it {
-        if *v != prev {
+        if *v != prev_v {
           writer
-            .write_all((i as u32).to_le_bytes().as_ref())
-            .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
+            .write_all((prev_i as u32).to_le_bytes().as_ref())
+            .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
           len += 1;
-          prev = *v;
+          prev_v = *v;
         }
+        prev_i = i;
       }
+      writer
+        .write_all((prev_i as u32).to_le_bytes().as_ref())
+        .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+      len += 1;
     }
     Ok((size_of::<u32>() + size_of::<T>()) * len)
   } else {
@@ -775,20 +787,26 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
     }*/
     let mut it = values.iter().enumerate();
     if let Some((i, v)) = it.next() {
-      let mut prev = *v;
-      writer
+      let mut prev_i = i;
+      let mut prev_v = *v;
+      /*writer
         .write_all((i as u64).to_le_bytes().as_ref())
         .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
-      len += 1;
+      len += 1;*/
       for (i, v) in it {
-        if *v != prev {
+        if *v != prev_v {
           writer
-            .write_all((i as u64).to_le_bytes().as_ref())
-            .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
+            .write_all((prev_i as u64).to_le_bytes().as_ref())
+            .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
           len += 1;
-          prev = *v;
+          prev_v = *v;
         }
+        prev_i = i;
       }
+      writer
+        .write_all((prev_i as u64).to_le_bytes().as_ref())
+        .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+      len += 1;
     }
     Ok((size_of::<u64>() + size_of::<T>()) * len)
   }
@@ -835,16 +853,17 @@ where
   let mut curr_v = T::zero();
   let end = H::from_u64(n_hash(depth) + 1);
   for (h, v) in it {
+    curr_v = v;
     assert!(curr_h <= h);
     // Fill missing values by current value.
-    while curr_h < h {
+    while curr_h <= h {
       writer.write_all(curr_v.to_le_bytes().as_ref())?;
       curr_h += H::one();
     }
     // Write current value
-    writer.write_all(v.to_le_bytes().as_ref())?;
+    /*writer.write_all(v.to_le_bytes().as_ref())?;
     curr_h = h + H::one();
-    curr_v = v;
+    curr_v = v;*/
   }
   while curr_h < end {
     // (end + 1) elems in Implicit
@@ -1763,7 +1782,7 @@ mod tests {
     let depth = 10;
     let n = n_hash(depth);
     let values: Vec<u32> = (0..=n as u32).collect();
-    let cindex = OwnedCIndex::new_unchecked(depth, values.into_boxed_slice());
+    let cindex = OwnedCIndex::new_unsafe(depth, values.into_boxed_slice());
     let mut indexex_file_md5 = [0_u8; 32];
     indexex_file_md5.copy_from_slice("0123456789ABCDEF0123456789ABCDEF".as_bytes());
     cindex
