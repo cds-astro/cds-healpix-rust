@@ -1,26 +1,39 @@
 [package]
-name = "healpix"
-version = "0.1.4"
+name = "cdshealpix-wasm"
+version = "0.9.0"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
-edition = "2018"
-
-[build-dependencies]
-cdshealpix = "0.5.4"
-
-[dependencies]
-cdshealpix = "0.5.4"
-wasm-bindgen = "0.2.64"
+description = """
+WASM version of the CDS HEALPix library.
+"""
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+categories = ["science", "data-structures", "algorithms"]
+keywords = ["healpix"]
+documentation = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
+homepage = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
+repository = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
+edition = "2024"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+cdshealpix = { path = "../.." }
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 
 [profile.release]
-#lto = true # Commented due to a bug in rustc 1.44: https://github.com/rustwasm/wasm-bindgen/issues/2160 and https://github.com/rust-lang/rust/issues/72758
+panic = 'unwind'
+debug = false
+debug-assertions = false
+overflow-checks = false
+opt-level = 3
+lto = true
 
-# See: https://rustwasm.github.io/wasm-pack/book/cargo-toml-configuration.html
 
-# `wasm-opt` is on by default in for the release profile, but it can be
-# disabled by setting it to `false`i
-#[package.metadata.wasm-pack.profile.release]
-#wasm-opt = false
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = true
 

@@ -1,0 +1,19 @@
+name: TestWASM
+
+on: [push]
+
+jobs:
+  wasmtest:
+    name: Test WASM
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh 
+    - name: WASM test
+      run: |
+        source $HOME/.cargo/env      
+        cd crates/wasm
+        wasm-pack test --node
+
+

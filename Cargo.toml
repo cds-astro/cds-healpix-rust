@@ -32,7 +32,8 @@ doc = true
 
 [workspace]
 members = [
-    "crates/cli"
+    "crates/cli",
+    "crates/wasm"
 ]
 
 [workspace.dependencies]

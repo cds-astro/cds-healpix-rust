@@ -420,6 +420,7 @@ impl From<MomVecImpl<u64, u32>> for CountMom {
 impl CountMom {
   /// # Params
   /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(
     &self,
     path: P,
@@ -484,6 +485,7 @@ impl DensMom {
 
   /// # Params
   /// * `value_name`: the name of the value so we know the king of quantity this map stores.
+  #[cfg(not(target_arch = "wasm32"))]
   pub fn to_fits_file<P: AsRef<Path>, T: AsRef<str>>(
     &self,
     path: P,
