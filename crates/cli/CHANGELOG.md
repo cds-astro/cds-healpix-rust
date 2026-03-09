@@ -1,5 +1,15 @@
 # `hpx-cli` Change Log
 
+## 0.1.2
+
+Released 2025-03-09
+
+### Fixed
+
+* Bugs in Heapix Cumulative Index
+
+
+
 ## 0.1.1
 
 Released 2025-06-02

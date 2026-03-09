@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix-wasm"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 description = """
 WASM version of the CDS HEALPix library.
@@ -12,7 +12,7 @@ keywords = ["healpix"]
 documentation = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
 homepage = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
 repository = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
-edition = "2024"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
