@@ -1,15 +1,29 @@
 //! Implementation of the HEALPix framework.  
 //! See papers:  
 //! * Gorsky2005: "HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data
-//!                Distributed on the Sphere", Górski, K. M. et al., 2005; 2005ApJ...622..759G.
+//!   Distributed on the Sphere", Górski, K. M. et al., 2005; 2005ApJ...622..759G.
 //! * Calabretta2004: "Mapping on the HEALPix grid", Calabretta, M. R., 2004; 2004astro.ph.12607C
 //! * Calabretta2007: "Mapping on the HEALPix grid", Calabretta, M. R. et Roukema, B. F., 2007; 2007MNRAS.381..865C
 //! * Reinecke2015: "Efficient data structures for masks on 2D grids",  Reinecke, M. et Hivon, E., 2015; 2015A&A...580A.132R
 
 use std::{
   f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
+  ops::Shr,
   sync::Once,
 };
+
+pub mod compass_point;
+pub mod external_edge;
+/// Module containing NESTED scheme methods
+pub mod nested;
+/// Module containing RING scheme methods
+pub mod ring;
+pub mod special_points_finder;
+pub mod sph_geom;
+/// No need to make those public!
+mod xy_geom;
+
+use crate::compass_point::MainWind::{self, *};
 
 /// Constant = sqrt(6).
 ///
@@ -49,7 +63,7 @@ pub const FOUR_OVER_PI: f64 = 4_f64 / PI;
 /// use std::f64::consts::PI;
 /// assert_eq!(PI / 4f64, PI_OVER_FOUR);
 /// ```
-pub const PI_OVER_FOUR: f64 = 0.25_f64 * PI;
+pub const PI_OVER_FOUR: f64 = FRAC_PI_4;
 
 /// Constant = 29, i.e. the largest possible depth we can store on a signed positive long
 /// (4 bits for base cells + 2 bits per depth + 2 remaining bits (1 use in the unique notation).
@@ -154,7 +168,7 @@ static SMALLER_EDGE2OPEDGE_DIST: [f64; 30] = [
 /// assert!(f64::abs(f64::acos(f64::sqrt(TRANSITION_Z * FOUR_OVER_PI)) - LAT_OF_SQUARE_CELL) < 1e-15_f64);
 /// ```
 pub static LAT_OF_SQUARE_CELL: f64 = 0.399_340_199_478_977_75_f64;
-/// Simply the consine of LAT_OF_SQUARE_CELL
+/// Cosine of LAT_OF_SQUARE_CELL
 static COS_LAT_OF_SQUARE_CELL: f64 = 0.921_317_731_923_561_3_f64;
 
 /// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
@@ -294,7 +308,6 @@ impl ConstantsC2V {
 }
 
 #[inline]
-// #[allow(dead_code)]
 pub fn haversine_dist(p1_lon: f64, p1_lat: f64, p2_lon: f64, p2_lat: f64) -> f64 {
   let shs = squared_half_segment(p2_lon - p1_lon, p2_lat - p1_lat, p1_lat.cos(), p2_lat.cos());
   sphe_dist(shs)
@@ -325,7 +338,7 @@ fn to_squared_half_segment(spherical_distance: f64) -> f64 {
 }
 
 #[inline]
-fn pow2(x: f64) -> f64 {
+const fn pow2(x: f64) -> f64 {
   x * x
 }
 
@@ -355,23 +368,16 @@ impl Customf64 for f64 {
     0.5 * self
   }
 
-  /// [Duplicated code](https://doc.rust-lang.org/std/primitive.f64.html#method.div_euc), because
-  /// it is unstable so far.
   #[inline]
   fn div_eucl(self, rhs: f64) -> f64 {
-    let q = (self / rhs).trunc();
-    if self % rhs < 0.0 {
-      return if rhs > 0.0 { q - 1.0 } else { q + 1.0 };
-    }
-    q
+    self.div_euclid(rhs)
   }
 
   fn eq0(self) -> bool {
     self.abs() < f64::EPSILON
   }
 }
-// All types that implement `f64` get methods defined in `Customf64` for free.
-// impl<F: f64> Customf64 for F {}*/
+
 /// Returns an upper limit on the distance between a cell center around the given position
 /// and its furthest vertex.
 /// # Params
@@ -381,8 +387,8 @@ impl Customf64 for f64 {
 ///
 /// # Result
 /// The following plot shows, for the depth 8, the real largest distances (in red) and the result
-/// of this method (in blue).  
-/// WARNING: the units of `(lon, lat)` on the plot are *degrees*, while the distance is in *mas*  
+/// of this method (in blue).
+/// WARNING: the units of `(lon, lat)` on the plot are *degrees*, while the distance is in *mas*
 /// Credit: plot made using [TOPCAT](http://www.star.bris.ac.uk/~mbt/topcat/)
 /// ![CenterToVertexDist](https://raw.githubusercontent.com/cds-astro/cds-healpix-rust/master/resources/4doc/d_center_vertex.png)
 ///
@@ -403,7 +409,7 @@ pub fn largest_center_to_vertex_distance(depth: u8, lon: f64, lat: f64) -> f64 {
 }
 
 /// Returns an upper limit on the distance between a cell center and it furthest vertex, for
-/// all the cells in the region covered by a cone of given center and radius.  
+/// all the cells in the region covered by a cone of given center and radius.
 /// It is an extension of [largest_center_to_vertex_distance](#fn.largest_center_to_vertex_distance)
 /// # Params
 /// - `depth` the depth of the cell
@@ -495,9 +501,9 @@ pub fn largest_center_to_vertex_distances_with_radius(
   vec.into_boxed_slice()
 }
 
-/// Returns an upper limit on distances between the center of a cell and its furthest vertex.  
+/// Returns an upper limit on distances between the center of a cell and its furthest vertex.
 /// We assumes that the cell center is located in the North polar cap region (OR IS ON THE
-/// TRANSITION LATITUDE).  
+/// TRANSITION LATITUDE).
 /// We use a linear upper limit based on the longitude.
 /// - At the transition latitude, we note CN the distance at a base cell border between:
 ///   - Cell center (C): (x_c = 1/nside, y_c = 1) => (lon_c = pi/4 * 1/nside, lat_c = TRANSITION_LATITUDE)
@@ -511,22 +517,22 @@ pub fn largest_center_to_vertex_distances_with_radius(
 /// - finally, linear approx:
 /// > d = ((lon % pi/2) - pi/4) * (dMax - dMin)/(pi/4 * (1 - 1/nside)) + dMin
 #[inline]
-fn largest_c2v_dist_in_npc(lon: f64, csts: &ConstantsC2V) -> f64 {
+const fn largest_c2v_dist_in_npc(lon: f64, csts: &ConstantsC2V) -> f64 {
   let lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
-  debug_assert!((0_f64..=FRAC_PI_4).contains(&lon));
+  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
 /// Same as the above method, but taking into account an additional radius
 #[inline]
-fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
+const fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2V) -> f64 {
   debug_assert!(0_f64 < radius);
   let mut lon = (FRAC_PI_4 - (lon % FRAC_PI_2)).abs();
-  debug_assert!((0_f64..=FRAC_PI_4).contains(&lon));
+  debug_assert!(0_f64 <= lon && lon <= FRAC_PI_4);
   lon = f64::min(lon + radius, FRAC_PI_4);
   linear_approx(lon, csts.slope_npc, csts.intercept_npc)
 }
 
-/// Returns an upper limit on distance between the center of a cell and its furthest vertex.  
+/// Returns an upper limit on distance between the center of a cell and its furthest vertex.
 /// We assumes that the cell center is located in the equatorial region,
 /// above the latitude at which cells are squares.
 /// We use a linear upper limit based on the latitude.
@@ -539,12 +545,12 @@ fn largest_c2v_dist_in_npc_with_radius(lon: f64, radius: f64, csts: &ConstantsC2
 /// - finally, linear approx:
 /// > d = (lat - LAT_OF_SQUARE_CELL) * (dMax - dMin)/(TRANSITION_LATITUDE - LAT_OF_SQUARE_CELL) + dMin
 #[inline]
-fn largest_c2v_dist_in_eqr_top(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!((LAT_OF_SQUARE_CELL..TRANSITION_LATITUDE).contains(&lat_abs));
+const fn largest_c2v_dist_in_eqr_top(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
+  debug_assert!(LAT_OF_SQUARE_CELL <= lat_abs && lat_abs < TRANSITION_LATITUDE);
   linear_approx(lat_abs, csts.slope_eqr, csts.intercept_eqr)
 }
 
-/// Returns an upper limit on distance between the center of a cell and its furthest vertex.  
+/// Returns an upper limit on distance between the center of a cell and its furthest vertex.
 /// We assumes that the cell center is located in the equatorial region,
 /// bellow the latitude at which cells are squares.
 /// We use a parabola approximation upper limit based on the latitude.
@@ -558,13 +564,13 @@ fn largest_c2v_dist_in_eqr_top(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
 ///   - => dist =  d_max * (1 + (cos(LAT_OF_SQUARE_CELL) - 1) / LAT_OF_SQUARE_CELL^2 * lat^2)
 ///   - => dist =  d_max * (1 - (1 - cos(LAT_OF_SQUARE_CELL)) / LAT_OF_SQUARE_CELL^2 * lat^2)
 #[inline]
-fn largest_c2v_dist_in_eqr_bottom(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
-  debug_assert!((0_f64..LAT_OF_SQUARE_CELL).contains(&lat_abs));
+const fn largest_c2v_dist_in_eqr_bottom(lat_abs: f64, csts: &ConstantsC2V) -> f64 {
+  debug_assert!(0_f64 <= lat_abs && lat_abs < LAT_OF_SQUARE_CELL);
   csts.coeff_x2_eqr * pow2(lat_abs) + csts.coeff_cst_eqr
 }
 
 #[inline]
-fn linear_approx(x: f64, slope: f64, intercept: f64) -> f64 {
+const fn linear_approx(x: f64, slope: f64, intercept: f64) -> f64 {
   slope * x + intercept
 }
 
@@ -620,7 +626,7 @@ fn linear_approx(x: f64, slope: f64, intercept: f64) -> f64 {
 /// }
 /// ```
 #[inline]
-pub fn nside(depth: u8) -> u32 {
+pub const fn nside(depth: u8) -> u32 {
   check_depth(depth);
   nside_unsafe(depth)
 }
@@ -654,7 +660,7 @@ pub const fn nside_unsafe(depth: u8) -> u32 {
 /// }
 /// ```
 #[inline]
-pub fn nside_square(delta_depth: u8) -> u64 {
+pub const fn nside_square(delta_depth: u8) -> u64 {
   check_depth(delta_depth);
   nside_square_unsafe(delta_depth)
 }
@@ -667,7 +673,7 @@ pub const fn nside_square_unsafe(delta_depth: u8) -> u64 {
 }
 
 #[inline]
-fn check_depth(depth: u8) {
+const fn check_depth(depth: u8) {
   assert!(is_depth(depth), "Expected depth in [0, 29]");
 }
 
@@ -699,7 +705,7 @@ pub const fn is_depth(depth: u8) -> bool {
 /// }
 /// ```
 #[inline]
-pub fn depth(nside: u32) -> u8 {
+pub const fn depth(nside: u32) -> u8 {
   check_nside(nside);
   depth_unsafe(nside)
 }
@@ -722,7 +728,7 @@ pub const fn depth_unsafe(nside: u32) -> u8 {
 /// - `depth`
 ///
 /// # Unsafe
-/// - Because we do not check that `n_hash` is a valid number of cells.  
+/// - Because we do not check that `n_hash` is a valid number of cells.
 ///
 /// # Examples
 ///
@@ -734,27 +740,27 @@ pub const fn depth_unsafe(nside: u32) -> u8 {
 /// }
 /// ```
 #[inline]
-pub fn depth_from_n_hash_unsafe(n_hash: u64) -> u8 {
+pub const fn depth_from_n_hash_unsafe(n_hash: u64) -> u8 {
   // 12 = 0b1100 so we have to remove the 2 unset bits
   ((n_hash.trailing_zeros() - 2) >> 1) as u8
 }
 
 #[inline]
-fn check_nside(nside: u32) {
+const fn check_nside(nside: u32) {
   assert!(is_nside(nside), "Nside must be a power of 2 in [1-2^29]");
 }
 
 /// Returns `true` if the given argument is a valid `nside` for the NESTED scheme, i.e.
 /// if it is a power of 2, is != 0 and is <= [NSIDE_MAX](constant.NSIDE_MAX.html).
 #[inline]
-pub fn is_nside(nside: u32) -> bool {
+pub const fn is_nside(nside: u32) -> bool {
   is_pow_of_2(nside) && nside > 0 && nside <= NSIDE_MAX
 }
 
 /// Determines if an integer is a power of two, including 0.
 /// Taken from the "Bit Twiddling Hacks" web page of Sean Eron Anderson.
 #[inline]
-fn is_pow_of_2(x: u32) -> bool {
+const fn is_pow_of_2(x: u32) -> bool {
   (x & (x - 1)) == 0
 }
 
@@ -808,7 +814,7 @@ fn is_pow_of_2(x: u32) -> bool {
 /// ```
 ///
 #[inline]
-pub fn n_hash(depth: u8) -> u64 {
+pub const fn n_hash(depth: u8) -> u64 {
   check_depth(depth);
   n_hash_unsafe(depth)
 }
@@ -831,13 +837,13 @@ pub const fn n_hash_unsafe(depth: u8) -> u64 {
 /// assert!(has_best_starting_depth(PI / 4f64));
 /// ```
 #[inline]
-pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
+pub const fn has_best_starting_depth(d_max_rad: f64) -> bool {
   d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0]
 }
 
 /// Returns the the smallest depth (in `[0, 29]`) at which a shape having the given largest distance
 /// from its center to a border overlaps a maximum of 9 cells (the cell containing the center of
-/// the shape plus the 8 neighbouring cells).  
+/// the shape plus the 8 neighbouring cells).
 /// Info: internally, unrolled binary search loop on 30 pre-computed values (one by depth).
 ///
 /// Returns -1 if the given distance is very large (> ~48deg), else returns the smallest depth
@@ -873,7 +879,7 @@ pub fn has_best_starting_depth(d_max_rad: f64) -> bool {
 /// assert_eq!(22, best_starting_depth(9.537E-8)); // 20 mas
 /// ```
 #[inline]
-pub fn best_starting_depth(d_max_rad: f64) -> u8 {
+pub const fn best_starting_depth(d_max_rad: f64) -> u8 {
   // Could have used an Option
   assert!(
     d_max_rad < SMALLER_EDGE2OPEDGE_DIST[0],
@@ -967,11 +973,11 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 {
   }
 }
 
-/// Performs the HEALPix projection: `(x, y) = proj(lon, lat)`.  
+/// Performs the HEALPix projection: `(x, y) = proj(lon, lat)`.
 /// The chosen scale is such that: base cell vertices and center coordinates are integers;
-/// the distance from a cell center to its vertices equals one.  
+/// the distance from a cell center to its vertices equals one.
 /// This projection is multi-purpose in the sense that if `lon` is in `[-pi, pi]`, then
-/// `x` is in `[-4, 4]` and if `lon` is in `[0, 2pi]`, then `x` is in `[0, 8]`.  
+/// `x` is in `[-4, 4]` and if `lon` is in `[0, 2pi]`, then `x` is in `[0, 8]`.
 /// It means that a same position on the sphere can lead to different positions in the projected
 /// Euclidean plane.
 ///
@@ -1117,9 +1123,9 @@ pub fn best_starting_depth(d_max_rad: f64) -> u8 {
 #[inline]
 pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
   check_lat(lat);
-  let lon = abs_sign_decompose(lon);
-  let lat = abs_sign_decompose(lat);
-  let x = pm1_offset_decompose(lon.abs * FOUR_OVER_PI);
+  let lon = AbsAndSign::decompose(lon);
+  let lat = AbsAndSign::decompose(lat);
+  let x = OffsetAndPM1::decompose(lon.abs * FOUR_OVER_PI);
   let mut xy = (x.pm1, lat.abs);
   if is_in_equatorial_region(lat.abs) {
     proj_cea(&mut xy);
@@ -1160,7 +1166,7 @@ pub fn proj(lon: f64, lat: f64) -> (f64, f64) {
 /// assert_eq!(base_cell_from_proj_coo(5.0, -1.0), 10);
 /// assert_eq!(base_cell_from_proj_coo(7.0, -1.0), 11);
 /// ```
-pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
+pub const fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   let mut x = 0.5 * ensures_x_is_positive(x);
   let mut y = 0.5 * (y + 3.0);
   let mut i = x as u8;
@@ -1168,9 +1174,9 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   let mut j = (y as u8) << 1;
   debug_assert!(j == 0 || j == 2 || j == 4);
   x -= i as f64;
-  debug_assert!((0.0..1.0).contains(&x));
+  debug_assert!(0.0 <= x && x < 1.0);
   y -= (j >> 1) as f64;
-  debug_assert!((0.0..1.0).contains(&y));
+  debug_assert!(0.0 <= y && y < 1.0);
   let in_northwest = (x <= y) as u8; // 1/0
   let in_southeast = (x >= 1.0 - y) as u8; // 0\1
   i += in_southeast >> in_northwest; // <=> in_southeast & (1 - in_northwest) => 0 or 1
@@ -1182,7 +1188,18 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
   ((4 - j) << 2) + i
 }
 
-/// Unproject the given HEALPix projected points.  
+/// In the case we want the projection to return values `x in [0, 8]`, we just have to apply
+/// this method to the returned `x` value.
+#[inline]
+pub(crate) const fn ensures_x_is_positive(x: f64) -> f64 {
+  if x < 0.0 {
+    x + 8.0
+  } else {
+    x
+  }
+}
+
+/// Unproject the given HEALPix projected points.
 /// This unprojection is multi-purpose in the sense that:
 ///  - if input `x` in `[-8, 0[`, then output `lon` in `[-2pi, 0]`
 ///  - if input `x` in `[ 0, 8]`, then output `lon` in `[0, 2pi]`
@@ -1195,7 +1212,7 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 ///
 /// # Output
 /// -  `(lon, lat)` in radians, the position on the unit sphere whose projected coordinates are
-///    the input coordinates `(x, y)`.  
+///    the input coordinates `(x, y)`.
 ///   - if `x <= 0`, then `lon` in `[-2pi, 0]`;
 ///   - else if `x >= 0`, the  `lon` in `[0, 2pi]`
 ///   - `lat` always in `[-pi/2, pi/2]`.
@@ -1283,9 +1300,9 @@ pub fn base_cell_from_proj_coo(x: f64, y: f64) -> u8 {
 #[inline]
 pub fn unproj(x: f64, y: f64) -> (f64, f64) {
   check_y(y);
-  let x = abs_sign_decompose(x);
-  let y = abs_sign_decompose(y);
-  let lon = pm1_offset_decompose(x.abs);
+  let x = AbsAndSign::decompose(x);
+  let y = AbsAndSign::decompose(y);
+  let lon = OffsetAndPM1::decompose(x.abs);
   let mut lonlat = (lon.pm1, y.abs);
   if is_in_projected_equatorial_region(y.abs) {
     deproj_cea(&mut lonlat);
@@ -1297,21 +1314,123 @@ pub fn unproj(x: f64, y: f64) -> (f64, f64) {
   lonlat
 }
 
-/// In the case we want the projection to return values `x in [0, 8]`, we just have to apply
-/// this method to the returned `x` value.
+/// Transforms the input longitude and latitude in a base cell number (`\in [0, 12[`)
+/// and projected coordinates `(x, y)` inside the base cell with:
+/// * origin: the south vertex
+/// * x-axis: west-to-east axis
+/// * y-axis: south-to-north axis
+/// and such that:
+/// * `x \in [-1.0, 1.0]`
+/// * `y \in [ 0.0, 2.0]`
+///
+/// # Inputs
+/// - `lon`: longitude in radians, support reasonably large positive and negative values
+///   producing accurate results with a naive range reduction like modulo 2*pi
+///   (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
+/// - `lat`: latitude in radians, must be in `[-pi/2, pi/2]`
+/// # Output
+/// - 0: base cell number (`\in [0, 12[`)
+/// - 1:  west-to-east  axis coordinate in the base cell, `x \in [-1.0, 1.0]`
+/// - 2: south-to-north axis coordinate in the base cell, `y \in [ 0.0, 2.0]`
+/// # Panics
+///   If `lat` **not in** `[-pi/2, pi/2]`, this method panics.
 #[inline]
-pub(crate) fn ensures_x_is_positive(x: f64) -> f64 {
-  if x < 0.0 {
-    x + 8.0
+pub(crate) fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
+  check_lat(lat);
+  let (x_pm1, q) = xpm1_and_q(lon);
+  if lat > TRANSITION_LATITUDE {
+    // North polar cap, Collignon projection.
+    // - set the origin to (PI/4, 0)
+    let sqrt_3_one_min_z = SQRT6 * (HALF * lat + FRAC_PI_4).cos();
+    let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, 2.0 - sqrt_3_one_min_z);
+    let d0h = q;
+    (d0h, x_proj, y_proj)
+  } else if lat < -TRANSITION_LATITUDE {
+    // South polar cap, Collignon projection
+    // - set the origin to (PI/4, -PI/2)
+    let sqrt_3_one_min_z = SQRT6 * (HALF * lat - FRAC_PI_4).cos(); // cos(-x) = cos(x)
+    let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, sqrt_3_one_min_z);
+    let d0h = q + 8;
+    (d0h, x_proj, y_proj)
   } else {
-    x
+    // Equatorial region, Cylindrical equal area projection
+    // - set the origin to (PI/4, 0)               if q = 2
+    // - set the origin to (PI/4, -PI/2)           if q = 0
+    // - set the origin to (0, -TRANSITION_LAT)    if q = 3
+    // - set the origin to (PI/2, -TRANSITION_LAT) if q = 1
+    // let zero_or_one = (x_cea as u8) & 1;
+    let y_pm1 = lat.sin() * ONE_OVER_TRANSITION_Z;
+    // Inequalities have been carefully chosen so that S->E and S->W axis are part of the cell,
+    // and not E->N and W->N
+
+    // Version with branch
+    // |\3/|
+    // .2X1.
+    // |/0\|
+    /*let q13 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */  debug_assert!(q12 == 0 || q12 == 1);
+    let q23 = (x_pm1 <=  y_pm1) as u8; /* 1/0 */  debug_assert!(q23 == 0 || q23 == 1);
+    match q13 | (q23 << 1) {
+      0 => ( q         , x_pm1      , y_pm1 + 2.0),
+      1 => ((q + 5) & 7, x_pm1 - 1.0, y_pm1 + 1.0), // (q + 5) & 7 <=> (q + 1) | 4
+      2 => ( q + 4     , x_pm1 + 1.0, y_pm1 + 1.0),
+      3 => ( q + 8     , x_pm1      , y_pm1),
+      _ => unreachable!(),
+    }*/
+
+    // Branch free version
+    // |\2/|
+    // .3X1.
+    // |/0\|
+    let q01 = (x_pm1 > y_pm1) as u8; /* 0/1 */
+    debug_assert!(q01 == 0 || q01 == 1);
+    let q12 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */
+    debug_assert!(q12 == 0 || q12 == 1);
+    // q1 = 1 if q1, 0 else
+    let q1 = q01 & q12;
+    debug_assert!(q1 == 0 || q1 == 1);
+    // = q01 + q03, i.e. 0/1 + 1\0
+    let q013 = q01 + (1 - q12);
+    // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
+    let x_proj = x_pm1 - ((q01 + q12) as i8 - 1) as f64;
+    // y: y_pm1 + 0 if q2 | y_pm1 + 1 if q1 or q3 | y_pm1 + 2 if q0
+    let y_proj = y_pm1 + q013 as f64;
+    // d0h: +8 if q0 | +4 if q3 | +5 if q1
+    let d0h = (q013 << 2) + ((q + q1) & 3);
+    (d0h, x_proj, y_proj)
+  }
+}
+
+/// Transform the input longitude, in radians, in a value `x` in `[-1, 1[` plus a quarter in `[0, 3]`,
+/// such that `lon = (x + 1) * PI / 4 + q * PI / 2`.
+#[inline]
+pub(crate) const fn xpm1_and_q(lon: f64) -> (f64, u8) {
+  let lon_bits = lon.to_bits();
+  let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
+  let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
+  let x = lon_abs * FOUR_OVER_PI;
+  let q = x as u8 | 1_u8;
+  // Remark: to avoid the branch, we could have copied lon_sign on x - q,
+  //         but I so far lack of idea to deal with q efficiently.
+  //         And we are not supposed to have negative longitudes in ICRS
+  //         (the most used reference system in astronomy).
+  if lon_sign == 0 {
+    // => lon >= 0
+    (x - (q as f64), (q & 7_u8) >> 1)
+  } else {
+    // case lon < 0 should be rare => few risks of branch miss-prediction
+    // Since q in [0, 3]: 3 - (q >> 1)) <=> 3 & !(q >> 1)
+    // WARNING: BE SURE TO HANDLE THIS CORRECTLY IN THE REMAINING OF THE CODE!
+    //  - Case lon =  3/4 pi = 270 deg => x = -1, q=3
+    //  - Case lon = -1/2 pi = -90 deg => x =  1, q=2
+    (q as f64 - x, 3 - ((q & 7_u8) >> 1))
   }
 }
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
 #[inline]
-fn check_lat(lat: f64) {
-  assert!((-FRAC_PI_2..=FRAC_PI_2).contains(&lat));
+const fn check_lat(lat: f64) {
+  // assert!((-FRAC_PI_2..=FRAC_PI_2).contains(&lat));
+  assert!(-FRAC_PI_2 <= lat && lat <= FRAC_PI_2)
 }
 
 /// Verify that the latitude is in [-PI/2, PI/2], panics if not.
@@ -1336,45 +1455,52 @@ fn check_y(y: f64) {
 /// Returns `true` if the point of given (absolute value of) latitude is in the equatorial region,
 /// and `false` if it is located in one of the two polar caps
 #[inline]
-pub fn is_in_equatorial_region(abs_lat: f64) -> bool {
+pub const fn is_in_equatorial_region(abs_lat: f64) -> bool {
   abs_lat <= TRANSITION_LATITUDE
 }
 
 /// Returns `true` if the point of given (absolute value of) y coordinate in the projected plane
 /// is in the equatorial region, and `false` if it is located in one of the two polar caps
 #[inline]
-pub fn is_in_projected_equatorial_region(abs_y: f64) -> bool {
+pub const fn is_in_projected_equatorial_region(abs_y: f64) -> bool {
   abs_y <= 1.0
 }
 
-// Returns the absolute value of the given double together with its bit of sign
-struct AbsAndSign {
+pub(crate) struct AbsAndSign {
   abs: f64,
   sign: u64,
 }
-#[inline]
-pub(crate) fn abs_sign_decompose(x: f64) -> AbsAndSign {
-  let bits = f64::to_bits(x);
-  AbsAndSign {
-    abs: f64::from_bits(bits & F64_BUT_SIGN_BIT_MASK),
-    sign: bits & F64_SIGN_BIT_MASK,
+impl AbsAndSign {
+  /// Decompose the given double value in its absolute value and its sing bit.
+  #[inline]
+  pub(crate) const fn decompose(x: f64) -> Self {
+    let bits = f64::to_bits(x);
+    Self {
+      abs: f64::from_bits(bits & F64_BUT_SIGN_BIT_MASK),
+      sign: bits & F64_SIGN_BIT_MASK,
+    }
   }
 }
 
-// Decompose the given positive real value in
-// --* an integer offset in [1, 3, 5, 7] (*PI/4) and
-// --* a real value in [-1.0, 1.0] (*PI/4)
 pub(crate) struct OffsetAndPM1 {
   offset: u8, // = 1, 3, 5 or 7
   pm1: f64,   // in [-1.0, 1.0]
 }
-#[inline]
-pub(crate) fn pm1_offset_decompose(x: f64) -> OffsetAndPM1 {
-  let floor: u8 = x as u8;
-  let odd_floor: u8 = floor | 1u8;
-  OffsetAndPM1 {
-    offset: odd_floor & 7u8, // value modulo 8
-    pm1: x - (odd_floor as f64),
+impl OffsetAndPM1 {
+  /// Decompose the given positive value in
+  /// * `offset`: a offset (1, 3, 5 or 7)
+  /// * `pm1`: a value in `[-1.0, -1.0]`
+  ///
+  /// such that: `x % (2 pi) = (pm1 + offset) * pi/4`
+  #[inline]
+  pub(crate) const fn decompose(x: f64) -> OffsetAndPM1 {
+    debug_assert!(x >= 0.0);
+    let floor: u8 = x as u8;
+    let odd_floor: u8 = floor | 1u8;
+    OffsetAndPM1 {
+      offset: odd_floor & 7u8, // value modulo 8
+      pm1: x - (odd_floor as f64),
+    }
   }
 }
 
@@ -1414,39 +1540,33 @@ fn deproj_collignon(lonlat: &mut (f64, f64)) {
 }
 
 #[inline]
-fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
+const fn is_not_near_from_pole(sqrt_of_three_time_one_minus_sin_of: f64) -> bool {
   // In case of pole: x = y = 0
   sqrt_of_three_time_one_minus_sin_of > EPS_POLE
 }
 
 #[inline]
-fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
+const fn deal_with_numerical_approx_in_edges(lon: &mut f64) {
   *lon = lon.clamp(-1.0, 1.0);
 }
 
 // Shift x by the given offset and apply lon and lat signs to x and y respectively
 #[inline]
-pub(crate) fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64) {
+pub(crate) const fn apply_offset_and_signs(ab: &mut (f64, f64), off: u8, a_sign: u64, b_sign: u64) {
   let (ref mut a, ref mut b) = *ab;
   *a += off as f64;
   *a = f64::from_bits(f64::to_bits(*a) | a_sign);
   *b = f64::from_bits(f64::to_bits(*b) | b_sign);
 }
 
-// Import module compass point
-pub mod compass_point;
-pub mod external_edge;
-use crate::compass_point::MainWind;
-use crate::compass_point::MainWind::*;
-
-/// Compute the base cell value which is the neighbour of the given base cell, in the given direction.  
+/// Compute the base cell value which is the neighbour of the given base cell, in the given direction.
 /// There is no neighbour:
 /// - in the North and South directions for the equatorial region cells (i.e. cells 4, 5, 6 and 7)
 /// - in the East and West directions for:
 ///   - the north polar cap cells (i.e. cells 0, 1, 2 and 3)
-///   - the south polar cap cells (i.e. cells 8, 9, 10 and 11)  
-pub fn neighbour(base_cell: u8, direction: MainWind) -> Option<u8> {
-  if direction == MainWind::C {
+///   - the south polar cap cells (i.e. cells 8, 9, 10 and 11)
+pub const fn neighbour(base_cell: u8, direction: MainWind) -> Option<u8> {
+  if matches!(direction, MainWind::C) {
     Some(base_cell)
   } else {
     let d0h_mod_4 = base_cell & 3_u8; // <=> base_cell modulo 4
@@ -1460,7 +1580,7 @@ pub fn neighbour(base_cell: u8, direction: MainWind) -> Option<u8> {
   }
 }
 
-fn npc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
+const fn npc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
     S => base_cell_opt(iden(d0h_mod_4), 2),
     SE => base_cell_opt(next(d0h_mod_4), 1),
@@ -1472,7 +1592,7 @@ fn npc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   }
 }
 
-fn eqr_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
+const fn eqr_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
     SE => base_cell_opt(iden(d0h_mod_4), 2),
     E => base_cell_opt(next(d0h_mod_4), 1),
@@ -1483,8 +1603,7 @@ fn eqr_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
     _ => None,
   }
 }
-
-fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
+const fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
   match direction {
     S => base_cell_opt(oppo(d0h_mod_4), 2),
     SE => base_cell_opt(next(d0h_mod_4), 2),
@@ -1504,8 +1623,8 @@ fn spc_neighbour(d0h_mod_4: u8, direction: MainWind) -> Option<u8> {
 /// - `inner_direction` the direction of the sub-cell in the edge of the given base cell
 /// - `neighbour_direction` direction of the neighbour of the sub-cell from which we are looking
 ///   at the direction of the sub-cell
-///   
-pub fn edge_cell_direction_from_neighbour(
+///
+pub const fn edge_cell_direction_from_neighbour(
   base_cell: u8,
   inner_direction: &MainWind,
   neighbour_direction: &MainWind,
@@ -1519,30 +1638,30 @@ pub fn edge_cell_direction_from_neighbour(
   }
 }
 
-fn npc_egde_direction_from_neighbour(
+const fn npc_egde_direction_from_neighbour(
   inner_direction: &MainWind,
   neighbour_direction: &MainWind,
 ) -> MainWind {
   match neighbour_direction {
-    C => panic!("No neighbour in direction {:?}", &neighbour_direction),
+    C => panic!("No neighbour in direction for C"),
     E => match inner_direction {
       N | NE => N,
-      E => panic!("No neighbour in direction {:?}", &neighbour_direction),
+      E => panic!("No neighbour in direction for E"),
       S | SE => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     W => match inner_direction {
       N | NW => N,
-      W => panic!("No neighbour in direction {:?}", &neighbour_direction),
+      W => panic!("No neighbour in direction for W"),
       S | SW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     NE => {
-      assert!(*inner_direction == N || *inner_direction == E || *inner_direction == NE);
+      assert!(matches!(inner_direction, N | E | NE));
       NW
     }
     NW => {
-      assert!(*inner_direction == N || *inner_direction == W || *inner_direction == NW);
+      assert!(matches!(inner_direction, N | W | NW));
       NE
     }
     N => match inner_direction {
@@ -1555,37 +1674,37 @@ fn npc_egde_direction_from_neighbour(
   }
 }
 
-fn eqr_edge_direction_from_neighbour(
+const fn eqr_edge_direction_from_neighbour(
   _inner_direction: &MainWind,
   neighbour_direction: &MainWind,
 ) -> MainWind {
   neighbour_direction.opposite()
 }
 
-fn spc_edge_direction_from_neighbour(
+const fn spc_edge_direction_from_neighbour(
   inner_direction: &MainWind,
   neighbour_direction: &MainWind,
 ) -> MainWind {
   match neighbour_direction {
-    C => panic!("No neighbour in direction {:?}", &neighbour_direction),
+    C => panic!("No neighbour in direction for C"),
     E => match inner_direction {
       S | SE => S,
-      E => panic!("No neighbour in direction {:?}", &neighbour_direction),
+      E => panic!("No neighbour in direction for E"),
       N | NE => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     W => match inner_direction {
       S | SW => S,
-      W => panic!("No neighbour in direction {:?}", &neighbour_direction),
+      W => panic!("No neighbour in direction for W"),
       N | NW => neighbour_direction.opposite(),
       _ => unreachable!(),
     },
     SE => {
-      assert!(*inner_direction == S || *inner_direction == E || *inner_direction == SE);
+      assert!(matches!(inner_direction, S | E | SE));
       SW
     }
     SW => {
-      assert!(*inner_direction == S || *inner_direction == W || *inner_direction == SW);
+      assert!(matches!(inner_direction, S | W | SW));
       SE
     }
     S => match inner_direction {
@@ -1603,7 +1722,7 @@ fn spc_edge_direction_from_neighbour(
 /// # Panics
 /// If the base cell has no neighbour in the given direction (i.e. N/S for equatorial cells
 /// and E/W for polar caps cells)
-pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
+pub const fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -> MainWind {
   match base_cell >> 2 {
     // <=> basce_cell / 4
     0 => npc_direction_from_neighbour(neighbour_direction),
@@ -1613,9 +1732,9 @@ pub fn direction_from_neighbour(base_cell: u8, neighbour_direction: &MainWind) -
   }
 }
 
-fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
+const fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
+    E | W | C => panic!("No neighbour in direction for E, W or C"),
     NE => NW,
     NW => NE,
     N => N,
@@ -1623,16 +1742,16 @@ fn npc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   }
 }
 
-fn eqr_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
+const fn eqr_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    S | N | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
+    S | N | C => panic!("No neighbour in direction for S, N or C"),
     _ => neighbour_direction.opposite(),
   }
 }
 
-fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
+const fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
   match neighbour_direction {
-    E | W | C => panic!("No neighbour in direction {:?}", &neighbour_direction),
+    E | W | C => panic!("No neighbour in direction for E, W or C"),
     S => S,
     SE => SW,
     SW => SE,
@@ -1642,34 +1761,34 @@ fn spc_direction_from_neighbour(neighbour_direction: &MainWind) -> MainWind {
 
 /// Returns (mod4 - 1) in [0, 2], and 3 if mod4 == 0 (i.e. the previous value in [0, 3] range)
 #[inline]
-fn prev(mod4: u8) -> u8 {
+const fn prev(mod4: u8) -> u8 {
   debug_assert!(mod4 < 4);
   (((mod4 as i8) - 1) & 3) as u8
 }
 
 /// Returns (mod4 + 1) in [1, 3], and 0 if mod4 == 3 (i.e. the next value in [0, 3] range)
 #[inline]
-fn next(mod4: u8) -> u8 {
+const fn next(mod4: u8) -> u8 {
   debug_assert!(mod4 < 4);
   (mod4 + 1) & 3
 }
 
 /// Returns (mod4 + 2) in [2, 3], and 0 if mod4 == 2 and 1 if mod4 == 3 (i.e. the opposite value in [0, 3] range)
 #[inline]
-fn oppo(mod4: u8) -> u8 {
+const fn oppo(mod4: u8) -> u8 {
   debug_assert!(mod4 < 4);
   (mod4 + 2) & 3
 }
 
 /// Returns the input value: useless, just used to improve code legibility
 #[inline]
-fn iden(mod4: u8) -> u8 {
+const fn iden(mod4: u8) -> u8 {
   debug_assert!(mod4 < 4);
   mod4
 }
 
 #[inline]
-fn base_cell_opt(i: u8, j: u8) -> Option<u8> {
+const fn base_cell_opt(i: u8, j: u8) -> Option<u8> {
   Some(base_cell(i, j))
 }
 
@@ -1680,21 +1799,35 @@ fn base_cell_opt(i: u8, j: u8) -> Option<u8> {
 ///   - = 1 for the cells with are only in the equatorial region
 ///   - = 2 for the cells covering the south polar cap
 #[inline]
-fn base_cell(i: u8, j: u8) -> u8 {
+const fn base_cell(i: u8, j: u8) -> u8 {
   debug_assert!(i < 4 && j < 3);
   (j << 2) + i
 }
 
-/// Module containing NESTED scheme methods
-pub mod nested;
+/// x / 2
+#[inline]
+pub(crate) fn div2_quotient<T: Shr<u8, Output = T>>(x: T) -> T {
+  // x >> 1
+  x.shr(1)
+}
 
-/// Module containing RING scheme methods
-pub mod ring;
+/// x modulo 2
+#[inline]
+pub(crate) const fn div2_remainder(x: u64) -> u64 {
+  x & 1
+}
 
-pub mod special_points_finder;
-pub mod sph_geom;
-/// No need to make those public!
-mod xy_geom;
+/// x / 4
+#[inline]
+pub(crate) const fn div4_quotient(x: u8) -> u8 {
+  x >> 2
+}
+
+/// x modulo 4
+#[inline]
+pub(crate) const fn div4_remainder(x: u8) -> u8 {
+  x & 3
+}
 
 #[cfg(test)]
 mod tests {

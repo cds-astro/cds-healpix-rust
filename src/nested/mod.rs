@@ -1,6 +1,5 @@
 use std::{
-  f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
-  ops::Shr,
+  f64::consts::{FRAC_PI_2, PI},
   ops::{Range, RangeInclusive},
 };
 
@@ -29,6 +28,7 @@ pub mod bmoc;
 pub mod gpu;
 pub mod iter;
 pub mod map;
+pub mod moc;
 pub mod sort;
 pub mod zordercurve;
 
@@ -122,9 +122,7 @@ pub fn get(depth: u8) -> &'static Layer {
   &LAYERS[depth as usize]
 }
 
-pub mod moc;
-
-pub const fn to_range(hash: u64, delta_depth: u8) -> std::ops::Range<u64> {
+pub const fn to_range(hash: u64, delta_depth: u8) -> Range<u64> {
   let twice_delta_depth = delta_depth << 1;
   (hash << twice_delta_depth)..((hash + 1) << twice_delta_depth)
 }
@@ -200,8 +198,6 @@ pub const fn from_zuniq(zuniq: u64) -> (u8, u64) {
 pub const fn from_uniq(uniq_hash: u64) -> (u8, u64) {
   let depth = (60 - uniq_hash.leading_zeros()) >> 1;
   let hash = uniq_hash & !(16_u64 << (depth << 1));
-  // = uniq_hash - (16_u64 << (depth << 1));
-  // = uniq_hash & !highest_one_bit(uniq_hash)); also works, but do not benefit from depth
   (depth as u8, hash)
 }
 
@@ -211,17 +207,6 @@ pub const fn from_uniq_ivoa(uniq_hash: u64) -> (u8, u64) {
   let depth = (61 - uniq_hash.leading_zeros()) >> 1;
   let hash = uniq_hash - (4_u64 << (depth << 1));
   (depth as u8, hash)
-}
-
-#[allow(dead_code)]
-const fn highest_one_bit(mut i: u64) -> u64 {
-  i |= i >> 1;
-  i |= i >> 2;
-  i |= i >> 4;
-  i |= i >> 8;
-  i |= i >> 16;
-  i |= i >> 32;
-  i - (i >> 1)
 }
 
 /// Conveniency function returning the number of hash value in the [Layer] of the given *depth*.
@@ -587,8 +572,7 @@ impl Layer {
   /// assert_eq!(nside * nside - 1, nested12.hash(12.5_f64.to_radians(), 89.99999_f64.to_radians()));
   /// ```
   pub fn hash(&self, lon: f64, lat: f64) -> u64 {
-    check_lat(lat);
-    let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
+    let (d0h, l_in_d0c, h_in_d0c) = d0h_lh_in_d0c(lon, lat);
     // Coords inside the base cell
     //  - ok to cast on u32 since small negative values due to numerical inaccuracies (like -1e-15), are rounded to 0
     let i =
@@ -623,94 +607,6 @@ impl Layer {
     ...
   }*/
 
-  #[inline]
-  fn d0h_lh_in_d0c(lon: f64, lat: f64) -> (u8, f64, f64) {
-    let (x_pm1, q) = Layer::xpm1_and_q(lon);
-    if lat > TRANSITION_LATITUDE {
-      // North polar cap, Collignon projection.
-      // - set the origin to (PI/4, 0)
-      let sqrt_3_one_min_z = SQRT6 * (HALF * lat + FRAC_PI_4).cos();
-      let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, 2.0 - sqrt_3_one_min_z);
-      let d0h = q;
-      (d0h, x_proj, y_proj)
-    } else if lat < -TRANSITION_LATITUDE {
-      // South polar cap, Collignon projection
-      // - set the origin to (PI/4, -PI/2)
-      let sqrt_3_one_min_z = SQRT6 * (HALF * lat - FRAC_PI_4).cos(); // cos(-x) = cos(x)
-      let (x_proj, y_proj) = (x_pm1 * sqrt_3_one_min_z, sqrt_3_one_min_z);
-      let d0h = q + 8;
-      (d0h, x_proj, y_proj)
-    } else {
-      // Equatorial region, Cylindrical equal area projection
-      // - set the origin to (PI/4, 0)               if q = 2
-      // - set the origin to (PI/4, -PI/2)           if q = 0
-      // - set the origin to (0, -TRANSITION_LAT)    if q = 3
-      // - set the origin to (PI/2, -TRANSITION_LAT) if q = 1
-      // let zero_or_one = (x_cea as u8) & 1;
-      let y_pm1 = lat.sin() * ONE_OVER_TRANSITION_Z;
-      // Inequalities have been carefully chosen so that S->E and S->W axis are part of the cell,
-      // and not E->N and W->N
-
-      // Version with branch
-      // |\3/|
-      // .2X1.
-      // |/0\|
-      /*let q13 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */  debug_assert!(q12 == 0 || q12 == 1);
-      let q23 = (x_pm1 <=  y_pm1) as u8; /* 1/0 */  debug_assert!(q23 == 0 || q23 == 1);
-      match q13 | (q23 << 1) {
-        0 => ( q         , x_pm1      , y_pm1 + 2.0),
-        1 => ((q + 5) & 7, x_pm1 - 1.0, y_pm1 + 1.0), // (q + 5) & 7 <=> (q + 1) | 4
-        2 => ( q + 4     , x_pm1 + 1.0, y_pm1 + 1.0),
-        3 => ( q + 8     , x_pm1      , y_pm1),
-        _ => unreachable!(),
-      }*/
-      // Branch free version
-      // |\2/|
-      // .3X1.
-      // |/0\|
-      let q01 = (x_pm1 > y_pm1) as u8; /* 0/1 */
-      debug_assert!(q01 == 0 || q01 == 1);
-      let q12 = (x_pm1 >= -y_pm1) as u8; /* 0\1 */
-      debug_assert!(q12 == 0 || q12 == 1);
-      let q1 = q01 & q12; /* = 1 if q1, 0 else */
-      debug_assert!(q1 == 0 || q1 == 1);
-      let q013 = q01 + (1 - q12); // = q01 + q03; /* 0/1 + 1\0 +  */
-                                  // x: x_pm1 + 1 if q3 | x_pm1 - 1 if q1 | x_pm1 if q0 or q2
-      let x_proj = x_pm1 - ((q01 + q12) as i8 - 1) as f64;
-      // y: y_pm1 + 0 if q2 | y_pm1 + 1 if q1 or q3 | y_pm1 + 2 if q0
-      let y_proj = y_pm1 + q013 as f64;
-      // d0h: +8 if q0 | +4 if q3 | +5 if q1
-      let d0h = (q013 << 2) + ((q + q1) & 3);
-      (d0h, x_proj, y_proj)
-    }
-  }
-
-  /// Transform the input longitude, in radians, in a value `x` in `[-1, 1[` plus a quarter in `[0, 3]`,
-  /// such that `lon = (x + 1) * PI / 4 + q * PI / 2`.
-  #[inline]
-  fn xpm1_and_q(lon: f64) -> (f64, u8) {
-    let lon_bits = lon.to_bits();
-    let lon_abs = f64::from_bits(lon_bits & F64_BUT_SIGN_BIT_MASK);
-    let lon_sign = lon_bits & F64_SIGN_BIT_MASK;
-    let x = lon_abs * FOUR_OVER_PI;
-    let q = x as u8 | 1_u8;
-    // Remark: to avoid the branch, we could have copied lon_sign on x - q,
-    //         but I so far lack of idea to deal with q efficiently.
-    //         And we are not supposed to have negative longitudes in ICRS
-    //         (the most used reference system in astronomy).
-    if lon_sign == 0 {
-      // => lon >= 0
-      (x - (q as f64), (q & 7_u8) >> 1)
-    } else {
-      // case lon < 0 should be rare => few risks of branch miss-prediction
-      // Since q in [0, 3]: 3 - (q >> 1)) <=> 3 & !(q >> 1)
-      // WARNING: BE SURE TO HANDLE THIS CORRECTLY IN THE REMAINING OF THE CODE!
-      //  - Case lon =  3/4 pi = 270 deg => x = -1, q=3
-      //  - Case lon = -1/2 pi = -90 deg => x =  1, q=2
-      (q as f64 - x, 3 - ((q & 7_u8) >> 1))
-    }
-  }
-
   /// Returns the cell number (hash value) associated with the given position on the unit sphere,
   /// together with the offset `(dx, dy)` on the Euclidean plane of the projected position with
   /// respect to the origin of the cell (South vertex).
@@ -744,8 +640,7 @@ impl Layer {
   /// assert!((dy - 0.5).abs() < 1e-12_f64);
   /// ```
   pub fn hash_with_dxdy(&self, lon: f64, lat: f64) -> (u64, f64, f64) {
-    check_lat(lat);
-    let (d0h, l_in_d0c, h_in_d0c) = Layer::d0h_lh_in_d0c(lon, lat);
+    let (d0h, l_in_d0c, h_in_d0c) = d0h_lh_in_d0c(lon, lat);
     let x = f64::from_bits((self.time_half_nside + (h_in_d0c + l_in_d0c).to_bits() as i64) as u64);
     debug_assert!(
       -1e-14 < x || x < self.nside as f64 * (1.0_f64 + 1e-14),
@@ -949,7 +844,7 @@ impl Layer {
     let first_isolat_index;
     let mut i_in_ring = div2_quotient(l); // Quotient such that: 1/2 = 0; -1/2 = -1
     if i_ring < self.nside as u64 {
-      // North polar cap + NPC/EQR tansition
+      // North polar cap + NPC/EQR transition
       // sum from i = 1 to ringIndex of 4 * i = 4 * i*(i+1)/2 = 2 * i*(i+1)
       let ip1 = i_ring + 1;
       first_isolat_index = (i_ring * ip1) << 1;
@@ -1125,7 +1020,7 @@ impl Layer {
   }
 
   /// See the same method (generalized to any NSIDE) in the RING module.
-  /// Here we addiionally use the fact that NSIDE is a powrer of two.
+  /// Here we additionally use the fact that NSIDE is a power of two.
   #[inline]
   fn first_hash_in_eqr(&self) -> u64 {
     //   2*nside*(nside + 1)
@@ -4658,31 +4553,6 @@ const fn bits_2_hash(d0h_bits: u64, i_in_d0h_bits: u64, j_in_d0h_bits: u64) -> u
   d0h_bits | i_in_d0h_bits | j_in_d0h_bits
 }
 
-/// x / 2
-#[inline]
-fn div2_quotient<T: Shr<u8, Output = T>>(x: T) -> T {
-  // x >> 1
-  x.shr(1)
-}
-
-/// x modulo 2
-#[inline]
-const fn div2_remainder(x: u64) -> u64 {
-  x & 1
-}
-
-/// x / 4
-#[inline]
-const fn div4_quotient(x: u8) -> u8 {
-  x >> 2
-}
-
-/// x modulo 4
-#[inline]
-const fn div4_remainder(x: u8) -> u8 {
-  x & 3
-}
-
 /// mask ...010101
 /// ```rust
 /// use cdshealpix::nested::{x_mask};
@@ -7849,6 +7719,7 @@ mod tests {
     let k = 4;
     let layer = get(depth);
 
+    /*
     // For visual inspection in Aladin
     fn to_aladin(depth: u8, center: u64, cells: &[u64]) {
       print!("draw moc {}/{}, ", depth, center);
@@ -7856,7 +7727,7 @@ mod tests {
         print!("{}, ", cell);
       }
       println!();
-    }
+    }*/
 
     let expected = [
       // NPC
@@ -8167,9 +8038,9 @@ mod tests {
 
   /*#[test]
   fn test_xpm1_and_q () {
-    let a = Layer::d0h_lh_in_d0c(std::f64::NAN, 0.0);
+    let a = d0h_lh_in_d0c(std::f64::NAN, 0.0);
     eprintln!("{:?}", &a);
-    let a = Layer::d0h_lh_in_d0c(std::f64::INFINITY, 0.0);
+    let a = d0h_lh_in_d0c(std::f64::INFINITY, 0.0);
     eprintln!("{:?}", &a);
   }*/
 }
