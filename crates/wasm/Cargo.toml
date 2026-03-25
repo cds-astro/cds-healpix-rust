@@ -35,5 +35,5 @@ lto = true
 
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = true
+wasm-opt = false # due to error so far!
 
