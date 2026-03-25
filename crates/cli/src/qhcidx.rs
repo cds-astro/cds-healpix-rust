@@ -7,10 +7,9 @@ use std::{
 use clap::{Args, Subcommand};
 use memmap2::MmapOptions;
 
-use hpxlib::nested::sort::cindex::FitsMMappedCIndex;
 use hpxlib::nested::{
   bmoc::BMOC,
-  sort::cindex::{FITSCIndex, HCIndex},
+  sort::cindex::{FITSCIndex, FitsMMappedCIndex, HCIndex},
 };
 
 /// Type of the query (HEALPix cell or BMOC).

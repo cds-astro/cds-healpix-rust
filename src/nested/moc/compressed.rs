@@ -199,7 +199,7 @@ where
             curr_h >> ((dd << 1) as usize)
           };
           let dd = ((63 - (self.h ^ target_h).leading_zeros()) >> 1) as u8;
-          let target_d = if dd > self.d { 0 } else { self.d - dd };
+          let target_d = self.d.saturating_sub(dd);
           // - go up to common depth (if needed)
           while self.d > target_d {
             let n = three - (self.h & three);

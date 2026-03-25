@@ -361,8 +361,9 @@ impl ImplicitCountMap {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
   /// Here a few typical values corresponding the the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
@@ -389,8 +390,9 @@ impl ImplicitCountMap {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
   /// Here a few typical values corresponding the the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
@@ -825,8 +827,9 @@ impl ImplicitCountMapU32 {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
   /// Here a few typical values corresponding the the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
@@ -853,8 +856,9 @@ impl ImplicitCountMapU32 {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
   /// Here a few typical values corresponding the the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
@@ -972,8 +976,9 @@ impl ImplicitDensityMap {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
   /// Here a few typical values corresponding the the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
@@ -1049,9 +1054,10 @@ impl ImplicitDensityMapU32 {
 
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
-  /// Here a few typical values corresponding the the given completeness:
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///
+  /// Here a few typical values corresponding the given completeness:
   ///     + Completeness = 90.0% =>  6.251
   ///     + Completeness = 95.0% =>  7.815
   ///     + Completeness = 97.5% =>  9.348

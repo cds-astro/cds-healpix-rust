@@ -240,7 +240,7 @@ impl<V: Copy> CardinalMap<V> {
 
   /// Associate the given value with the given direction
   pub fn put(&mut self, key: Cardinal, value: V) -> Option<V> {
-    mem::replace(&mut self.array[key.index() as usize], Some(value))
+    self.array[key.index() as usize].replace(value)
   }
 
   /// Get a pointer to the value associated with the given direction
@@ -434,7 +434,7 @@ impl<V: Copy> OrdinalMap<V> {
 
   /// Associate the given value with the given direction
   pub fn put(&mut self, key: Ordinal, value: V) -> Option<V> {
-    mem::replace(&mut self.array[key.index() as usize], Some(value))
+    self.array[key.index() as usize].replace(value)
   }
 
   /// Get a pointer to the value associated with the given direction
@@ -455,10 +455,10 @@ impl<V: Copy> OrdinalMap<V> {
 ///////////////
 
 /// Main winds directions
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainWind {
   /// South
-  S,
+  S = 0,
   /// Southeast
   SE,
   /// East
@@ -514,21 +514,18 @@ impl MainWind {
   /// assert_eq!(MainWind::from_index(7), MainWind::NW);
   /// assert_eq!(MainWind::from_index(8), MainWind::N);
   /// ```
-  pub fn from_index(i: u8) -> MainWind {
+  pub const fn from_index(i: u8) -> Self {
     match i {
-      0 => MainWind::S,
-      1 => MainWind::SE,
-      2 => MainWind::E,
-      3 => MainWind::SW,
-      4 => MainWind::C,
-      5 => MainWind::NE,
-      6 => MainWind::W,
-      7 => MainWind::NW,
-      8 => MainWind::N,
-      _ => panic!(
-        "Wrong MainWind index: Expected value in [0, 7]; Actual value {}.",
-        i
-      ),
+      0 => Self::S,
+      1 => Self::SE,
+      2 => Self::E,
+      3 => Self::SW,
+      4 => Self::C,
+      5 => Self::NE,
+      6 => Self::W,
+      7 => Self::NW,
+      8 => Self::N,
+      _ => panic!("Wrong MainWind index: Expected value in [0, 7]."),
     }
   }
 
@@ -546,21 +543,20 @@ impl MainWind {
   /// assert_eq!(false, MainWind::NE.is_cardinal());
   /// assert_eq!(false, MainWind::NW.is_cardinal());
   /// ```
-  pub fn is_cardinal(&self) -> bool {
-    matches!(*self, MainWind::S | MainWind::E | MainWind::N | MainWind::W)
+  pub const fn is_cardinal(&self) -> bool {
+    matches!(*self, Self::S | Self::E | Self::N | Self::W)
   }
 
   /// Convert this main wind into a Cardinal point.
   /// # Panics
   /// If the maind wind is not a cardinal point
-  pub fn to_cardinal(&self) -> Cardinal {
-    // use self::Cardinal;
+  pub const fn to_cardinal(&self) -> Cardinal {
     match *self {
-      MainWind::S => Cardinal::S,
-      MainWind::E => Cardinal::E,
-      MainWind::N => Cardinal::N,
-      MainWind::W => Cardinal::W,
-      _ => panic!("Main wind '{:?}' can't be converted to cardinal!", &self),
+      Self::S => Cardinal::S,
+      Self::E => Cardinal::E,
+      Self::N => Cardinal::N,
+      Self::W => Cardinal::W,
+      _ => panic!("Main wind different from S, E, N or W cannot be converted to cardinal!"),
     }
   }
 
@@ -578,23 +574,20 @@ impl MainWind {
   /// assert_eq!(true, MainWind::NE.is_ordinal());
   /// assert_eq!(true, MainWind::NW.is_ordinal());
   /// ```
-  pub fn is_ordinal(&self) -> bool {
-    matches!(
-      *self,
-      MainWind::SE | MainWind::SW | MainWind::NE | MainWind::NW
-    )
+  pub const fn is_ordinal(&self) -> bool {
+    matches!(*self, Self::SE | Self::SW | Self::NE | Self::NW)
   }
 
   /// Convert this main wind into an Ordinal point.
   /// # Panics
   /// If the maind wind is not an orinal point
-  pub fn to_ordinal(&self) -> Ordinal {
+  pub const fn to_ordinal(&self) -> Ordinal {
     match *self {
-      MainWind::SE => Ordinal::SE,
-      MainWind::SW => Ordinal::SW,
-      MainWind::NE => Ordinal::NE,
-      MainWind::NW => Ordinal::NW,
-      _ => panic!("Main wind '{:?}' can't be converted to ordinal!", &self),
+      Self::SE => Ordinal::SE,
+      Self::SW => Ordinal::SW,
+      Self::NE => Ordinal::NE,
+      Self::NW => Ordinal::NW,
+      _ => panic!("Main wind different from SE, SW, NE or NW cannot be converted to ordinal!"),
     }
   }
 
@@ -615,17 +608,17 @@ impl MainWind {
   /// assert_eq!(MainWind::NW.opposite(), MainWind::SE);
   /// assert_eq!(MainWind::N.opposite(),  MainWind::S);
   /// ```
-  pub fn opposite(&self) -> MainWind {
+  pub const fn opposite(&self) -> MainWind {
     match *self {
-      MainWind::S => MainWind::N,
-      MainWind::SE => MainWind::NW,
-      MainWind::E => MainWind::W,
-      MainWind::SW => MainWind::NE,
-      MainWind::C => MainWind::C,
-      MainWind::NE => MainWind::SW,
-      MainWind::W => MainWind::E,
-      MainWind::NW => MainWind::SE,
-      MainWind::N => MainWind::S,
+      Self::S => Self::N,
+      Self::SE => Self::NW,
+      Self::E => Self::W,
+      Self::SW => Self::NE,
+      Self::C => Self::C,
+      Self::NE => Self::SW,
+      Self::W => Self::E,
+      Self::NW => Self::SE,
+      Self::N => Self::S,
     }
   }
 
@@ -649,26 +642,35 @@ impl MainWind {
   /// assert_eq!(MainWind::from_offsets( 0,  1), NW);
   /// assert_eq!(MainWind::from_offsets( 1,  1),  N);
   /// ```
-  pub fn from_offsets(offset_se: i8, offset_sw: i8) -> MainWind {
-    debug_assert!((-1_i8..=1_i8).contains(&offset_se));
-    debug_assert!((-1_i8..=1_i8).contains(&offset_sw));
+  pub const fn from_offsets(offset_se: i8, offset_sw: i8) -> MainWind {
+    //debug_assert!((-1_i8..=1_i8).contains(&offset_se));
+    //debug_assert!((-1_i8..=1_i8).contains(&offset_sw));
+    debug_assert!(-1_i8 <= offset_se && offset_se <= 1_i8);
+    debug_assert!(-1_i8 <= offset_sw && offset_sw <= 1_i8);
     let mut i = (offset_sw + 1_i8) as u8;
     i += (i << 1) + (offset_se + 1_i8) as u8;
     MainWind::from_index(i)
   }
 
-  fn index(&self) -> u8 {
-    match *self {
-      MainWind::S => 0,
-      MainWind::SE => 1,
-      MainWind::E => 2,
-      MainWind::SW => 3,
-      MainWind::C => 4,
-      MainWind::NE => 5,
-      MainWind::W => 6,
-      MainWind::NW => 7,
-      MainWind::N => 8,
-    }
+  /// Returns the index (or discriminant) of a given main wind opposite direction.
+  ///
+  /// # Example
+  ///
+  /// ```rust
+  /// use cdshealpix::compass_point::MainWind;
+  ///
+  /// assert_eq!(MainWind::S.index(), 0);
+  /// assert_eq!(MainWind::SE.index(), 1);
+  /// assert_eq!(MainWind::E.index(), 2);
+  /// assert_eq!(MainWind::SW.index(), 3);
+  /// assert_eq!(MainWind::C.index(), 4);
+  /// assert_eq!(MainWind::NE.index(), 5);
+  /// assert_eq!(MainWind::W.index(), 6);
+  /// assert_eq!(MainWind::NW.index(), 7);
+  /// assert_eq!(MainWind::N.index(), 8);
+  /// ```
+  pub const fn index(&self) -> u8 {
+    (*self) as u8
   }
 
   /// Returns:
@@ -677,17 +679,17 @@ impl MainWind {
   /// _S SE _E
   /// ----------> SE
   /// -1  0  1
-  pub(super) fn offset_se(&self) -> i8 {
+  pub(super) const fn offset_se(&self) -> i8 {
     match *self {
-      MainWind::S => -1,
-      MainWind::SE => 0,
-      MainWind::E => 1,
-      MainWind::SW => -1,
-      MainWind::C => 0,
-      MainWind::NE => 1,
-      MainWind::W => -1,
-      MainWind::NW => 0,
-      MainWind::N => 1,
+      Self::S => -1,
+      Self::SE => 0,
+      Self::E => 1,
+      Self::SW => -1,
+      Self::C => 0,
+      Self::NE => 1,
+      Self::W => -1,
+      Self::NW => 0,
+      Self::N => 1,
     }
   }
 
@@ -696,17 +698,17 @@ impl MainWind {
   ///  1 | _W NW _N
   ///  0 | SW _C NE
   /// -1 | _S SE _E
-  pub(super) fn offset_sw(&self) -> i8 {
+  pub(super) const fn offset_sw(&self) -> i8 {
     match *self {
-      MainWind::S => -1,
-      MainWind::SE => -1,
-      MainWind::E => -1,
-      MainWind::SW => 0,
-      MainWind::C => 0,
-      MainWind::NE => 0,
-      MainWind::W => 1,
-      MainWind::NW => 1,
-      MainWind::N => 1,
+      Self::S => -1,
+      Self::SE => -1,
+      Self::E => -1,
+      Self::SW => 0,
+      Self::C => 0,
+      Self::NE => 0,
+      Self::W => 1,
+      Self::NW => 1,
+      Self::N => 1,
     }
   }
 }
@@ -734,7 +736,7 @@ impl<V: Copy> MainWindMap<V> {
 
   /// Associate the given value with the given direction
   pub fn put(&mut self, key: MainWind, value: V) -> Option<V> {
-    mem::replace(&mut self.array[key.index() as usize], Some(value))
+    self.array[key.index() as usize].replace(value)
   }
 
   /// Associate None with the given direction

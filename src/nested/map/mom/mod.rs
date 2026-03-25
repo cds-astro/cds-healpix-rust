@@ -319,7 +319,7 @@ pub trait Mom<'a>: Sized {
   /// * `merger`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
   /// # Warning
   /// * the caller has to ensure that the iterator is sorted. In case of doubt, create a decorator
-  /// similar to the ones in `nested::iter::checksorted` and call `from_hpx_sorted_entries_fallible` instead.
+  ///   similar to the ones in `nested::iter::checksorted` and call `from_hpx_sorted_entries_fallible` instead.
   fn from_hpx_sorted_entries<I, M>(depth: u8, sorted_entries_it: I, merger: M) -> Self
   where
     I: Iterator<Item = (Self::ZUniqHType, Self::ValueType)>,
@@ -335,7 +335,7 @@ pub trait Mom<'a>: Sized {
   /// * `merger`: returns `Ok` if merge succeed, else return `Err` with original elements (in the same order).
   /// # Warning
   /// * the caller has to ensure that the iterator is sorted. In case of doubt, create a decorator
-  /// similar to the ones in `nested::iter::checksorted`.
+  ///   similar to the ones in `nested::iter::checksorted`.
   fn from_hpx_sorted_entries_fallible<E, I, M>(
     depth: u8,
     sorted_entries_it: I,
@@ -519,10 +519,10 @@ where
   /// * `size`: the `(X, Y)` number of pixels in the image;
   /// * `proj`: a projection, if different from Mollweide;
   /// * `proj_center`: the `(lon, lat)` coordinates of the center of the projection, in radians,
-  ///                      if different from `(0, 0)`;
+  ///   if different from `(0, 0)`;
   /// * `proj_bounds`: the `(X, Y)` bounds of the projection, if different from the default values
-  ///                  which depends on the projection. For unbounded projections, de default value
-  ///                  is `(-PI..PI, -PI..PI)`.
+  ///   which depends on the projection. For unbounded projections, de default value
+  ///   is `(-PI..PI, -PI..PI)`.
   /// * `path`: the path of th PNG file to be written.
   /// * `view`: set to true to visualize the saved image.
   #[cfg(not(target_arch = "wasm32"))]
@@ -763,8 +763,8 @@ impl<'a, V: SkyMapValue + ToBytes + 'a, M: Mom<'a, ValueType = V>> WritableMom<'
 /// Provide a merger merging density values based on a chi-square criterion.
 /// # Params
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-/// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-/// from the same normal distribution which mean and variance comes from a poisson distribution.
+///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+///   from the same normal distribution which mean and variance comes from a poisson distribution.
 /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
 ///
 /// Here a few typical values corresponding the the given completeness:
@@ -859,8 +859,8 @@ pub fn new_chi2_density_ref_merger_with_depth_threshold<
 /// Provide a merger merging counts based on a chi-square criterion.
 /// # Params
 /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-/// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-/// from the same normal distribution which mean and variance comes from a poisson distribution.
+///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+///   from the same normal distribution which mean and variance comes from a poisson distribution.
 /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
 ///
 /// Here a few typical values corresponding the the given completeness:

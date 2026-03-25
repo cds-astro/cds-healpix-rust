@@ -31,6 +31,7 @@ use std::{
   fs::File,
   io::{Error as IoError, Write},
   marker::PhantomData,
+  mem::size_of_val,
   ops::Range,
   path::Path,
   ptr::slice_from_raw_parts,
@@ -460,7 +461,7 @@ impl<T: UInt> SHCIndex<T> for OwnedImplicitSHCIndex<T> {
       writer.write_all(k.as_le_bytes())?
     }*/
     let pointer = self.sampled_hash.as_ref();
-    let n_bytes = pointer.len() * size_of::<T>();
+    let n_bytes = size_of_val(pointer);
     let bytes = unsafe { std::slice::from_raw_parts(pointer.as_ptr() as *const u8, n_bytes) };
     writer.write_all(bytes).map(|()| n_bytes)
   }
@@ -608,7 +609,7 @@ impl<'a, T: UInt> SHCIndex<T> for BorrowedImplicitSHCIndex<'a, T> {
       writer.write_all(k.as_le_bytes())?
     }*/
     let pointer = self.sampled_hash;
-    let n_bytes = pointer.len() * size_of::<T>();
+    let n_bytes = size_of_val(pointer);
     let bytes = unsafe { std::slice::from_raw_parts(pointer.as_ptr() as *const u8, n_bytes) };
     writer.write_all(bytes).map(|()| n_bytes)
   }
@@ -670,7 +671,7 @@ impl<T: UInt> ExplicitSHCIndex<T> for OwnedExplicitSHCIndex<T> {
 
   fn write_all_values<W: Write>(&self, mut writer: W) -> Result<usize, IoError> {
     let pointer = self.byte_offsets.as_ref();
-    let n_bytes = pointer.len() * size_of::<u64>();
+    let n_bytes = size_of_val(pointer);
     let bytes = unsafe { std::slice::from_raw_parts(pointer.as_ptr() as *const u8, n_bytes) };
     writer.write_all(bytes).map(|()| n_bytes)
   }
@@ -726,7 +727,7 @@ impl<'a, T: UInt> ExplicitSHCIndex<T> for BorrowedExplicitSHCIndex<'a, T> {
 
   fn write_all_values<W: Write>(&self, mut writer: W) -> Result<usize, IoError> {
     let pointer = self.byte_offsets;
-    let n_bytes = pointer.len() * size_of::<u64>();
+    let n_bytes = size_of_val(pointer);
     let bytes = unsafe { std::slice::from_raw_parts(pointer.as_ptr() as *const u8, n_bytes) };
     writer.write_all(bytes).map(|()| n_bytes)
   }

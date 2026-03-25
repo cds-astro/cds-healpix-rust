@@ -364,16 +364,11 @@ impl FitsCard for Nside {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FirstPix(u64);
 impl FirstPix {
   pub fn get(&self) -> u64 {
     self.0
-  }
-}
-impl Default for FirstPix {
-  fn default() -> Self {
-    Self(0)
   }
 }
 impl FitsCard for FirstPix {

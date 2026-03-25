@@ -180,8 +180,8 @@ fn gen_rand_lonlat(n: usize) -> Vec<(f64, f64)> {
   (0..n)
     .map(|_| {
       (
-        rng.gen::<f64>() * TWICE_PI,
-        rng.gen::<f64>() * PI - FRAC_PI_2,
+        rng.r#gen::<f64>() * TWICE_PI,
+        rng.r#gen::<f64>() * PI - FRAC_PI_2,
       )
     })
     .collect()

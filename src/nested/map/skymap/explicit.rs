@@ -408,7 +408,7 @@ impl<H: HHash> ExplicitCountMap<H> {
         .0
         .entries
         .iter()
-        .map(|(h, count)| (h.clone(), *count as f64 * one_over_area))
+        .map(|(h, count)| (*h, *count as f64 * one_over_area))
         .collect(),
     ))
   }
@@ -423,7 +423,7 @@ impl<H: HHash> ExplicitCountMap<H> {
         .0
         .entries
         .par_iter()
-        .map(|(h, count)| (h.clone(), *count as f64 * one_over_area))
+        .map(|(h, count)| (*h, *count as f64 * one_over_area))
         .collect(),
     ))
   }

@@ -18,7 +18,7 @@ use crate::{
 /// * This iterator does not check whether the input is sorted or not, but the only 2 `From` implemented
 ///   are supposed to ensure so.
 /// * If you implemented a `new` method (or `From`) from generic Iterators, you must first decorate
-///  them to ensure the input iterator is sorted.
+///   them to ensure the input iterator is sorted.
 pub struct SortedHash2HashCountIt<E, I>
 where
   E: Error,
@@ -39,7 +39,7 @@ where
       prev_hash: 0,
       prev_count: 0,
       not_depleted: true,
-      it: it.into(),
+      it,
     }
   }
 }
@@ -90,7 +90,7 @@ where
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.not_depleted {
-      while let Some(res_hash) = self.it.next() {
+      for res_hash in self.it.by_ref() {
         match res_hash {
           Ok(hash) => {
             if hash == self.prev_hash {
@@ -130,6 +130,7 @@ where
 /// It is equivalent to:
 /// * `dedup_with_count` in `itertools`;
 /// * the `uniq -c` linux command.
+///
 /// Except that all hash values from 0 to `n_cells(depth)` are returned, in order, with count = 0 for
 /// hash value not present in the input iterator.
 ///
@@ -137,7 +138,7 @@ where
 /// * This iterator does not check whether the input is sorted or not, but the only 2 `From` implemented
 ///   are supposed to ensure so.
 /// * If you implemented a `new` method (or `From`) from generic Iterators, you must first decorate
-///  them to ensure the input iterator is sorted.
+///   them to ensure the input iterator is sorted.
 pub struct SortedHash2HashCountIncludingZeroIt<E, I>
 where
   E: Error,
@@ -160,7 +161,7 @@ where
       prev_hash: 0,
       curr_hash: 0,
       curr_count: 0,
-      it: it.into(),
+      it,
     }
   }
 }
@@ -195,7 +196,7 @@ where
   J: Iterator<Item = (f64, f64)>,
 {
   fn from(it: SortedHashIt<J>) -> Self {
-    Self::new(it.depth(), it.into())
+    Self::new(it.depth(), it)
   }
 }
 
@@ -209,7 +210,7 @@ where
   J: Iterator<Item = Result<(f64, f64), F>>,
 {
   fn from(it: SortedHashItFromFallibleIt<F, J>) -> Self {
-    Self::new(it.depth(), it.into())
+    Self::new(it.depth(), it)
   }
 }
 
@@ -226,7 +227,7 @@ where
       self.prev_hash += 1;
       res
     } else if self.curr_hash != self.max_hash {
-      while let Some(res_hash) = self.it.next() {
+      for res_hash in self.it.by_ref() {
         match res_hash {
           Ok(hash) => {
             if hash == self.curr_hash {

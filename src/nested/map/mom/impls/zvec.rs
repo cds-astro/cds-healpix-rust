@@ -765,8 +765,8 @@ where
   ///   associations (take the weighted mean of neighbour cells in such a case?!).
   /// # Params
   /// * `chi2_of_3dof_threshold`: threshold on the value of the chi square distribution with 3
-  /// degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
-  /// from the same normal distribution which mean and variance comes from a poisson distribution.
+  ///   degrees of freedom below which we consider the 4 values of 4 sibling cells as coming
+  ///   from the same normal distribution which mean and variance comes from a poisson distribution.
   /// * `depth_threshold`: threshold on `depth` to avoid making to low resolution cells, i.e MOM minimum depth
   ///
   /// Here a few typical values corresponding the the given completeness:

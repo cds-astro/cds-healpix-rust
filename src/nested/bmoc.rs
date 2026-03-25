@@ -1109,6 +1109,7 @@ impl BMOC {
   /// * the depth if the cell;
   /// * the cell number;
   /// * a flag telling if the cell is fully covered or not.
+  ///
   /// WARNING: this is probably not the method you are interested in as a user,
   /// see [flat_iter](#method.flat_iter) instead.
   /// TODO: make a public method to extract information from the raw value
@@ -1556,7 +1557,6 @@ impl BMOC {
     })?;
     match zuniq_n_bytes {
       4 => (0..n_rows)
-        .into_iter()
         .map(|_| reader.read_u32::<LittleEndian>().map(|v| v as u64))
         .collect::<Result<Vec<u64>, IoError>>()
         .map_err(FitsError::Io),
@@ -1564,7 +1564,6 @@ impl BMOC {
         // We could have mmapped the data to handle large BMOCs... let's do it another day
         // (or make an iterator and perform operation from iterators, like in MOCs...).
         (0..n_rows)
-          .into_iter()
           .map(|_| reader.read_u64::<LittleEndian>())
           .collect::<Result<Vec<u64>, IoError>>()
           .map_err(FitsError::Io)
@@ -1655,19 +1654,19 @@ impl BMOC {
   }
 
   pub fn to_csv<W: Write>(&self, mut writer: W) -> Result<(), IoError> {
-    write!(
+    writeln!(
       &mut writer,
-      "# BMOC order max: {}; File sorted by ZUNIQ(order, ipix).\n",
+      "# BMOC order max: {}; File sorted by ZUNIQ(order, ipix).",
       self.depth_max
     )?;
-    write!(&mut writer, "order,ipix,is_fully_covered_flag\n")?;
+    writeln!(&mut writer, "order,ipix,is_fully_covered_flag")?;
     for fzuniq in self.entries.iter().cloned() {
       let is_full = fzuniq as u8 & 1_u8;
       let zuniq = fzuniq >> 1; // Remove flag bit
       let n_trailing_zero = zuniq.trailing_zeros(); // must be even
       let hash = zuniq >> (1 | n_trailing_zero); // remove trailing zero plus sentinel bit
       let depth = self.depth_max - (n_trailing_zero as u8 >> 1);
-      write!(&mut writer, "{},{},{}\n", depth, hash, is_full)?;
+      writeln!(&mut writer, "{},{},{}", depth, hash, is_full)?;
     }
     Ok(())
   }
@@ -2334,12 +2333,14 @@ mod tests {
     bmoc.compress_lossy()
   }
 
+  /*
+  // Only for debug purpose
   fn to_aladin_moc(bmoc: &BMOC) {
     print!("draw moc {}/", bmoc.get_depth_max());
     for cell in bmoc.flat_iter() {
       print!("{}, ", cell);
     }
-  }
+  }*/
 
   #[test]
   fn testok_compressed_moc_empty_d0() {

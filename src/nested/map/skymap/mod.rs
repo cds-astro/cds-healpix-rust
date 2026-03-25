@@ -151,9 +151,10 @@ pub trait SkyMap<'a> {
   /// The "best" is determined from the size, in byte, of both representation.
   /// # Params
   /// * `impl_over_expl_limit_ratio` limit on the ratio of the implicit byte size
-  /// over the explicit byte size.
+  ///   over the explicit byte size.
   ///     + above the limit, the explicit representation is chosen.
   ///     + below the limit, the implicit representation is chosen.
+  ///
   /// (This allows to put a size limit on the explicit representation: looking to a value in 'explicit'
   /// requires a binary search, which is longer than the direct access allowed by `implicit`).
   fn is_implicit_the_best_representation(
@@ -290,10 +291,10 @@ impl SkyMapEnum {
   /// Returns the "best" representation ot be used to serialize (in FITS) this index.
   /// The "best" is determined from the size, in byte, of both representation.
   /// # Params
-  /// * `impl_over_expl_limit_ratio` limit on the ratio of the implicit byte size
-  /// over the explicit byte size.
+  /// * `impl_over_expl_limit_ratio` limit on the ratio of the implicit byte size over the explicit byte size.
   ///     + above the limit, the explicit representation is chosen.
   ///     + below the limit, the implicit representation is chosen.
+  ///
   /// (This allows to put a size limit on the explicit representation: looking to a value in 'explicit'
   /// requires a binary search, which is longer than the direct access allowed by `implicit`).
   pub fn is_implicit_the_best_representation(
@@ -1204,6 +1205,7 @@ impl DensMap {
 #[cfg(test)]
 mod tests {
 
+  /*  Test only on personal computer
   fn init_logger() {
     let log_level = log::LevelFilter::max();
     // let log_level = log::LevelFilter::Error;
@@ -1217,7 +1219,6 @@ mod tests {
       .try_init();
   }
 
-  /*  Test only on personal computer
   #[test]
   #[cfg(not(target_arch = "wasm32"))]
   fn test_xmm_slew_dens() {

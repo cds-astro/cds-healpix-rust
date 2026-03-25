@@ -257,6 +257,7 @@ pub trait HCIndex {
 
   /// For the fits serialization. Must write all tuples, in ascending hpx order,
   /// and in little-endian, in the given writer.
+  ///
   /// # WARNING
   /// If the depth is lower or equal to 13, cell hash value **must** be written using `u32`,
   /// else using `u64`.
@@ -273,11 +274,12 @@ pub trait HCIndex {
 
   /// Returns the "best" representation ot be used to serialize (in FITS) this index.
   /// The "best" is determined from the size, in byte, of both representation.
+  ///
   /// # Params
-  /// * `impl_over_expl_limit_ratio` limit on the ratio of the implicit byte size
-  /// over the explicit byte size.
+  /// * `impl_over_expl_limit_ratio` limit on the ratio of the implicit byte size over the explicit byte size.
   ///     + above the limit, the explicit representation is chosen.
   ///     + below the limit, the implicit representation is chosen.
+  ///
   /// (This allows to put a size limit on the explicit representation: looking to a value in 'explicit'
   /// requires a binary search, which is longer than the direct access allowed by `implicit`).
   fn best_representation(&self, impl_over_expl_limit_ratio: f64) -> HCIndexShape {
@@ -767,7 +769,7 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
         if *v != prev_v {
           writer
             .write_all((prev_i as u32).to_le_bytes().as_ref())
-            .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+            .and_then(|()| writer.write_all(prev_v.to_le_bytes().as_ref()))?;
           len += 1;
           prev_v = *v;
         }
@@ -775,7 +777,7 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
       }
       writer
         .write_all((prev_i as u32).to_le_bytes().as_ref())
-        .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+        .and_then(|()| writer.write_all(prev_v.to_le_bytes().as_ref()))?;
       len += 1;
     }
     Ok((size_of::<u32>() + size_of::<T>()) * len)
@@ -797,7 +799,7 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
         if *v != prev_v {
           writer
             .write_all((prev_i as u64).to_le_bytes().as_ref())
-            .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+            .and_then(|()| writer.write_all(prev_v.to_le_bytes().as_ref()))?;
           len += 1;
           prev_v = *v;
         }
@@ -805,7 +807,7 @@ fn write_all_values_explicit_from_implicit<T: HCIndexValue, W: Write>(
       }
       writer
         .write_all((prev_i as u64).to_le_bytes().as_ref())
-        .and_then(|()| writer.write_all(&(prev_v.to_le_bytes().as_ref())))?;
+        .and_then(|()| writer.write_all(prev_v.to_le_bytes().as_ref()))?;
       len += 1;
     }
     Ok((size_of::<u64>() + size_of::<T>()) * len)
@@ -826,7 +828,7 @@ where
       len += 1;
       writer
         .write_all(HHash::to_u32(h).to_le_bytes().as_ref())
-        .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
+        .and_then(|()| writer.write_all(v.to_le_bytes().as_ref()))?;
     }
     Ok((size_of::<u32>() + size_of::<T>()) * len)
   } else {
@@ -834,7 +836,7 @@ where
       len += 1;
       writer
         .write_all(HHash::to_u64(h).to_le_bytes().as_ref())
-        .and_then(|()| writer.write_all(&(v.to_le_bytes().as_ref())))?;
+        .and_then(|()| writer.write_all(v.to_le_bytes().as_ref()))?;
     }
     Ok((size_of::<u64>() + size_of::<T>()) * len)
   }
@@ -1415,7 +1417,7 @@ impl<H: HHash, T: HCIndexValue> OwnedCIndexExplicitBTree<H, T> {
   pub fn new(depth: u8, entries: Vec<(H, T)>) -> Self {
     Self {
       depth,
-      entries: BTreeMap::from_iter(entries.into_iter()),
+      entries: BTreeMap::from_iter(entries),
     }
   }
 }
@@ -1432,10 +1434,7 @@ impl<H: HHash, T: HCIndexValue> HCIndex for OwnedCIndexExplicitBTree<H, T> {
   }
 
   fn entries(&self) -> Self::EntriesIt<'_> {
-    self
-      .entries
-      .iter()
-      .map(|(h, b)| (HHash::to_u64(h), b.clone()))
+    self.entries.iter().map(|(h, b)| (HHash::to_u64(h), *b))
   }
 
   fn get(&self, hash: u64) -> Self::V {

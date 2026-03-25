@@ -416,7 +416,7 @@ impl SimpleExtSortParams {
 ///
 pub fn hpx_external_sort_with_knowledge<'a, T, E, I, S, F>(
   it: I,
-  count_map: &'a S,
+  count_map: S,
   hpx29: F,
   sort_params: Option<SimpleExtSortParams>,
 ) -> Result<impl Iterator<Item = Result<T, Box<dyn Error>>>, Box<dyn Error>>
@@ -424,7 +424,7 @@ where
   T: ExtSortable,
   E: Error + Send + 'static,
   I: Iterator<Item = Result<T, E>> + Send,
-  S: SkyMap<'a, HashType = u32, ValueType = u32>,
+  S: SkyMap<'a, HashType = u32, ValueType = u32> + 'a,
   F: Fn(&T) -> u64 + Sync,
 {
   let params = sort_params.unwrap_or_default();
@@ -444,7 +444,7 @@ where
 ///   for direct use.
 pub fn hpx_external_sort_with_knowledge_write_tmp<'a, T, E, I, S, F>(
   mut it: I,
-  count_map: &'a S,
+  count_map: S,
   hpx29: F,
   sort_params: Option<SimpleExtSortParams>,
 ) -> Result<(), Box<dyn Error>>
@@ -452,7 +452,7 @@ where
   T: ExtSortable,
   E: Error + Send + 'static,
   I: Iterator<Item = Result<T, E>> + Send,
-  S: SkyMap<'a, HashType = u32, ValueType = u32>,
+  S: SkyMap<'a, HashType = u32, ValueType = u32> + 'a,
   F: Fn(&T) -> u64 + Sync,
 {
   // Get general params
@@ -784,9 +784,9 @@ fn get_range_binsearch(hash: u32) -> impl Fn(&(Range<u32>, u32)) -> Ordering {
 /// Returns ordered ranges at the skymap depth containing a sum of `counts` of maximum `threshold`,
 /// together with this sum of counts each range contains.
 /// The first value of the returned tuple is the total number of counts in the skymap.
-fn skymap2ranges<'a, S>(counts: &'a S, threshold: u32) -> (u64, Vec<(Range<u32>, u32)>)
+fn skymap2ranges<'a, S>(counts: S, threshold: u32) -> (u64, Vec<(Range<u32>, u32)>)
 where
-  S: SkyMap<'a, HashType = u32, ValueType = u32>,
+  S: SkyMap<'a, HashType = u32, ValueType = u32> + 'a,
 {
   // 1000 chosen assuming a total count of 10x10^9 and a threshold of 10x10^6.
   let mut range_count_vec: Vec<(Range<u32>, u32)> = Vec::with_capacity(1000);
@@ -797,7 +797,13 @@ where
   let mut start = 0_u32;
   let mut cumul_count = 0_u32;
 
-  for (hash, count) in counts.entries() {
+  for (hash, count) in counts.owned_entries() {
+    assert!(
+      count <= threshold,
+      "Count number {} higher than threshold {}. Use a deeper depth or a higher threshold!",
+      count,
+      threshold
+    );
     let sum = cumul_count + count;
     if sum <= threshold {
       cumul_count = sum;
@@ -805,7 +811,7 @@ where
       range_count_vec.push((start..hash, cumul_count));
       n_tot += cumul_count as u64;
       start = hash;
-      cumul_count = *count;
+      cumul_count = count;
     }
   }
   range_count_vec.push((start..n_hash(depth) as u32, cumul_count));
@@ -880,7 +886,7 @@ where
       .unwrap_or_default()
       .as_millis()
   );
-  hpx_external_sort_with_knowledge(iterable.into_iter(), &count_map, hpx29, Some(params))
+  hpx_external_sort_with_knowledge(iterable.into_iter(), count_map, hpx29, Some(params))
 }
 
 pub fn hpx_external_sort_stream<T, E, I, F, P: AsRef<Path>>(
@@ -935,7 +941,7 @@ where
   let mut bufr = params.open_file_all().map(BufReader::new)?;
   hpx_external_sort_with_knowledge(
     (0..n_rows).map(move |_| bincode.deserialize_from(&mut bufr)),
-    &count_map,
+    count_map,
     hpx29,
     Some(params),
   )
@@ -1066,7 +1072,7 @@ pub fn hpx_external_sort_csv_stdin_gen<W: Write, P: AsRef<Path>>(
   // Handle header line
   if has_header {
     if let Some(header) = line_res_it.next().transpose()? {
-      write!(&mut writer, "{}\n", header)?;
+      writeln!(&mut writer, "{}", header)?;
     }
   }
   // Get the sorted iterator
@@ -1220,7 +1226,7 @@ pub fn hpx_external_sort_csv_file_gen<IN: AsRef<Path>, W: Write, P: AsRef<Path>>
   // Handle header line
   if has_header {
     if let Some(header) = line_res_it.next().transpose()? {
-      write!(&mut writer, "{}\n", header)?;
+      writeln!(&mut writer, "{}", header)?;
     }
   }
   let sort_params = sort_params.unwrap_or_default();
@@ -1275,7 +1281,7 @@ pub fn hpx_external_sort_csv_file_gen<IN: AsRef<Path>, W: Write, P: AsRef<Path>>
   }
   // Get the sorted iterator
   let sorted_it =
-    hpx_external_sort_with_knowledge(line_res_it, &count_map, hpx29, Some(sort_params))?;
+    hpx_external_sort_with_knowledge(line_res_it, count_map, hpx29, Some(sort_params))?;
 
   debug!("Starts writing sorted rows in output file...");
   let tstart = SystemTime::now();

@@ -6,22 +6,14 @@ pub mod zvec;
 
 #[cfg(test)]
 mod tests {
-  use std::f64::consts::PI;
-
   use itertools::Itertools;
 
   use mapproj::pseudocyl::mol::Mol;
 
-  use crate::nested::{
-    map::{
-      img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
-      mom::{
-        impls::{bslice::FITSMom, zvec::MomVecImpl},
-        DensMom, Mom, WritableMom, ZUniqHashT,
-      },
-      skymap::SkyMapEnum,
-    },
-    n_hash,
+  use crate::nested::map::{
+    img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
+    mom::{impls::bslice::FITSMom, DensMom, Mom},
+    skymap::SkyMapEnum,
   };
 
   #[test]

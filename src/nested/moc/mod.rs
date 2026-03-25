@@ -594,7 +594,7 @@ where
         r.to = nr.to;
         self.next()
       } else {
-        replace(&mut self.curr, Some(nr))
+        self.curr.replace(nr)
       }
     } else {
       self.curr.take()
