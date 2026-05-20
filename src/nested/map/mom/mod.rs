@@ -947,20 +947,40 @@ pub fn new_chi2_count_ref_merger_with_depth_threshold<
   }
 }
 
+pub fn zuniq_from_u32_to_u64(zuniq: u32) -> u64 {
+  (zuniq as u64) << 32
+}
+
+/// # panics
+/// If depth encoded in the given zuniq is larger than 13
+pub fn zuniq_from_u64_to_u32(zuniq: u64) -> u32 {
+  assert_eq!(zuniq & 0x00000000FFFFFFFF_u64, 0_u64);
+  (zuniq >> 32) as u32
+}
+
 #[cfg(test)]
 mod tests {
-  use crate::nested::map::img::to_mom_png_file;
-  use crate::nested::map::mom::{new_chi2_count_ref_merger_no_depth_threshold, LhsRhsBoth};
   use mapproj::pseudocyl::mol::Mol;
 
   use super::{
     super::{
-      img::{ColorMapFunctionType, PosConversion},
+      img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
       skymap::SkyMapEnum,
     },
     impls::zvec::MomVecImpl,
-    Mom,
+    new_chi2_count_ref_merger_no_depth_threshold, zuniq_from_u32_to_u64, zuniq_from_u64_to_u32,
+    LhsRhsBoth, Mom, ZUniqHashT,
   };
+
+  #[test]
+  fn test_zuniq_from_u32_to_u64_and_y64_to_u32() {
+    let z_u32 = u32::to_zuniq(11, 50331641);
+    let z_u64 = u64::to_zuniq(11, 50331641);
+    assert!(z_u32 as u64 != z_u64);
+    assert!(z_u64 as u32 != z_u32);
+    assert_eq!(z_u64, zuniq_from_u32_to_u64(z_u32));
+    assert_eq!(z_u32, zuniq_from_u64_to_u32(z_u64));
+  }
 
   #[test]
   #[cfg(not(target_arch = "wasm32"))]

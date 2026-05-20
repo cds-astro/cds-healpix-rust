@@ -30,9 +30,9 @@ use super::super::{
     },
     skymap::{SkyMap, SkyMapValue},
   },
-  LhsRhsBoth, Mom, ZUniqHashT,
+  impls::zvec::MomVecImpl,
+  zuniq_from_u32_to_u64, zuniq_from_u64_to_u32, LhsRhsBoth, Mom, WritableMom, ZUniqHashT,
 };
-use crate::nested::map::mom::WritableMom;
 
 /// Defines the type of ZUniq Hash values that can be read/write from/to FITS files.
 pub trait Z4FITS:
@@ -73,7 +73,7 @@ pub enum FITSMom {
   U64F64(FitsMMappedCIndex<u64, f64>),
 }
 impl FITSMom {
-  // TODO: make a method loading everything from a reader a aking a zvec object!
+  // TODO: make a method loading everything from a reader a asking a zvec object!
   #[cfg(not(target_arch = "wasm32"))]
   pub fn from_fits_file<P: AsRef<Path>>(path: P) -> Result<Self, FitsError> {
     let mut file = File::open(path)?;
@@ -572,6 +572,40 @@ where
   {
     unimplemented!(
       "Unable to create this object from the merge operation. Look at MomVecImpl instead."
+    )
+  }
+}
+
+impl<'a, V> MomSliceImpl<'a, u32, V>
+where
+  V: V4FITS,
+{
+  /// # WARNING
+  /// Requires a copy of the map. It would be better to implement a generic "U32toU64MomDecorator"!
+  pub fn to_zuniq_u64_mom(self) -> MomVecImpl<u64, V> {
+    MomVecImpl::<u64, V>::new(
+      self.depth_max(),
+      self
+        .owned_entries()
+        .map(|(z, v)| (zuniq_from_u32_to_u64(z), v))
+        .collect(),
+    )
+  }
+}
+
+impl<'a, V> MomSliceImpl<'a, u64, V>
+where
+  V: V4FITS,
+{
+  /// # WARNING
+  /// Requires a copy of the map. It would be better to implement a generic "U32toU64MomDecorator"!
+  pub fn to_zuniq_u32_mom(self) -> MomVecImpl<u32, V> {
+    MomVecImpl::<u32, V>::new(
+      self.depth_max(),
+      self
+        .owned_entries()
+        .map(|(z, v)| (zuniq_from_u64_to_u32(z), v))
+        .collect(),
     )
   }
 }

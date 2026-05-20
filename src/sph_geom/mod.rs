@@ -519,7 +519,7 @@ fn compute_cross_products(vertices: &[Coo3D]) -> Box<[Vect3]> {
 }
 
 /// Returns `true` if the given point `p` longitude is between the given vertices `v1` and `v2`
-/// longitude range.rust
+/// longitude range.
 #[inline]
 fn is_in_lon_range<T1, T2, T3>(coo: &T1, v1: &T2, v2: &T3) -> bool
 where

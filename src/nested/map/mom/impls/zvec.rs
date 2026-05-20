@@ -8,12 +8,13 @@ use std::{
 
 use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
 
-use crate::nested::{map::mom::new_chi2_density_merger, n_hash};
+use crate::nested::n_hash;
 
 use super::{
   super::{
     super::skymap::{SkyMap, SkyMapValue},
-    LhsRhsBoth, Mom, ZUniqHashT,
+    new_chi2_density_merger, zuniq_from_u32_to_u64, zuniq_from_u64_to_u32, LhsRhsBoth, Mom,
+    ZUniqHashT,
   },
   bslice::{MomSliceImpl, V4FITS, Z4FITS},
 };
@@ -791,7 +792,7 @@ where
       match lrb {
         LhsRhsBoth::Left(_) => None,
         LhsRhsBoth::Right(_) => None,
-        LhsRhsBoth::Both(l, b) => Some(cte * l * b),
+        LhsRhsBoth::Both(l, r) => Some(cte * l * r),
       }
     };
     Self::merge(
@@ -800,6 +801,40 @@ where
       split,
       op,
       new_chi2_density_merger(chi2_of_3dof_threshold, depth_threshold),
+    )
+  }
+}
+
+impl<V> MomVecImpl<u32, V>
+where
+  V: SkyMapValue,
+{
+  /// # WARNING
+  /// Requires a copy of the map. It would be better to implement a generic "U32toU64MomDecorator"!
+  pub fn to_zuniq_u64(self) -> MomVecImpl<u64, V> {
+    MomVecImpl::<u64, V>::new(
+      self.depth_max(),
+      self
+        .owned_entries()
+        .map(|(z, v)| (zuniq_from_u32_to_u64(z), v))
+        .collect(),
+    )
+  }
+}
+
+impl<V> MomVecImpl<u64, V>
+where
+  V: SkyMapValue,
+{
+  /// # WARNING
+  /// Requires a copy of the map. It would be better to implement a generic "U32toU64MomDecorator"!
+  pub fn to_zuniq_u32(self) -> MomVecImpl<u32, V> {
+    MomVecImpl::<u32, V>::new(
+      self.depth_max(),
+      self
+        .owned_entries()
+        .map(|(z, v)| (zuniq_from_u64_to_u32(z), v))
+        .collect(),
     )
   }
 }
