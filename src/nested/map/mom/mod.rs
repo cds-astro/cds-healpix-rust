@@ -7,7 +7,7 @@ use std::{
   error::Error,
   fmt::{Debug, Display},
   fs::File,
-  io::{BufWriter, Write},
+  io::{BufWriter, Error as IoError, Write},
   ops::{AddAssign, RangeInclusive},
   path::Path,
 };
@@ -21,10 +21,9 @@ use num_traits::{AsPrimitive, Float, FloatConst, FromPrimitive, ToBytes};
 #[cfg(not(target_arch = "wasm32"))]
 use super::img::to_mom_png_file;
 use super::{
-  skymap::{SkyMap, SkyMapValue},
   HHash,
+  skymap::{SkyMap, SkyMapValue},
 };
-use crate::nested::map::mom::impls::zvec::MomVecImpl;
 use crate::nested::{
   map::{
     fits::{
@@ -34,7 +33,8 @@ use crate::nested::{
         write_str_mandatory_keyword_record, write_uint_mandatory_keyword_record,
       },
     },
-    img::{to_mom_png, ColorMapFunctionType, PosConversion, Val},
+    img::{ColorMapFunctionType, PosConversion, Val, to_mom_png},
+    mom::impls::zvec::MomVecImpl,
   },
   n_hash,
 };
@@ -249,7 +249,7 @@ pub trait Mom<'a>: Sized {
   /// Returns all entries, in the z-order curve order, overlapped by the HEALPix cell of given `zuniq` hash value,
   /// making a copy of the value.
   fn get_copy_of_overlapped_cells(&'a self, zuniq: Self::ZUniqHType)
-    -> Self::OverlappedEntriesCopy;
+  -> Self::OverlappedEntriesCopy;
 
   /// Returns all HEALPix zuniq hash, ordered following the z-order curve.
   fn zuniqs(&'a self) -> Self::ZuniqIt;
@@ -297,13 +297,21 @@ pub trait Mom<'a>: Sized {
       let (mut depth_l, mut hash_l) = Self::ZUniqHType::from_zuniq(l);
       for r in it {
         if depth_l < self.depth_max() {
-          return Err(format!("Element has a larger depth than MOM maximum depth. Elem: {}; Depth: {}; Mom max depth: {}", l, depth_l, self.depth_max()));
+          return Err(format!(
+            "Element has a larger depth than MOM maximum depth. Elem: {}; Depth: {}; Mom max depth: {}",
+            l,
+            depth_l,
+            self.depth_max()
+          ));
         }
         let (depth_r, hash_r) = Self::ZUniqHType::from_zuniq(r);
         if l >= r {
           return Err(format!("The MOM is not ordered: {} >= {}", l, r));
         } else if Self::ZUniqHType::are_overlapping_cells(depth_l, hash_l, depth_r, hash_r) {
-          return Err(format!("Overlapping elements in the MOM: {} and {}. I.e. depth: {}; hash: {} and depth: {}, hash: {}.", l, r, depth_l, hash_l, depth_r, hash_r));
+          return Err(format!(
+            "Overlapping elements in the MOM: {} and {}. I.e. depth: {}; hash: {} and depth: {}, hash: {}.",
+            l, r, depth_l, hash_l, depth_r, hash_r
+          ));
         }
         l = r;
         depth_l = depth_r;
@@ -401,6 +409,19 @@ pub trait Mom<'a>: Sized {
       Self::ZUniqHType,
       [Self::ValueType; 4],
     ) -> Result<Self::ValueType, [Self::ValueType; 4]>;
+
+  fn to_csv_file<P: AsRef<Path>>(&'a self, path: P) -> Result<(), IoError> {
+    File::create(path).and_then(|file| self.to_csv(BufWriter::new(file)))
+  }
+
+  fn to_csv<W: Write>(&'a self, mut writer: W) -> Result<(), IoError> {
+    writeln!(writer, "depth,hash,value")?;
+    for (z, v) in self.entries() {
+      let (d, h) = Self::ZUniqHType::from_zuniq(z);
+      writeln!(writer, "{},{},{:?}", d, h, v)?;
+    }
+    Ok(())
+  }
 }
 
 pub enum CountMom {
@@ -964,12 +985,12 @@ mod tests {
 
   use super::{
     super::{
-      img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
+      img::{ColorMapFunctionType, PosConversion, to_mom_png_file},
       skymap::SkyMapEnum,
     },
+    LhsRhsBoth, Mom, ZUniqHashT,
     impls::zvec::MomVecImpl,
     new_chi2_count_ref_merger_no_depth_threshold, zuniq_from_u32_to_u64, zuniq_from_u64_to_u32,
-    LhsRhsBoth, Mom, ZUniqHashT,
   };
 
   #[test]
@@ -980,6 +1001,12 @@ mod tests {
     assert!(z_u64 as u32 != z_u32);
     assert_eq!(z_u64, zuniq_from_u32_to_u64(z_u32));
     assert_eq!(z_u32, zuniq_from_u64_to_u32(z_u64));
+    let (d, h) = u32::from_zuniq(z_u32);
+    assert_eq!(d, 11);
+    assert_eq!(h, 50331641);
+    let (d, h) = u64::from_zuniq(z_u64);
+    assert_eq!(d, 11);
+    assert_eq!(h, 50331641);
   }
 
   #[test]

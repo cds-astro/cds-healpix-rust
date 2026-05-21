@@ -7,6 +7,7 @@ use std::{
   io::{BufReader, BufWriter, Read, Seek, Write},
   ops::{Add, AddAssign, Deref, RangeInclusive},
   path::Path,
+  fmt::Debug,
 };
 
 use colorous::Gradient;
@@ -42,7 +43,7 @@ pub mod explicit;
 pub mod implicit;
 
 /// Trait marking the type of the values writable in a FITS skymap.
-pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone + Zero + PartialEq {
+pub trait SkyMapValue: ToBytes + Add + AddAssign + Clone + Zero + PartialEq + Debug {
   /// FITS size, in bytes, of a value.
   const FITS_NAXIS1: u8 = size_of::<Self>() as u8;
   /// FITS TFORM type of the value

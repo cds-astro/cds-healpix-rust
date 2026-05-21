@@ -4,12 +4,12 @@ use std::{
   convert::{TryFrom, TryInto},
   error::Error,
   fs::File,
-  io::{BufWriter, Write},
+  io::{BufWriter, Error as IoError, Write},
   iter::{Empty, Map},
   marker::PhantomData,
   ops::Range,
   path::Path,
-  slice::{from_raw_parts, ChunksExact},
+  slice::{ChunksExact, from_raw_parts},
   str,
   time::SystemTime,
 };
@@ -30,8 +30,9 @@ use super::super::{
     },
     skymap::{SkyMap, SkyMapValue},
   },
+  LhsRhsBoth, Mom, WritableMom, ZUniqHashT,
   impls::zvec::MomVecImpl,
-  zuniq_from_u32_to_u64, zuniq_from_u64_to_u32, LhsRhsBoth, Mom, WritableMom, ZUniqHashT,
+  zuniq_from_u32_to_u64, zuniq_from_u64_to_u32,
 };
 
 /// Defines the type of ZUniq Hash values that can be read/write from/to FITS files.
@@ -224,6 +225,21 @@ impl FITSMom {
       .map_err(FitsError::Io)
       .and_then(|file| self.to_fits_bintable(BufWriter::new(file)))
   }
+
+  pub fn to_csv_file<P: AsRef<Path>>(&self, path: P) -> Result<(), IoError> {
+    File::create(path).and_then(|file| self.to_csv(BufWriter::new(file)))
+  }
+
+  pub fn to_csv<W: Write>(&self, writer: W) -> Result<(), IoError> {
+    match &self {
+      FITSMom::U32U32(e) => e.get_mom().to_csv(writer),
+      FITSMom::U32F32(e) => e.get_mom().to_csv(writer),
+      FITSMom::U32F64(e) => e.get_mom().to_csv(writer),
+      FITSMom::U64U32(e) => e.get_mom().to_csv(writer),
+      FITSMom::U64F32(e) => e.get_mom().to_csv(writer),
+      FITSMom::U64F64(e) => e.get_mom().to_csv(writer),
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -402,7 +418,9 @@ where
     &'a self,
     _hash_at_depth_max: Self::ZUniqHType,
   ) -> Option<(Self::ZUniqHType, &'a Self::ValueType)> {
-    unimplemented!("Unable to get references while directly reading from bytes. Look at the get_copy_of_cell_containing_unsafe method or the MomVecImpl implementation.")
+    unimplemented!(
+      "Unable to get references while directly reading from bytes. Look at the get_copy_of_cell_containing_unsafe method or the MomVecImpl implementation."
+    )
   }
 
   fn get_copy_of_cell_containing_unsafe(
@@ -432,7 +450,9 @@ where
 
   /// WARNING: not implemented!
   fn get_overlapped_cells(&'a self, _zuniq: Self::ZUniqHType) -> Self::OverlappedEntries {
-    unimplemented!("Unable to get references while directly reading from bytes. Look at the get_copy_of_overlapped_cells method or the MomVecImpl implementation.")
+    unimplemented!(
+      "Unable to get references while directly reading from bytes. Look at the get_copy_of_overlapped_cells method or the MomVecImpl implementation."
+    )
   }
 
   fn get_copy_of_overlapped_cells(
@@ -461,7 +481,9 @@ where
 
   /// WARNING: not implemented!
   fn values(&'a self) -> Self::ValuesIt {
-    unimplemented!("Unable to get references while directly reading from bytes. Look at the owned_entries method or the MomVecImpl implementation.")
+    unimplemented!(
+      "Unable to get references while directly reading from bytes. Look at the owned_entries method or the MomVecImpl implementation."
+    )
   }
 
   fn values_copy(&'a self) -> Self::ValuesCopyIt {
@@ -473,7 +495,9 @@ where
 
   /// WARNING: not implemented!
   fn entries(&'a self) -> Self::EntriesIt {
-    unimplemented!("Unable to get references while directly reading from bytes. Look at the owned_entries method or the MomVecImpl implementation.")
+    unimplemented!(
+      "Unable to get references while directly reading from bytes. Look at the owned_entries method or the MomVecImpl implementation."
+    )
   }
 
   fn entries_copy(&'a self) -> Self::EntriesCopyIt {
@@ -573,6 +597,15 @@ where
     unimplemented!(
       "Unable to create this object from the merge operation. Look at MomVecImpl instead."
     )
+  }
+
+  fn to_csv<W: Write>(&'a self, mut writer: W) -> Result<(), IoError> {
+    writeln!(writer, "depth,hash,value")?;
+    for (z, v) in self.entries_copy() {
+      let (d, h) = Self::ZUniqHType::from_zuniq(z);
+      writeln!(writer, "{},{},{:?}", d, h, v)?;
+    }
+    Ok(())
   }
 }
 

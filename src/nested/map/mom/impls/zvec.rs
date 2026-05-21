@@ -1,3 +1,5 @@
+use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
+use std::fmt::Debug;
 use std::{
   cmp::Ordering,
   error::Error,
@@ -6,15 +8,13 @@ use std::{
   vec::IntoIter,
 };
 
-use num_traits::{Float, FloatConst, FromPrimitive, PrimInt};
-
 use crate::nested::n_hash;
 
 use super::{
   super::{
     super::skymap::{SkyMap, SkyMapValue},
-    new_chi2_density_merger, zuniq_from_u32_to_u64, zuniq_from_u64_to_u32, LhsRhsBoth, Mom,
-    ZUniqHashT,
+    LhsRhsBoth, Mom, ZUniqHashT, new_chi2_density_merger, zuniq_from_u32_to_u64,
+    zuniq_from_u64_to_u32,
   },
   bslice::{MomSliceImpl, V4FITS, Z4FITS},
 };
@@ -344,7 +344,17 @@ where
     O: Fn(LhsRhsBoth<V>) -> Option<V>,
     M: Fn(u8, Z, [V; 4]) -> Result<V, [V; 4]>,
   {
-    #[derive(Clone)]
+    /*fn print_stack<ZZ: ZUniqHashT, VV: Debug>(stack: &Vec<(ZZ, VV)>) {
+      // Z: ZUniqHashT,
+      // V: 'a + crate::nested::map::skymap::SkyMapValue,
+      println!("stack:");
+      for (z, v) in stack {
+        let (d, h) = ZZ::from_zuniq(*z);
+        println!("  {}/{} {:?}", d, h, v);
+      }
+    }*/
+
+    #[derive(Debug, Clone)]
     struct DHZ<ZZ: ZUniqHashT> {
       d: u8,
       h: ZZ,
@@ -359,6 +369,7 @@ where
         Self::new(self.d, next_h, ZZ::to_zuniq(self.d, next_h))
       }
     }
+    #[derive(Debug, Clone)]
     struct DHZV<ZZ: ZUniqHashT, VV> {
       d: u8,
       h: ZZ,
@@ -370,6 +381,11 @@ where
         Self { d, h, z, v }
       }
     }
+    /*impl<ZZ: ZUniqHashT, VV> Debug for DHZV<ZZ, VV> {
+      fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DHZV({}, {}, {})", self.d, self.h, self.z)
+      }
+    }*/
     let zv_to_dhzv = |(z, v)| {
       let (d, h) = Self::ZUniqHType::from_zuniq(z);
       DHZV { d, h, z, v }
@@ -383,10 +399,13 @@ where
     let mut left: Option<DHZV<Z, V>> = it_left.next();
     let mut right: Option<DHZV<Z, V>> = it_right.next();
     let mut expected_next_dhz = DHZ::new(depth, Z::zero(), Z::to_zuniq(depth, Z::zero()));
+    // The last healpix index added to the stack: used to know whether tot try to merge the tail of the stack or not.
     let mut last_dhz_added = expected_next_dhz.clone();
+
     loop {
       match (left, right) {
         (Some(l), Some(r)) => match l.d.cmp(&r.d) {
+          // Same depth
           Ordering::Equal => match l.h.cmp(&r.h) {
             Ordering::Equal => {
               if let Some(v) = op(LhsRhsBoth::Both(l.v, r.v)) {
@@ -429,6 +448,7 @@ where
               left = Some(l);
             }
           },
+          // Left cell depth lower than right cell depth
           Ordering::Less => {
             // degrade r_hash to l_depth
             // if equals, then split l (put in the stack)
@@ -485,6 +505,7 @@ where
               }
             }
           }
+          // Right cell depth lower than left cell depth
           Ordering::Greater => {
             let l_has_at_r_depth = l.h >> (((l.d - r.d) << 1) as usize);
             match l_has_at_r_depth.cmp(&r.h) {
@@ -557,9 +578,11 @@ where
             if last_dhz_added.z == expected_next_dhz.z {
               if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
                 Self::from_skymap_recursive(&mut stack, &merge);
-              } else {
-                expected_next_dhz = last_dhz_added.next();
+                let last_z_added = stack.last().unwrap().0;
+                let (d, h) = Z::from_zuniq(last_z_added);
+                last_dhz_added = DHZ::new(d, h, last_z_added);
               }
+              expected_next_dhz = last_dhz_added.next();
             } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
               expected_next_dhz = last_dhz_added.next();
             }
@@ -580,9 +603,11 @@ where
             if last_dhz_added.z == expected_next_dhz.z {
               if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
                 Self::from_skymap_recursive(&mut stack, &merge);
-              } else {
-                expected_next_dhz = last_dhz_added.next();
+                let last_z_added = stack.last().unwrap().0;
+                let (d, h) = Z::from_zuniq(last_z_added);
+                last_dhz_added = DHZ::new(d, h, last_z_added);
               }
+              expected_next_dhz = last_dhz_added.next();
             } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
               expected_next_dhz = last_dhz_added.next();
             }
@@ -590,12 +615,15 @@ where
           break;
         }
       }
+      // Post check
       if last_dhz_added.z == expected_next_dhz.z {
         if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::LAST_LAYER_MASK {
           Self::from_skymap_recursive(&mut stack, &merge);
-        } else {
-          expected_next_dhz = last_dhz_added.next();
+          let last_z_added = stack.last().unwrap().0;
+          let (d, h) = Z::from_zuniq(last_z_added);
+          last_dhz_added = DHZ::new(d, h, last_z_added);
         }
+        expected_next_dhz = last_dhz_added.next();
       } else if last_dhz_added.h & Z::LAST_LAYER_MASK == Z::zero() {
         expected_next_dhz = last_dhz_added.next();
       }
@@ -848,9 +876,10 @@ mod tests {
   use crate::{
     n_hash,
     nested::map::{
-      img::{to_mom_png_file, ColorMapFunctionType, PosConversion},
+      img::{ColorMapFunctionType, PosConversion, to_mom_png_file},
       mom::{
-        impls::zvec::MomVecImpl, new_chi2_count_ref_merger_no_depth_threshold, Mom, ZUniqHashT,
+        LhsRhsBoth, Mom, ZUniqHashT, impls::zvec::MomVecImpl,
+        new_chi2_count_ref_merger_no_depth_threshold,
       },
       skymap::SkyMapEnum,
     },
@@ -866,11 +895,7 @@ mod tests {
       SkyMapEnum::ImplicitU64I32(skymap) => {
         let merger = |_depth: u8, _hash: u64, [n0, n1, n2, n3]: [&i32; 4]| -> Option<i32> {
           let sum = *n0 + *n1 + *n2 + *n3;
-          if sum < 1_000_000 {
-            Some(sum)
-          } else {
-            None
-          }
+          if sum < 1_000_000 { Some(sum) } else { None }
         };
         let mut mom = MomVecImpl::from_skymap_ref(&skymap, merger);
         /*println!("Mom len: {}", mom.entries.len());
@@ -965,4 +990,176 @@ mod tests {
       _ => panic!(),
     }
   }
+
+  #[test]
+  fn test_merge_mom_basic_1() {
+    // Build input MOMs
+    // * one with zeros only
+    let never_merge = |_depth: u8, _hash: u32, dens: [u32; 4]| Err(dens);
+    let allsky_mom_0 = MomVecImpl::<u32, u32>::from_hpx_sorted_entries(
+      2,
+      (0..192_u32).into_iter().map(|icell| (icell, 0)),
+      never_merge,
+    );
+    // * one with cell numbers
+    let allsky_mom_i = MomVecImpl::<u32, u32>::from_hpx_sorted_entries(
+      3,
+      (0..768_u32).into_iter().map(|icell| (icell, icell)),
+      never_merge,
+    );
+
+    // Define merging methods
+    // * split: keep the same value for sub-cells
+    let split = |_depth: u8, _hash: u32, val: u32| -> [u32; 4] { [val; 4] };
+    // * op: compute the sume
+    let op = |lrb: LhsRhsBoth<u32>| -> Option<u32> {
+      match lrb {
+        LhsRhsBoth::Left(_) => panic!("left empty"),
+        LhsRhsBoth::Right(_) => panic!("right empty"),
+        LhsRhsBoth::Both(l, r) => Some(l + r),
+      }
+    };
+    // * merge: keep the largest value
+    let merge = |_depth: u8, _hash: u32, vals: [u32; 4]| -> Result<u32, [u32; 4]> {
+      let val = vals[3];
+      if val <= 767 {
+        // always true
+        // eprintln!("MERGED OK! depth: {}; hash: {}; val: {}", depth, hash, val);
+        Ok(val)
+      } else {
+        // eprintln!("MERGED KO! depth: {}; hash: {}; val: {}", depth, hash, val);
+        Err(vals)
+      }
+    };
+    //
+    let res_mom = MomVecImpl::<u32, u32>::merge(allsky_mom_0, allsky_mom_i, split, op, merge);
+    let mut hash = 0;
+    let mut val = 63;
+    for (z, v) in res_mom.entries {
+      let (d, h) = u32::from_zuniq(z);
+      assert_eq!(d, 0);
+      assert_eq!(h, hash);
+      hash += 1;
+      assert_eq!(v, val);
+      val += 64;
+      // println!("d: {}; h: {}; val: {}", d, h, v);
+    }
+  }
+
+  #[test]
+  fn test_merge_mom_basic_2() {
+    // Build input MOMs
+    // * one with zeros only
+    let never_merge = |_depth: u8, _hash: u32, dens: [u32; 4]| Err(dens);
+    let mut mom_l_elems = Vec::<(u32, u32)>::with_capacity(200);
+    for i in 0u32..3 {
+      mom_l_elems.push((u32::to_zuniq(2, i), 0));
+    }
+    mom_l_elems.push((u32::to_zuniq(3, (3 << 2) | 0), 0));
+    mom_l_elems.push((u32::to_zuniq(3, (3 << 2) | 1), 0));
+    mom_l_elems.push((u32::to_zuniq(4, ((3 << 2) | 2) << 2 | 0), 0));
+    mom_l_elems.push((u32::to_zuniq(4, ((3 << 2) | 2) << 2 | 1), 0));
+    mom_l_elems.push((u32::to_zuniq(4, ((3 << 2) | 2) << 2 | 2), 0));
+    mom_l_elems.push((u32::to_zuniq(4, ((3 << 2) | 2) << 2 | 3), 0));
+    mom_l_elems.push((u32::to_zuniq(3, (3 << 2) | 3), 0));
+    for i in 4u32..192 {
+      mom_l_elems.push((u32::to_zuniq(2, i), 0));
+    }
+
+    let allsky_mom_0 = MomVecImpl::<u32, u32>::new(4, mom_l_elems);
+    // * one with cell numbers
+    let allsky_mom_i = MomVecImpl::<u32, u32>::from_hpx_sorted_entries(
+      3,
+      (0..768_u32).into_iter().map(|icell| (icell, icell)),
+      never_merge,
+    );
+
+    // Define merging methods
+    // * split: keep the same value for sub-cells
+    let split = |_depth: u8, _hash: u32, val: u32| -> [u32; 4] { [val; 4] };
+    // * op: compute the sume
+    let op = |lrb: LhsRhsBoth<u32>| -> Option<u32> {
+      match lrb {
+        LhsRhsBoth::Left(_) => panic!("left empty"),
+        LhsRhsBoth::Right(_) => panic!("right empty"),
+        LhsRhsBoth::Both(l, r) => Some(l + r),
+      }
+    };
+    // * merge: keep the largest value
+    let merge = |_depth: u8, _hash: u32, vals: [u32; 4]| -> Result<u32, [u32; 4]> {
+      let val = vals[3];
+      if val <= 767 {
+        // always true
+        // eprintln!("MERGED OK! depth: {}; hash: {}; val: {}", depth, hash, val);
+        Ok(val)
+      } else {
+        // eprintln!("MERGED KO! depth: {}; hash: {}; val: {}", depth, hash, val);
+        Err(vals)
+      }
+    };
+    //
+    let res_mom = MomVecImpl::<u32, u32>::merge(allsky_mom_0, allsky_mom_i, split, op, merge);
+    let mut hash = 0;
+    let mut val = 63;
+    for (z, v) in res_mom.entries {
+      let (d, h) = u32::from_zuniq(z);
+      assert_eq!(d, 0);
+      assert_eq!(h, hash);
+      hash += 1;
+      assert_eq!(v, val);
+      val += 64;
+      // println!("d: {}; h: {}; val: {}", d, h, v);
+    }
+  }
+
+  /*
+  #[test]
+  fn test_merge_mom_local() {
+    const NMATCH_MAX: f64 = 1_000_000_000.0_f64;
+    // Compute the area (in `rad^-2`) of the cone of given radius in arcsec.
+    fn cone_area(r_arcsec: f64) -> f64 {
+      let r_rad = (r_arcsec / 3600.0).to_radians();
+      // Area of a spherical cap = 2 pi (1 - cos(r))
+      // But, (1 - cos(2a)) = 2 sin^2(a) => 1 - cos(r) = 2 sin^2(r/2) with r = 2a
+      let sin_half_r = (0.5 * r_rad).sin();
+      4.0 * PI * (sin_half_r * sin_half_r)
+    }
+
+    let moml: MomVecImpl<u32, f64> =
+      match FITSMom::from_fits_file("local_resources/xmm4d13s.densmom.fits") {
+        Ok(FITSMom::U64F64(fits_mom)) => fits_mom.get_mom().to_zuniq_u32_mom(),
+        _ => panic!("File not found or Wrong content type"),
+      };
+    // moml.to_csv(io::stdout().lock());
+    let momr: MomVecImpl<u32, f64> =
+      match FITSMom::from_fits_file("local_resources/kids_dr5.densmom.fits") {
+        Ok(FITSMom::U32F64(fits_mom)) => fits_mom.get_mom().into(),
+        _ => panic!("File not found or Wrong content type"),
+      };
+
+    let cone_area = cone_area(10.0);
+    let split = |_depth: u8, _hash: u32, val: f64| -> [f64; 4] { [val; 4] };
+    let op = |lrb: LhsRhsBoth<f64>| -> Option<f64> {
+      match lrb {
+        LhsRhsBoth::Left(_) => panic!("left empty"), // Some(l * real_match_proba), WARNING: ignore border effects!
+        LhsRhsBoth::Right(_) => panic!("right emtpy"), //Some(0.0),
+        LhsRhsBoth::Both(l, r) => Some(0.30 * l + cone_area * l * r),
+      }
+    };
+    let merge = |depth: u8, hash: u32, dens: [f64; 4]| -> Result<f64, [f64; 4]> {
+      let frac_area_4 = PI / n_hash(depth) as f64;
+      let mean_dens_times_4 = dens.iter().sum::<f64>();
+      let n_assoc = frac_area_4 * mean_dens_times_4;
+      if depth >= 2 && n_assoc <= NMATCH_MAX {
+        Ok(0.25 * mean_dens_times_4)
+      } else {
+        Err(dens)
+      }
+    };
+    let match_mom = MomVecImpl::<u32, f64>::merge(moml, momr, split, op, merge);
+    for (z, v) in match_mom.entries().take(100) {
+      let (d, h) = u32::from_zuniq(z);
+      println!("d: {}; h: {}; val: {}", d, h, v);
+    }
+  }*/
 }
