@@ -1,4 +1,4 @@
-use std::{error::Error, path::PathBuf};
+use std::{error::Error, io, path::PathBuf};
 
 use clap::{Args, Subcommand};
 use log::error;
@@ -214,6 +214,8 @@ pub enum Conversion {
   Count2dens,
   /// Transforms a FITS MOM into a BINTABLE FITS MOM file.
   Bintable,
+  /// Transforms a FITS MOM into a CSV MOM file.
+  Csv,
   // gw2fits
   /*/// Transforms a density map into a MOM based on a chi2 merge algorithm.
   Dens2chi2mom {
@@ -232,7 +234,7 @@ pub struct Convert {
   /// Path of the input map FITS file.
   #[clap(value_name = "IN_FILE")]
   input: PathBuf,
-  /// Path of the output FITS file.
+  /// Path of the output file (with CSV, use '-' for stdout).
   #[clap(value_name = "OUT_FILE")]
   output: PathBuf,
 }
@@ -250,6 +252,13 @@ impl Convert {
         _ => Err(String::from("Input MOM probably not a count MOM (value type not u32).").into()),
       },
       Conversion::Bintable => mom.to_fits_bintable_file(self.output).map_err(|e| e.into()),
+      Conversion::Csv => {
+        if *self.output == *"-" {
+          mom.to_csv(io::stdout().lock()).map_err(|e| e.into())
+        } else {
+          mom.to_csv_file(self.output).map_err(|e| e.into())
+        }
+      }
     }
   }
 }
