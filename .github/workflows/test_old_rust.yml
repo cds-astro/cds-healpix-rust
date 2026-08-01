@@ -1,0 +1,17 @@
+name: check-old-rust-version
+# Ensures that the repository didn't become too rusty
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  old-rust-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cds-astro/ci-templates/.github/actions/minimal-rust-version-check@main
