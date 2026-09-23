@@ -2385,7 +2385,13 @@ impl Layer {
 
   #[inline]
   fn check_hash(&self, hash: u64) {
-    assert!(self.is_hash(hash), "Wrong hash value: too large.");
+    assert!(
+      self.is_hash(hash),
+      "Wrong hash value: too large. depth: {}; hash: {}; n_hash: {}.",
+      self.depth,
+      hash,
+      self.n_hash
+    );
   }
 
   #[inline]
@@ -2463,67 +2469,101 @@ impl Layer {
     let ycoo = (dy > 0.5) as u8;
     let quarter: u8 = (ycoo << 1) + xcoo;
     match quarter {
-      0 => { // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
+      0 => {
+        // => S => (dx + 0.5, dy + 0.5, S, SE, SW, C)
         match neigbours_map.get(S) {
           Some(nh) => [
             (*nh, (0.5 - dx) * (0.5 - dy)),
             (*neigbours_map.get(SE).unwrap(), (0.5 + dx) * (0.5 - dy)),
             (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (0.5 + dy)),
-            (h, (0.5 + dx) * (0.5 + dy))
+            (h, (0.5 + dx) * (0.5 + dy)),
           ],
           None => [
             (h, 0.0),
-            (*neigbours_map.get(SE).unwrap(), (0.5 - dy) * (0.75 + 0.5 * dx)),
-            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (0.75 + 0.5 * dy)),
-            (h, (0.5 + dx) * (0.5 + dy))
+            (
+              *neigbours_map.get(SE).unwrap(),
+              (0.5 - dy) * (0.75 + 0.5 * dx),
+            ),
+            (
+              *neigbours_map.get(SW).unwrap(),
+              (0.5 - dx) * (0.75 + 0.5 * dy),
+            ),
+            (h, (0.5 + dx) * (0.5 + dy)),
           ],
         }
       }
-      1 => // => E => (dx - 0.5, dy + 0.5, SE, E, C, NE)
+      1 =>
+      // => E => (dx - 0.5, dy + 0.5, SE, E, C, NE)
+      {
         match neigbours_map.get(E) {
           Some(nh) => [
             (*neigbours_map.get(SE).unwrap(), (1.5 - dx) * (0.5 - dy)),
             (*nh, (dx - 0.5) * (0.5 - dy)),
             (h, (1.5 - dx) * (0.5 + dy)),
-            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.5 + dy))
+            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.5 + dy)),
           ],
           None => [
-            (*neigbours_map.get(SE).unwrap(), (0.5 - dy) * (1.25 - 0.5 * dx)),
+            (
+              *neigbours_map.get(SE).unwrap(),
+              (0.5 - dy) * (1.25 - 0.5 * dx),
+            ),
             (h, 0.0),
             (h, (1.5 - dx) * (0.5 + dy)),
-            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (0.75 + 0.5 * dy))
+            (
+              *neigbours_map.get(NE).unwrap(),
+              (dx - 0.5) * (0.75 + 0.5 * dy),
+            ),
           ],
         }
-      2 => // => W => (dx + 0.5, dy - 0.5, SW, C, W, NW)
+      }
+      2 =>
+      // => W => (dx + 0.5, dy - 0.5, SW, C, W, NW)
+      {
         match neigbours_map.get(W) {
           Some(nh) => [
             (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (1.5 - dy)),
             (h, (dx + 0.5) * (1.5 - dy)),
             (*nh, (0.5 - dx) * (dy - 0.5)),
-            (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (dy - 0.5))
+            (*neigbours_map.get(NW).unwrap(), (0.5 + dx) * (dy - 0.5)),
           ],
           None => [
-            (*neigbours_map.get(SW).unwrap(), (0.5 - dx) * (1.25 - 0.5 * dy)),
+            (
+              *neigbours_map.get(SW).unwrap(),
+              (0.5 - dx) * (1.25 - 0.5 * dy),
+            ),
             (h, (dx + 0.5) * (1.5 - dy)),
             (h, 0.0),
-            (*neigbours_map.get(NW).unwrap(), (dy - 0.5) * (0.5 * dx + 0.75))
+            (
+              *neigbours_map.get(NW).unwrap(),
+              (dy - 0.5) * (0.5 * dx + 0.75),
+            ),
           ],
         }
-      3 => // => N => (dx - 0.5, dy - 0.5, C, NE, NW, N)
+      }
+      3 =>
+      // => N => (dx - 0.5, dy - 0.5, C, NE, NW, N)
+      {
         match neigbours_map.get(N) {
           Some(nh) => [
             (h, (1.5 - dx) * (1.5 - dy)),
             (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (1.5 - dy)),
             (*neigbours_map.get(NW).unwrap(), (1.5 - dx) * (dy - 0.5)),
-            (*nh, (dx - 0.5) * (dy - 0.5))
+            (*nh, (dx - 0.5) * (dy - 0.5)),
           ],
           None => [
             (h, (1.5 - dx) * (1.5 - dy)),
-            (*neigbours_map.get(NE).unwrap(), (dx - 0.5) * (1.25 - 0.5 * dy)),
-            (*neigbours_map.get(NW).unwrap(), (1.25 - 0.5 * dx) * (dy - 0.5)),
-            (h, 0.0)
+            (
+              *neigbours_map.get(NE).unwrap(),
+              (dx - 0.5) * (1.25 - 0.5 * dy),
+            ),
+            (
+              *neigbours_map.get(NW).unwrap(),
+              (1.25 - 0.5 * dx) * (dy - 0.5),
+            ),
+            (h, 0.0),
           ],
         }
+      }
       _ => unreachable!(),
     }
   }
@@ -3215,6 +3255,7 @@ impl Layer {
     // Normal case
     let depth_start = best_starting_depth(cone_radius_ext);
     if depth_start >= self.depth {
+      // Compute cells at a deeper depth, and then degrade the result.
       let shs_max = to_squared_half_segment(
         cone_radius_ext
           + largest_center_to_vertex_distance_with_radius(
@@ -3231,7 +3272,7 @@ impl Layer {
         .values_vec()
         .iter()
         .filter(|neigh| {
-          for (lon, lat) in self.vertices(**neigh) {
+          for (lon, lat) in root_layer.vertices(**neigh) {
             if squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat)
               > shs_cone_radius_int
             {
@@ -3239,7 +3280,7 @@ impl Layer {
             }
           }
           false
-        }) // remove cell fully in the internal raidus
+        }) // remove cell fully in the internal radius
         .map(h_to_h_and_shs(cone_lon, cone_lat, cos_cone_lat, root_layer))
         .filter(shs_lower_than(shs_max))
         .map(self.h_and_shs_to_lower_h(depth_start))
@@ -8033,6 +8074,20 @@ mod tests {
       //if !expected.is_empty() {
       assert_eq!(&neig, expected);
       //}
+    }
+  }
+
+  #[test]
+  fn testok_ring_coverage() {
+    let expected_res_exact: [u64; 4] = [4351, 4522, 4693, 4864];
+
+    let actual_res_exact = ring_coverage_approx_custom(5, 2, 0.0, 0.0, 1e-14, 0.1_f64.to_radians());
+    // to_aladin_moc(&actual_res_exact);
+
+    assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
     }
   }
 

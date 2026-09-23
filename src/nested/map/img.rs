@@ -11,17 +11,17 @@ use std::{
 
 pub use colorous::Gradient;
 use mapproj::{
-  img2celestial::Img2Celestial, img2proj::ReversedEastPngImgXY2ProjXY, pseudocyl::mol::Mol,
-  CanonicalProjection, CenteredProjection, ImgXY, LonLat,
+  CanonicalProjection, CenteredProjection, ImgXY, LonLat, img2celestial::Img2Celestial,
+  img2proj::ReversedEastPngImgXY2ProjXY, pseudocyl::mol::Mol,
 };
 
 use crate::nested::{
   self,
   map::{
+    HHash,
     astrometry::{gal::Galactic, math::Coo},
     mom::{Mom, ZUniqHashT},
     skymap::SkyMap,
-    HHash,
   },
 };
 
@@ -909,7 +909,7 @@ where
       color_map_func_type,
     )
   }?;
-  let mut encoder = png::Encoder::new(writer, xsize as u32, ysize as u32); // Width is 2 pixels and height is 1.
+  let mut encoder = png::Encoder::new(writer, xsize as u32, ysize as u32);
   encoder.set_color(png::ColorType::Rgba);
   encoder.set_depth(png::BitDepth::Eight);
   let mut writer = encoder.write_header()?;
