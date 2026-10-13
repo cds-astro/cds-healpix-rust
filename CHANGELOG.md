@@ -1,5 +1,42 @@
 # `cdshealpix` Change Log
 
+## 0.10.0
+
+Released 2026-10-13
+
+### Added
+
+* Add `to_csv` method for MOMs
+* Add `zuniq` `u32 <-> u64` conversions for MOMs
+
+### Changed
+
+* Modify `ring::hash` to use the same core code as `nested::hash`
+
+### Fixed
+
+*  Fix bug in `ring_coverage` (see issue #30) when input `depth < best_starting_depth`
+
+
+## 0.9.1
+
+Released 2026-03-09
+
+### Changed
+
+* Use Rust GATs for lifetime of HCIndexType
+* Change .gitignore
+
+### Added
+
+* Add methods  `entries` and `to_csv` on Healpix Cumulative index
+
+### Fixed
+
+* Fix Explicit Cumulative Index 'get' method
+* Fix bug on HCIndex when partial coverage
+
+
 ## 0.9.0
 
 Released 2026-01-22
