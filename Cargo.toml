@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2024"
 rust-version = "1.87"

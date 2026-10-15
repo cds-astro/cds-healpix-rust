@@ -1,5 +1,15 @@
 # `cdshealpix` Change Log
 
+## 0.10.1
+
+Released 2026-10-15
+
+### Fixed
+
+* Bug in `ring::hash_with_dxdy` introduced fixing [issue 27](https://github.com/cds-astro/cds-healpix-rust/issues/27)
+    + the code was correct for NSIDEs with are powers of 2
+    + for odd NSIDEs, a few indices in the EQR had an offset of 1 with respect to correct indices
+
 ## 0.10.0
 
 Released 2026-10-13

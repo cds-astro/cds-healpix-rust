@@ -242,6 +242,7 @@ pub fn hash_with_dxdy(nside: u32, lon: f64, lat: f64) -> (u64, f64, f64) {
 }
 
 fn build_hash_from_parts(d0h: u8, i: u32, j: u32, nside: u32) -> u64 {
+  // eprintln!("d0h: {}; i: {}; j: {}", d0h, i, j);
   let nside32 = nside;
   let nside = nside as u64;
   // Number of isolatitude rings in a base cell:
@@ -272,23 +273,21 @@ fn build_hash_from_parts(d0h: u8, i: u32, j: u32, nside: u32) -> u64 {
   // NPC: j = l / 2 + (i + 1) / 2 + (i+1)*(ipix%4)
   // SPC: j = l / 2 + (h + 1) / 2 + (h+1)*(ipix%4)
   let first_isolat_index;
-  let mut i_in_ring = div2_quotient(l); // Quotient such that: 1/2 = 0; -1/2 = -1
+  let mut i_in_ring;
   if i_ring < nside {
     // North polar cap + NPC/EQR transition
-    // sum from i = 1 to ringIndex of 4 * i = 4 * i*(i+1)/2 = 2 * i*(i+1)
     let ip1 = i_ring + 1;
     first_isolat_index = (i_ring * ip1) << 1;
-    i_in_ring += (div2_quotient(ip1) + ip1 * i_d0h) as i64;
+    i_in_ring = div2_quotient(l + ip1 as i64) + (ip1 * i_d0h) as i64;
   } else if i_ring >= 3 * nside - 1 {
     // South polar cap
     let ip1 = h + 1;
     first_isolat_index = n_hash(nside32) - triangular_number_x4(ip1);
-    i_in_ring += (div2_quotient(ip1) + ip1 * i_d0h) as i64;
+    i_in_ring = div2_quotient(l + ip1 as i64) + (ip1 * i_d0h) as i64;
   } else {
     // Equatorial region
-    // sum from i = 1 to nside of i
     first_isolat_index = first_hash_in_eqr(nside32) + (i_ring - nside) * (nside << 2);
-    i_in_ring += div2_quotient(nside * (div2_remainder(j_d0h + 1))) as i64;
+    i_in_ring = div2_quotient(l + (nside * (div2_remainder(j_d0h + 1))) as i64);
     i_in_ring += (nside as i64) * (if d0h == 4 && l < 0 { 4 } else { i_d0h }) as i64;
   }
   i_in_ring as u64 + first_isolat_index
@@ -454,7 +453,6 @@ pub fn vertices(nside: u32, hash: u64) -> [(f64, f64); 4] {
 
 #[cfg(test)]
 mod tests {
-
   use crate::ring::*;
 
   #[test]
@@ -573,6 +571,45 @@ mod tests {
     let h = hash(nside, lon, lat);
     println!("h ring: {}", &h);
     assert_eq!(h, 4);
+  }
+
+  #[test]
+  fn test_hash_nested_vs_ring() {
+    // Fin corner cases?
+    for depth in 0..10 {
+      let nested_layer = nested::get(depth);
+      let nside = nside(depth);
+      for icell in 0..n_hash(nside) {
+        let (lon, lat) = nested::center(depth, icell);
+        let h1 = nested_layer.to_ring(nested_layer.hash(lon, lat));
+        let (h2, dx, dy) = hash_with_dxdy(nside, lon, lat);
+        assert!((dx - 0.5).abs() < 1e-12, "dx: {}", dx);
+        assert!((dy - 0.5).abs() < 1e-12, "dy: {}", dy);
+        assert_eq!(h1, h2);
+      }
+    }
+  }
+
+  #[test]
+  fn test_hash_roundtrip() {
+    // Nside are power of 2
+    for depth in 0..10 {
+      // eprintln!("* test depth = {}", depth);
+      let nside = nside_unsafe(depth);
+      for icell in 0..n_hash(nside) {
+        let (lon, lat) = sph_coo(nside, icell, 0.5, 0.5);
+        let hash = hash_with_dxdy(nside, lon, lat).0;
+        assert_eq!(hash, icell);
+      }
+    }
+    // Any NSide
+    for nside in 0..10 {
+      // eprintln!("* test nside = {}", nside);
+      for icell in 0..n_hash(nside) {
+        let (lon, lat) = sph_coo(nside, icell, 0.5, 0.5);
+        assert_eq!(hash_with_dxdy(nside, lon, lat).0, icell);
+      }
+    }
   }
 
   #[test]
