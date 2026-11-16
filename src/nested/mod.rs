@@ -4212,9 +4212,21 @@ impl Layer {
         );
       }
     } else {
-      let (n_vertices_in_poly, poly_vertices) = n_vertices_in_poly(depth, hash, poly);
-      if (n_vertices_in_poly > 0 && n_vertices_in_poly < 4) || has_intersection(poly, poly_vertices)
+      let center = center(depth, hash);
+      let (n_vertices_in_poly, cell_vertices) = n_vertices_in_poly(depth, hash, poly);
+      let mode = if (n_vertices_in_poly > 0 && n_vertices_in_poly < 4)
+        || has_intersection(poly, cell_vertices)
       {
+        0
+      } else if n_vertices_in_poly == 4 {
+        1
+      } else if poly.contains(&Coo3D::from_sph_coo(center.0, center.1)) {
+        0
+      } else {
+        2
+      };
+
+      if mode == 0 {
         if depth == self.depth {
           moc_builder.push(depth, hash, false);
         } else {
@@ -4244,7 +4256,7 @@ impl Layer {
             sorted_poly_vertices_hash,
           );
         }
-      } else if n_vertices_in_poly == 4 {
+      } else if mode == 1 {
         moc_builder.push(depth, hash, true);
       }
     }
@@ -4654,7 +4666,12 @@ fn to_shs_min_max(cone_radius: f64, distance: f64) -> MinMax {
     } else {
       to_squared_half_segment(cone_radius - distance)
     },
-    max: to_squared_half_segment(cone_radius + distance),
+    max: if cone_radius + distance >= PI {
+      // Largest possible half segment = unit sphere radius
+      1.0
+    } else {
+      to_squared_half_segment(cone_radius + distance)
+    },
   }
 }
 
@@ -5344,6 +5361,17 @@ mod tests {
       assert_eq!(l, r);
     }
     assert_eq!(actual_res.flat_iter().deep_size(), 758);
+  }
+
+  #[test]
+  fn testok_cones_from_pb3_issue33() {
+    let depth = 3_u8;
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let radius = 170.0_f64.to_radians();
+
+    let actual_res = cone_coverage_centers(depth, lon, lat, radius);
+    assert_eq!(actual_res.flat_iter().deep_size(), 764_usize);
   }
 
   #[test]
@@ -7109,6 +7137,107 @@ mod tests {
     let actual_res_exact = polygon_coverage(depth, &vertices, true);
     // to_aladin_moc(&actual_res_exact);
     assert!(actual_res_exact.deep_size() > 0);
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
+  fn testok_polygone_exact_issue33() {
+    let depth = 4;
+
+    // 1st polygon
+    let mut vertices = [
+      (11.0_f64, -9.8_f64),
+      (34.0_f64, -9.8_f64),
+      (34.0_f64, 9.8_f64),
+      (11.0_f64, 9.8_f64),
+    ];
+    // draw polygon(11.0, -9.8,34, -9.8,34.0, 9.8,11.0, 9.8)
+    for (lon, lat) in &mut vertices {
+      *lon = (*lon).to_radians();
+      *lat = (*lat).to_radians();
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    let expected_res_exact: [u64; 60] = [
+      10, 32, 1055, 1077, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102,
+      1103, 1104, 1105, 1106, 1107, 1110, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120,
+      1121, 1122, 1123, 1124, 1125, 1126, 1127, 1129, 1132, 1133, 1134, 1135, 1136, 1137, 1138,
+      1139, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148, 1221, 1232, 2287, 2298,
+    ];
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    // 2nd polygon
+    let mut vertices = [
+      (158.0_f64, -21.0_f64),
+      (202.0_f64, -21.0_f64),
+      (202.0_f64, 21.0_f64),
+      (158.0_f64, 21.0_f64),
+    ];
+    // draw polygon(158, -21,202, -21,202, 21,158, 21)
+    for (lon, lat) in &mut vertices {
+      *lon = (*lon).to_radians();
+      *lat = (*lat).to_radians();
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    let expected_res_exact: [u64; 170] = [
+      320, 640, 1549, 1550, 1551, 1554, 1555, 1556, 1557, 1558, 1559, 1560, 1561, 1562, 1563, 1564,
+      1565, 1566, 1567, 1569, 1571, 1572, 1573, 1574, 1575, 1576, 1577, 1578, 1579, 1580, 1581,
+      1582, 1583, 1584, 1585, 1586, 1587, 1588, 1589, 1590, 1591, 1592, 1593, 1594, 1595, 1596,
+      1597, 1598, 1599, 1600, 1602, 1603, 1608, 1609, 1610, 1611, 1612, 1614, 1615, 1632, 1633,
+      1634, 1635, 1636, 1637, 1638, 1639, 1640, 1641, 1642, 1643, 1644, 1645, 1646, 1647, 1648,
+      1650, 1651, 1656, 1657, 1658, 1659, 1660, 1662, 1663, 1664, 1665, 1667, 1668, 1669, 1670,
+      1671, 1676, 1677, 1679, 1680, 1681, 1682, 1683, 1684, 1685, 1686, 1687, 1688, 1689, 1690,
+      1691, 1692, 1693, 1694, 1695, 1712, 1713, 1715, 1716, 1717, 1718, 1719, 1724, 1725, 1727,
+      1728, 1729, 1730, 1731, 1732, 1733, 1734, 1735, 1736, 1737, 1738, 1739, 1740, 1741, 1742,
+      1743, 1744, 1745, 1746, 1747, 1748, 1749, 1750, 1751, 1752, 1753, 1754, 1755, 1756, 1758,
+      1760, 1761, 1762, 1763, 1764, 1765, 1766, 1767, 1768, 1769, 1770, 1771, 1772, 1773, 1776,
+      1777, 1778, 2431, 2751,
+    ];
+    assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
+    for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    // 3rd polygon
+    let mut vertices = [
+      (159.0_f64, -19.0_f64),
+      (201.0_f64, -19.0_f64),
+      (201.0_f64, 19.0_f64),
+      (159.0_f64, 19.0_f64),
+    ];
+    /*print!("\ndraw polygon(");
+    for (lon, lat) in vertices.iter() {
+      print!(",{}, {}", lon, lat);
+    }
+    println!(")");*/
+    // draw polygon(159, -19,201, -19,201, 19,159, 19)
+    for (lon, lat) in &mut vertices {
+      *lon = (*lon).to_radians();
+      *lat = (*lat).to_radians();
+    }
+
+    let actual_res_exact = polygon_coverage(depth, &vertices, true);
+    // to_aladin_moc(&actual_res_exact);
+    let expected_res_exact: [u64; 154] = [
+      1551, 1555, 1557, 1558, 1559, 1560, 1561, 1562, 1563, 1564, 1565, 1566, 1567, 1571, 1572,
+      1573, 1574, 1575, 1577, 1578, 1579, 1580, 1581, 1582, 1583, 1584, 1585, 1586, 1587, 1588,
+      1589, 1590, 1591, 1592, 1593, 1594, 1595, 1596, 1597, 1598, 1599, 1600, 1602, 1603, 1608,
+      1609, 1610, 1611, 1612, 1614, 1615, 1632, 1633, 1634, 1635, 1636, 1637, 1638, 1639, 1640,
+      1641, 1642, 1643, 1644, 1645, 1646, 1647, 1648, 1650, 1651, 1656, 1657, 1658, 1659, 1660,
+      1662, 1663, 1664, 1665, 1667, 1668, 1669, 1670, 1671, 1676, 1677, 1679, 1680, 1681, 1682,
+      1683, 1684, 1685, 1686, 1687, 1688, 1689, 1690, 1691, 1692, 1693, 1694, 1695, 1712, 1713,
+      1715, 1716, 1717, 1718, 1719, 1724, 1725, 1727, 1728, 1729, 1730, 1731, 1732, 1733, 1734,
+      1735, 1736, 1737, 1738, 1739, 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749,
+      1750, 1752, 1753, 1754, 1755, 1756, 1760, 1761, 1762, 1763, 1764, 1765, 1766, 1767, 1768,
+      1769, 1770, 1772, 1776,
+    ];
     assert_eq!(expected_res_exact.len(), actual_res_exact.deep_size());
     for (h1, h2) in actual_res_exact.flat_iter().zip(expected_res_exact.iter()) {
       assert_eq!(h1, *h2);
