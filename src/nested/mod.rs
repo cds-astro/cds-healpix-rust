@@ -13,15 +13,15 @@ use super::{
   ring::triangular_number_x4,
   special_points_finder::arc_special_points,
   sph_geom::{
-    cone::Cone, coo3d::*, elliptical_cone::EllipticalCone, frame::RefToLocalRotMatrix, zone::Zone,
-    ContainsSouthPoleMethod, Polygon,
+    ContainsSouthPoleMethod, Polygon, cone::Cone, coo3d::*, elliptical_cone::EllipticalCone,
+    frame::RefToLocalRotMatrix, zone::Zone,
   },
   *,
 };
 
 use self::{
   bmoc::*,
-  zordercurve::{get_zoc, ZOrderCurve, ZOC},
+  zordercurve::{ZOC, ZOrderCurve, get_zoc},
 };
 
 pub mod bmoc;
@@ -899,7 +899,7 @@ impl Layer {
   /// assert_eq!( 9, n1.from_ring(9));
   /// assert_eq!(14, n1.from_ring(10));
   /// assert_eq!(13, n1.from_ring(11));
-  /// assert_eq!(19, n1.from_ring(12));  
+  /// assert_eq!(19, n1.from_ring(12));
   /// assert_eq!( 0, n1.from_ring(13));
   /// assert_eq!(23, n1.from_ring(14));
   /// assert_eq!( 4, n1.from_ring(15));
@@ -1120,7 +1120,7 @@ impl Layer {
 
   /// Computes the position on the unit sphere of the cell vertex located at the given *direction*
   /// with respect to the center of the cell.
-  ///   
+  ///
   /// # Input
   /// - `hash`: the hash value of the cell we look for the position of a vertex
   /// - `vertex_direction`: the direction of the wanted vertex coordiantes
@@ -1159,7 +1159,7 @@ impl Layer {
   /// Computes the positions on the unit sphere of the 4 vertices of the given cell.
   /// If you want to access the position for a given direction, use method
   /// [vertices_map](#method.vertices_map).
-  ///   
+  ///
   /// # Input
   /// - `hash`: the hash value of the cell we look for the positions of its vertices
   ///
@@ -1202,7 +1202,7 @@ impl Layer {
   }
 
   /// Computes the projected coordinates of the 4 vertcies of the given cell.
-  ///  
+  ///
   /// # Input
   /// - `hash`: the hash value of the cell we look for the positions of its vertices
   ///
@@ -1228,7 +1228,7 @@ impl Layer {
   /// are in the given set.
   /// If you don't care about the association between position and direction,
   /// you should use [vertices](#method.vertices).
-  ///   
+  ///
   /// # Input
   /// - `hash`: the hash value of the cell we look for the positions of its vertices
   ///
@@ -1735,7 +1735,7 @@ impl Layer {
   ///
   /// # Input
   /// - `hash ` the hash for which we look for the internal bounds
-  /// - `delta_depth` difference between the depth of the edge cells and the depth of the given cell  
+  /// - `delta_depth` difference between the depth of the edge cells and the depth of the given cell
   ///
   /// # Output
   /// - the cell numbers (hash values) of the given hash inner edge ordered consecutively,
@@ -1904,7 +1904,7 @@ impl Layer {
   }
 
   /// Provides the list of all cells of depth this layer depth + the given `delta_depth`
-  /// surrounding the cell of given hash value.  
+  /// surrounding the cell of given hash value.
   ///
   /// Here the result of both following codes:
   /// ![External edge depth 1, cells 10 and 11, delta_depth = +2](external_edge.png)
@@ -2448,13 +2448,13 @@ impl Layer {
   /// In the normal case we have:
   /// ```math
   /// f(x, y) = f(0, 0) (1 - x) (1 - y)
-  ///         + f(1, 0) x (1 - y)         
+  ///         + f(1, 0) x (1 - y)
   ///         + f(0, 1) (1 - x) y
   ///         + f(1, 1) x y
   /// ```
   /// If a neighbour is missing, we share equally its contribution between the 2 cells that do not
   /// contains the given coordinate, and we fill the array with the cell of the given coordinate
-  /// with a weight of 0.  
+  /// with a weight of 0.
   /// # Output
   /// - `[(cell, weigth), (cell, weigth), (cell, weigth), (cell, weigth)]` the cell number
   ///   together with their weight
@@ -2823,7 +2823,7 @@ impl Layer {
         .into_iter()
         .filter(|neigh| {
           let (lon, lat) = self.center(*neigh);
-          squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat)
+          squared_half_segment(lon - cone_lon, lat - cone_lat, lat.cos(), cos_cone_lat)
             <= shs_cone_radius
         })
         .collect();
@@ -3005,7 +3005,7 @@ impl Layer {
           let mut fully_in = true;
           for (lon, lat) in self.vertices(*neigh) {
             fully_in &=
-              squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat)
+              squared_half_segment(lon - cone_lon, lat - cone_lat, lat.cos(), cos_cone_lat)
                 <= shs_cone_radius;
           }
           fully_in
@@ -3273,7 +3273,7 @@ impl Layer {
         .iter()
         .filter(|neigh| {
           for (lon, lat) in root_layer.vertices(**neigh) {
-            if squared_half_segment(lon - cone_lon, lat - cone_lat, lon.cos(), cos_cone_lat)
+            if squared_half_segment(lon - cone_lon, lat - cone_lat, lat.cos(), cos_cone_lat)
               > shs_cone_radius_int
             {
               return true;
@@ -3584,7 +3584,7 @@ impl Layer {
         .collect();
       neigs.sort_unstable(); // sort the array (unstable is ok since we remove duplicates)
       neigs.dedup(); // remove duplicates (vector must be sorted first)
-                     // return BMOC::create_unsafe(self.depth, neigs.into_boxed_slice());
+      // return BMOC::create_unsafe(self.depth, neigs.into_boxed_slice());
       let mut bmoc_builder = BMOCBuilderUnsafe::new(self.depth, neigs.len());
       for neig in neigs {
         bmoc_builder.push(self.depth, neig, false);
@@ -3691,12 +3691,12 @@ impl Layer {
     // => area_ratio = cone_area / cell_area = r^2 * ncell / 4 = r^2 * (ncell >> 2)
     let mut area_ratio = pow2(cone_radius) * ((self.n_hash >> 2) as f64);
     area_ratio += 1.0_f64; // to be sure the minimum = 1
-                           // We want:
-                           //  - ratio = 1    --> n = 9
-                           //  - ratio = +inf --> n = 1.25 (125% => + 25%)
-                           //  - function shape = a/x + b
-                           // => a / 1 + b = 9  and a / +inf + b = 1.25
-                           // => b = 1.25 and a = 7.75
+    // We want:
+    //  - ratio = 1    --> n = 9
+    //  - ratio = +inf --> n = 1.25 (125% => + 25%)
+    //  - function shape = a/x + b
+    // => a / 1 + b = 9  and a / +inf + b = 1.25
+    // => b = 1.25 and a = 7.75
     let correction_factor = 1.25_f64 + 7.75_f64 / area_ratio;
     (correction_factor * area_ratio) as usize
   }
@@ -4522,8 +4522,12 @@ fn is_in_list(depth: u8, hash: u64, depth_hashs: u8, sorted_hashs: &[u64]) -> bo
 }
 
 fn n_vertices_in_poly(depth: u8, hash: u64, poly: &Polygon) -> (u8, [Coo3D; 4]) {
-  let [(l_south, b_south), (l_east, b_east), (l_north, b_north), (l_west, b_west)] =
-    vertices(depth, hash);
+  let [
+    (l_south, b_south),
+    (l_east, b_east),
+    (l_north, b_north),
+    (l_west, b_west),
+  ] = vertices(depth, hash);
   let vertices = [
     Coo3D::from_sph_coo(l_south, b_south),
     Coo3D::from_sph_coo(l_east, b_east),
@@ -5249,6 +5253,62 @@ mod tests {
   }
 
   #[test]
+  fn testok_cones_from_issue33() {
+    let depth = 5_u8;
+    let lon = 170.0_f64;
+    let lat = 0.0_f64;
+    let radius = 0.05_f64;
+
+    let actual_res = cone_coverage_centers(
+      depth,
+      lon.to_radians(),
+      lat.to_radians(),
+      radius.to_radians(),
+    );
+    let expected_res: [u64; 0] = [];
+
+    println!("draw red circle({} {} {}deg)", lon, lat, radius);
+    // to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    let actual_res = cone_coverage_fullin(
+      depth,
+      lon.to_radians(),
+      lat.to_radians(),
+      radius.to_radians(),
+    );
+    let expected_res: [u64; 0] = [];
+    // to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+
+    let depth = 4_u8;
+    let lon = 10.0_f64;
+    let lat = 75.0_f64;
+    let radius = 0.5_f64;
+
+    let actual_res = cone_coverage_centers(
+      depth,
+      lon.to_radians(),
+      lat.to_radians(),
+      radius.to_radians(),
+    );
+    let expected_res: [u64; 1] = [239];
+
+    println!("draw red circle({} {} {}deg)", lon, lat, radius);
+    // to_aladin_moc(&actual_res);
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+  }
+
+  #[test]
   fn testok_ring_bmoc_dbg() {
     let depth = 4_u8;
     let lon = 13.158329_f64;
@@ -5517,6 +5577,7 @@ mod tests {
     for cell in bmoc.flat_iter() {
       print!("{}, ", cell);
     }
+    println!();
   }
 
   #[test]
