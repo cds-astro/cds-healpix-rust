@@ -10,7 +10,6 @@ readme = "README.md"
 categories = ["science", "data-structures", "algorithms"]
 keywords = ["healpix"]
 documentation = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
-homepage = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
 repository = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/wasm"
 edition = "2021"
 
@@ -36,4 +35,3 @@ lto = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false # due to error so far!
-

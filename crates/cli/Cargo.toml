@@ -8,7 +8,6 @@ readme = "README.md"
 categories = ["command-line-utilities", "science", "data-structures", "algorithms"]
 keywords = ["healpix", "skymap"]
 documentation = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
-homepage = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
 repository = "https://github.com/cds-astro/cds-healpix-rust/tree/main/crates/cli"
 edition = "2021"
 
