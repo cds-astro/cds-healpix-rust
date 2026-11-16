@@ -2876,6 +2876,7 @@ impl Layer {
     F: Fn((f64, f64)) -> f64,
   {
     let center = get(depth).center(hash);
+    // shs between the center of the cone and the center of the cell.
     let shs = shs_computer(center);
     let MinMax { min, max } = shs_minmax[recur_depth as usize];
     if shs <= min {
@@ -4644,7 +4645,12 @@ fn to_shs_min_max_array(cone_radius: f64, distances: &[f64]) -> Box<[MinMax]> {
 fn to_shs_min_max(cone_radius: f64, distance: f64) -> MinMax {
   MinMax {
     min: if cone_radius < distance {
-      0.0
+      // Testing whether or not a cell in fully included in a cone (from a cell upper bouding cone)
+      // must always fail if the radius of the cone is maller than the radius of the bounding cone.
+      // I first wanted to use f64::NAN, but any comparison would return `false`: it's ok for `dist <=NAN`
+      // but is probably not what we want for `dist >= NAN`. So using (any) negative value is "safer" (and using
+      // 0.0, forgetting to test it, was a bad idea...).
+      -1.0
     } else {
       to_squared_half_segment(cone_radius - distance)
     },
@@ -5253,7 +5259,7 @@ mod tests {
   }
 
   #[test]
-  fn testok_cones_from_issue33() {
+  fn testok_cones_from_pb1_issue33() {
     let depth = 5_u8;
     let lon = 170.0_f64;
     let lat = 0.0_f64;
@@ -5306,6 +5312,38 @@ mod tests {
     for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
       assert_eq!(h1, *h2);
     }
+  }
+
+  #[test]
+  fn testok_cones_from_pb2_issue33() {
+    let depth = 5_u8;
+    let lon = 0.0_f64.to_radians();
+    let lat = 0.0_f64.to_radians();
+    let radius = 30.0_f64.to_radians();
+    // Alaidn: draw red circle(0 0 30deg)
+
+    let actual_res = cone_coverage_centers(depth, lon, lat, radius);
+    assert_eq!(actual_res.flat_iter().deep_size(), 818);
+
+    let actual_res = cone_coverage_fullin(depth, lon, lat, radius);
+    let brut_force_res: Vec<u64> = (0..n_hash(depth))
+      .into_iter()
+      .filter_map(|h| {
+        for (v_lon, v_lat) in vertices(depth, h) {
+          let d = haversine_dist(lon, lat, v_lon, v_lat);
+          if d > radius {
+            return None;
+          }
+        }
+        Some(h)
+      })
+      .collect();
+    /*; to_aladin_moc(&actual_res);*/
+    assert_eq!(actual_res.flat_iter().deep_size(), brut_force_res.len());
+    for (l, r) in actual_res.flat_iter().zip(brut_force_res.into_iter()) {
+      assert_eq!(l, r);
+    }
+    assert_eq!(actual_res.flat_iter().deep_size(), 758);
   }
 
   #[test]
