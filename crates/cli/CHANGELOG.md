@@ -1,5 +1,18 @@
 # `hpx-cli` Change Log
 
+## 0.1.3
+
+Released 2026-11-17
+
+### Changed
+
+* Bump cdshealpix version to 0.10.2
+
+### Fixed
+
+* See cdshealpix 0.10.2 CHANGELOG
+
+
 ## 0.1.2
 
 Released 2025-03-09
@@ -29,4 +42,3 @@ Released 2025-06-02
 Released 2025-03-21
 
 * very first release of the tool
-

@@ -1,6 +1,6 @@
 [package]
 name = "cdshealpix"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 edition = "2024"
 rust-version = "1.87"
@@ -96,3 +96,15 @@ opt-level = 3 # 1,2,3,s,z Optimize for size instead of speed
 lto = true    # Optimize at the link stage (may remove dead code)
 codegen-units = 1
 panic = "abort"
+
+[profile.wasm]
+inherits = "release"
+panic = 'unwind'
+debug = false
+debug-assertions = false
+overflow-checks = false
+opt-level = 3
+lto = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false # due to error so far!

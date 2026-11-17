@@ -14,6 +14,6 @@ jobs:
       run: |
         source $HOME/.cargo/env      
         cd crates/wasm
-        wasm-pack test --node
+        wasm-pack test --node  -p cdshealpix-wasm --profile wasm
 
 

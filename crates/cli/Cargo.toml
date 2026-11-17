@@ -1,6 +1,6 @@
 [package]
 name = "hpx-cli"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"]
 description = "Command-line tool to play with HEALPix"
 license = "MIT OR Apache-2.0"
@@ -37,7 +37,8 @@ mimalloc = "0.1.43"
 
 [package.metadata.deb]
 maintainer = "F.-X. Pineau <francois-xavier.pineau@astro.unistra.fr>"
-depends = "$auto"
+#depends = "$auto"
+depends = []
 section = "utility"
 priority = "optional"
 assets = [

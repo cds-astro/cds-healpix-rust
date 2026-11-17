@@ -9,12 +9,17 @@ extern crate wasm_bindgen;
 // see https://rustwasm.github.io/wasm-bindgen/
 use wasm_bindgen::prelude::*;
 
-use cdshealpix::nested::{hash, center, neighbours, vertices, cone_coverage_approx_flat, cone_coverage_approx, polygon_coverage};
-use cdshealpix::nested::bmoc::*;
-use cdshealpix::compass_point::{MainWind, MainWindMap};
-
-use cdshealpix::sph_geom::Polygon;
-use cdshealpix::sph_geom::coo3d::{Coo3D, LonLat};
+use cdshealpix::{
+  compass_point::{MainWind, MainWindMap},
+  nested::{
+    bmoc::*, center, cone_coverage_approx, cone_coverage_approx_flat, hash, neighbours,
+    polygon_coverage, vertices,
+  },
+  sph_geom::{
+    coo3d::{Coo3D, LonLat},
+    Polygon,
+  },
+};
 
 const DEPHT_MAX: u8 = 24;
 
@@ -33,7 +38,6 @@ pub struct PolygonMap {
 
 #[wasm_bindgen(js_class = PolygonMap)]
 impl PolygonMap {
-
   pub fn new() -> PolygonMap {
     PolygonMap {
       polygons: Default::default(),
@@ -46,12 +50,14 @@ impl PolygonMap {
   pub fn add_polygon(&mut self, id: u32, vertices_coos: Box<[f64]>) {
     let mut vertices: Vec<LonLat> = Vec::with_capacity(vertices_coos.len() >> 1);
     for i in (0..vertices_coos.len()).step_by(2) {
-      vertices.push(LonLat { 
-          lon: vertices_coos[i].to_radians(), 
-          lat: vertices_coos[i + 1].to_radians(),
+      vertices.push(LonLat {
+        lon: vertices_coos[i].to_radians(),
+        lat: vertices_coos[i + 1].to_radians(),
       });
     }
-    self.polygons.insert(id, Polygon::new(vertices.into_boxed_slice()));
+    self
+      .polygons
+      .insert(id, Polygon::new(vertices.into_boxed_slice()));
   }
 
   /// Remove the polygon of given identifier to the map.
@@ -59,7 +65,7 @@ impl PolygonMap {
   pub fn remove_polygon(&mut self, id: u32) {
     self.polygons.remove(&id);
   }
-  
+
   /// Returns the list of the identifiers of the polygon containing the given point.
   #[wasm_bindgen(js_name = polygonContaining)]
   pub fn polygon_containing(&self, ra_deg: f64, de_deg: f64) -> Box<[u32]> {
@@ -82,8 +88,6 @@ impl PolygonMap {
       polygons
     }
   }*/
-
-
 }
 
 /// Returns the cell number (hash value) in the NESTED scheme associated with the given position
@@ -104,12 +108,12 @@ pub fn wasm_hash(depth: u8, lon: f64, lat: f64) -> f64 {
   hash(depth, lon.to_radians(), lat.to_radians()) as f64
 }
 
-/// Returns the cell numbers (hash value) in the NESTED scheme associated with the given positions 
+/// Returns the cell numbers (hash value) in the NESTED scheme associated with the given positions
 /// on the unit sphere
 /// # Inputs
 /// - `order`: the order of the HEALPix hashes we want in output
 /// - `coords`: an array storing consecutively the coordinates of the positions we look for the
-///             cell numbers: `[lon_1, lat_1, lon_2, lat_2, ..., lon_n, lat_n]` 
+///             cell numbers: `[lon_1, lat_1, lon_2, lat_2, ..., lon_n, lat_n]`
 ///   - `lon`: longitude in degrees, support reasonably large positive and negative values
 ///            producing accurate results with a naive range reduction like modulo 2*pi
 ///            (i.e. without having to resort on Cody-Waite or Payne Hanek range reduction).
@@ -155,11 +159,11 @@ impl LonLat {
 /// - `order`: the order of the cell
 /// - `icell`: the cell number value of the cell we look for the unprojected center, in the NESTED scheme
 /// # Output
-/// - `[lon, lat]` in degrees, the unprojected position (on the unit sphere) of the center of 
+/// - `[lon, lat]` in degrees, the unprojected position (on the unit sphere) of the center of
 ///   the cell in the Euclidean plane
 ///   - `lon`, longitude in `[0, 360]` degrees;
-///   - `lat`, latitude in `[-90, 90]` degrees. 
-/// 
+///   - `lat`, latitude in `[-90, 90]` degrees.
+///
 /// # Panics
 /// If the given `hash` value is not in `[0, 12*nside^2[`, this method panics.
 #[wasm_bindgen(js_name = nestedCenter)]
@@ -262,13 +266,18 @@ pub fn wasm_vertices_flat(depth: u8, hash: f64) -> Box<[f64]>  {
 /// - array containing the longitudes and latitudes (in degrees) of the vertices in the following order:
 ///   `[SouthLon, SouthLat, EastLon, EastLat, NoethLon, NorthLat, WestLon, WestLat]`
 #[wasm_bindgen(js_name = nestedVertices)]
-pub fn wasm_vertices(depth: u8, hash: f64) -> Box<[f64]>  {
-  let [(s_lon, s_lat), (e_lon, e_lat), (n_lon, n_lat), (w_lon, w_lat)] = vertices(depth, hash as u64);
+pub fn wasm_vertices(depth: u8, hash: f64) -> Box<[f64]> {
+  let [(s_lon, s_lat), (e_lon, e_lat), (n_lon, n_lat), (w_lon, w_lat)] =
+    vertices(depth, hash as u64);
   Box::new([
-    s_lon.to_degrees(), s_lat.to_degrees(),
-    e_lon.to_degrees(), e_lat.to_degrees(),
-    n_lon.to_degrees(), n_lat.to_degrees(),
-    w_lon.to_degrees(), w_lat.to_degrees(),
+    s_lon.to_degrees(),
+    s_lat.to_degrees(),
+    e_lon.to_degrees(),
+    e_lat.to_degrees(),
+    n_lon.to_degrees(),
+    n_lat.to_degrees(),
+    w_lon.to_degrees(),
+    w_lat.to_degrees(),
   ])
 }
 
@@ -276,19 +285,18 @@ pub fn wasm_vertices(depth: u8, hash: f64) -> Box<[f64]>  {
 pub fn wasm_vertices_struct(depth: u8, hash: f64) -> Box<[LonLat]>  {
   let [s, e, n, w] = vertices(depth, hash as u64);
   Box::new([
-    LonLat::from_tuple(s), 
-    LonLat::from_tuple(e), 
-    LonLat::from_tuple(n), 
+    LonLat::from_tuple(s),
+    LonLat::from_tuple(e),
+    LonLat::from_tuple(n),
     LonLat::from_tuple(w)
   ])
 }*/
-
 
 // Neighbours
 
 /// Contains the list of the neighbours of the `center` HEALPix cell.
 /// In general, a cell has 8 neighbours.
-/// But the top and bottom corners of equatorial base cells do not have 
+/// But the top and bottom corners of equatorial base cells do not have
 /// north and south neighbours respectively.
 /// The left most and right most corners of the polar caps base cells do not have
 /// west and east corners respectively.
@@ -340,10 +348,9 @@ pub fn wasm_neighbours(depth: u8, hash: f64) -> Neighbours {
   Neighbours::from_map(neighbours(depth, hash as u64, true))
 }
 
-
 // Bmoc cell
 
-/// Represents a BMOC object resulting from a cone search or a polygon query. 
+/// Represents a BMOC object resulting from a cone search or a polygon query.
 /// For practical reasons of data exchange between Javascript and WebAssembly, each elements
 /// of a cell (depth, hash, flag) are stored in separate arrays.
 /// (I firs wanted to return an array of Cell, but so far it is not possible with wasm-bindgen)
@@ -353,9 +360,9 @@ pub struct ColBMOC {
   pub n_cells: u32,
   #[wasm_bindgen(readonly)]
   pub depth_max: u8,
-  depths:  Box<[u8]>,
-  hashs:  Box<[f64]>,
-  is_full_flags:  Box<[bool]>,
+  depths: Box<[u8]>,
+  hashs: Box<[f64]>,
+  is_full_flags: Box<[bool]>,
 }
 
 /// Represents a BMOC cell: its depth, number and flag telling if the cell is fully/partially covered.
@@ -364,7 +371,7 @@ pub struct Cell {
   /// The order of the HEALPix cell
   #[wasm_bindgen(readonly)]
   pub order: u8,
-  /// The nested HEALPix cell number 
+  /// The nested HEALPix cell number
   #[wasm_bindgen(readonly)]
   pub icell: f64,
   /// The flag telling if the cell if fully or partially covered
@@ -396,7 +403,7 @@ impl ColBMOC {
       isfull: self.is_full_flags[icell],
     }
   }
-  
+
   /// Returns the depth of cell number `i` in the BMOC
   /// # Inputs
   /// - `i` the index of the cell in the BMOC
@@ -411,7 +418,7 @@ impl ColBMOC {
   pub fn get_cell_hash(&self, icell: u32) -> f64 {
     self.hashs[icell as usize]
   }
-  /// Returns the status flag of the cell number `i` in the BMOC 
+  /// Returns the status flag of the cell number `i` in the BMOC
   /// (`true`: cell fully covered; `false`: cell partially covered)
   /// # Inputs
   /// - `i` the index of the cell in the BMOC
@@ -446,7 +453,12 @@ impl ColBMOC {
 /// - the BMOC covered by the given cone
 #[wasm_bindgen(js_name = nestedQueryConeBMOC)]
 pub fn wasm_cone_coverage(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> ColBMOC {
-  bmoc2colbmoc(cone_coverage_approx(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians()))
+  bmoc2colbmoc(cone_coverage_approx(
+    depth,
+    cone_lon.to_radians(),
+    cone_lat.to_radians(),
+    cone_radius.to_radians(),
+  ))
 }
 
 /// Returns the flat list of HEALPix cell of given order covered by the given cone.
@@ -458,12 +470,23 @@ pub fn wasm_cone_coverage(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: 
 /// # Outputs
 /// - the flat list of HEALPix cell of given order covered by the given cone
 #[wasm_bindgen(js_name = nestedQueryCone)]
-pub fn wasm_cone_coverage_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_radius: f64) -> Box<[f64]>  {
-  let a: Vec<f64> = cone_coverage_approx_flat(depth, cone_lon.to_radians(), cone_lat.to_radians(), cone_radius.to_radians())
-    .iter().map(|&h| h as f64).collect();
+pub fn wasm_cone_coverage_flat(
+  depth: u8,
+  cone_lon: f64,
+  cone_lat: f64,
+  cone_radius: f64,
+) -> Box<[f64]> {
+  let a: Vec<f64> = cone_coverage_approx_flat(
+    depth,
+    cone_lon.to_radians(),
+    cone_lat.to_radians(),
+    cone_radius.to_radians(),
+  )
+  .iter()
+  .map(|&h| h as f64)
+  .collect();
   a.into_boxed_slice()
 }
-
 
 /// Returns the BMOC covered by the given polygon.
 /// # Inputs
@@ -474,9 +497,9 @@ pub fn wasm_cone_coverage_flat(depth: u8, cone_lon: f64, cone_lat: f64, cone_rad
 /// - the BMOC covered by the given polygon
 #[wasm_bindgen(js_name = nestedQueryPolygonBMOC)]
 pub fn wasm_polygon_coverage(depth: u8, vertices_coos: Box<[f64]>) -> ColBMOC {
-  let mut vertices:Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
+  let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
   for i in (0..vertices_coos.len()).step_by(2) {
-    vertices.push((vertices_coos[i], vertices_coos[i+1]));
+    vertices.push((vertices_coos[i], vertices_coos[i + 1]));
   }
   bmoc2colbmoc(polygon_coverage(depth, &vertices.into_boxed_slice(), true))
 }
@@ -490,9 +513,9 @@ pub fn wasm_polygon_coverage(depth: u8, vertices_coos: Box<[f64]>) -> ColBMOC {
 /// - the BMOC covered by the given polygon
 #[wasm_bindgen(js_name = nestedQueryPolygon)]
 pub fn wasm_polygon_coverage_flat(depth: u8, vertices_coos: Box<[f64]>) -> Box<[f64]> {
-  let mut vertices:Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
+  let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(vertices_coos.len() >> 1);
   for i in (0..vertices_coos.len()).step_by(2) {
-    vertices.push((vertices_coos[i], vertices_coos[i+1]));
+    vertices.push((vertices_coos[i], vertices_coos[i + 1]));
   }
   let bmoc = polygon_coverage(depth, &vertices.into_boxed_slice(), true);
   let flat_iter: BMOCFlatIter = bmoc.flat_iter();

@@ -1,5 +1,19 @@
 # `cdshealpix` Change Log
 
+## 0.10.2
+
+Released 2026-11-17
+
+### Fixed
+
+* Compilation error on targets different from Linux, Windows, MacOS or Wasm, see [issue 31](https://github.com/cds-astro/cds-healpix-rust/issues/31)
+* The 4 issues reported in [issue 33](https://github.com/cds-astro/cds-healpix-rust/issues/33)
+  + query cone: `lon.cos` instead of `lat.cos` when computing distances
+  + query cone: a cone centered exactly on a cell center returns the whole cell
+  + query cone: cones with a radius above about 132° lose cells
+  + query polygon: fixed examples in which the interior of a polygon was dropped
+
+
 ## 0.10.1
 
 Released 2026-10-15
@@ -612,5 +626,3 @@ Released 2019-01-24.
 ## 0.1.1
 
 Released 2019-01-18.
-
-

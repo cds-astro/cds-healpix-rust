@@ -6,6 +6,7 @@ build-backend = "maturin"
 
 [project]
 name = "hpx-cli"
+dynamic = ["version", "license"]
 
 [project.urls]
 repository = "https://github.com/cds-astro/cds-healpix-rust/tree/master/crates/cli"
@@ -23,4 +24,3 @@ profile = "release"
 frozen = false
 # Require Cargo.lock is up to date
 locked = false
-
