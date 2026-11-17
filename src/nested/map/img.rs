@@ -994,3 +994,11 @@ pub fn show_with_default_app(path: &str) -> Result<(), io::Error> {
     .output()?;
   Ok(())
 }
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+pub fn show_with_default_app(path: &str) -> Result<(), io::Error> {
+  Err(io::Error::new(
+    io::ErrorKind::Unsupported,
+    "not supported on this platform",
+  ))
+}
