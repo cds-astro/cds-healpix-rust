@@ -33,6 +33,11 @@ It is used in:
     + [MOCSet](https://github.com/cds-astro/cds-moc-rust/tree/main/crates/set), a standalone command line tool to build,
       update and query a persistent set of MOCs.
 
+* [Zodiacal](https://github.com/OrbitalCommons/zodiacal), a Rust blind-astrometry and plate-solving
+  library used by [Cosmic Frontier Labs](https://github.com/CosmicFrontierLabs) and
+  [Orbital Commons](https://github.com/OrbitalCommons), for HEALPix-based star-catalog indexing
+  and regional sky queries.
+
 * CDS internal developments
 * *Please help me fill in this list*
 
