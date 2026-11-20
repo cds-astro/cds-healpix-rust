@@ -9,7 +9,7 @@
 use std::{
   f64::consts::{FRAC_PI_2, FRAC_PI_4, PI},
   ops::Shr,
-  sync::Once,
+  sync::OnceLock,
 };
 
 pub mod compass_point;
@@ -171,15 +171,13 @@ pub static LAT_OF_SQUARE_CELL: f64 = 0.399_340_199_478_977_75_f64;
 /// Cosine of LAT_OF_SQUARE_CELL
 static COS_LAT_OF_SQUARE_CELL: f64 = 0.921_317_731_923_561_3_f64;
 
-/// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29)
+/// Array storing pre-computed values for each of the 30 possible depth (from 0 to 29),
+/// lazily initialized by the get_or_create function.
 /// Info: I would have prefered to compute those quantities at compilation time, and thus have
 /// a `static CSTS_C2V: [ConstantsC2V; 30]`. Unfortunately:
 /// - macro do not seems work with static arrays
 /// - const fn is not stable and can only use const fn (so no min/max/sin/ ...) :o/
-static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-  None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-];
+static CSTS_C2V: [OnceLock<ConstantsC2V>; 30] = [const { OnceLock::new() }; 30];
 // Found here: https://stackoverflow.com/questions/28656387/initialize-a-large-fixed-size-array-with-non-copy-types
 // I wanted to use it to set a static array. So far it is not possible.
 // I hope in the future to be able to compute such an array at compilation time.
@@ -197,63 +195,12 @@ static mut CSTS_C2V: [Option<ConstantsC2V>; 30] = [
 static CSTS_C2V: [ConstantsC2V; 30] = unsafe { make_array!(30, |depth| new_cst_c2v(depth)) };
 */
 
-/// See the get_or_create function, each object is used for the lazy instantiation of the
-/// layer of the corresponding depht.
-/// Info: Unfortunatly Default::default(); do no work with static arrays :o/
-static CSTS_C2V_INIT: [Once; 30] = [
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-  Once::new(),
-];
-/// Lazy factory method: instantiate a new Layer at the first call for a given depth; after the
-/// first call, returns an already instantiated Layer.
+/// Lazy factory method: instantiate the constants at the first call for a given depth; after the
+/// first call, returns the already instantiated constants.
 /// # Info
-/// This method resort to a double-checked lock, ensuring thread-safety.
+/// `OnceLock` synchronizes the initialization with every read, ensuring thread-safety.
 fn get_or_create(depth: u8) -> &'static ConstantsC2V {
-  unsafe {
-    // Inspired from the Option get_or_insert_with method, modified to ensure thread safety with
-    // https://doc.rust-lang.org/std/sync/struct.Once.html
-    // This implements a double-checked lock
-    match CSTS_C2V[depth as usize] {
-      Some(ref v) => return v,
-      None => {
-        CSTS_C2V_INIT[depth as usize].call_once(|| {
-          CSTS_C2V[depth as usize] = Some(ConstantsC2V::new(depth));
-        });
-      }
-    }
-    match CSTS_C2V[depth as usize] {
-      Some(ref v) => v,
-      _ => unreachable!(),
-    }
-  }
+  CSTS_C2V[depth as usize].get_or_init(|| ConstantsC2V::new(depth))
 }
 
 struct ConstantsC2V {
@@ -1832,6 +1779,25 @@ pub(crate) const fn div4_remainder(x: u8) -> u8 {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn testok_get_or_create_concurrent() {
+    // Concurrent first calls for the same depth (run with `cargo miri test` to detect data races)
+    let barrier = std::sync::Barrier::new(2);
+    let (a, b) = std::thread::scope(|s| {
+      let a = s.spawn(|| {
+        barrier.wait();
+        get_or_create(5).slope_npc
+      });
+      let b = s.spawn(|| {
+        barrier.wait();
+        get_or_create(5).slope_npc
+      });
+      (a.join().unwrap(), b.join().unwrap())
+    });
+    assert_eq!(a, b);
+    assert_eq!(a, get_or_create(5).slope_npc);
+  }
 
   #[test]
   fn testok_nside() {
