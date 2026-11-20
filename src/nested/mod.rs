@@ -10,7 +10,7 @@ use super::{
   },
   direction_from_neighbour, edge_cell_direction_from_neighbour,
   external_edge::*,
-  ring::triangular_number_x4,
+  ring::{isqrt, triangular_number_x4},
   special_points_finder::arc_special_points,
   sph_geom::{
     ContainsSouthPoleMethod, Polygon, cone::Cone, coo3d::*, elliptical_cone::EllipticalCone,
@@ -968,8 +968,7 @@ impl Layer {
       //   => n = [-2+2*sqrt(1+2x)]/4 => n = [sqrt(1+2x) - 1] / 2
       //   => n^2+n-x/2 = 0 => b^2-4ac = 1 + 2x => n = [sqrt(1+2x) - 1] / 2
       // n - 1 = ring index
-      // Here we may optimize by finding a good 'isqrt' implementation
-      let i_ring: u64 = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+      let i_ring: u64 = (isqrt(1 + (hash << 1)) - 1) >> 1;
       let n_in_ring: u64 = i_ring + 1;
       let i_in_ring = hash - triangular_number_x4(i_ring);
       let d0h = i_in_ring / n_in_ring;
@@ -979,7 +978,7 @@ impl Layer {
     } else if hash >= first_hash_on_eqr_spc_transition {
       // South polar cap
       let hash = self.n_hash - 1 - hash; // start counting in reverse order from south polar cap
-      let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+      let i_ring = (isqrt(1 + (hash << 1)) - 1) >> 1;
       let n_in_ring = i_ring + 1;
       let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
       let d0h = i_in_ring / n_in_ring;
@@ -7868,6 +7867,27 @@ mod tests {
     assert_eq!(56, layer_2.hash(lon_deg.to_radians(), lat_deg.to_radians()));
   }
    */
+
+  #[test]
+  fn testok_from_ring_depth29() {
+    // Ring indices for which the f64 square root of 1 + 2 * hash is off by one
+    let layer = get(29);
+    // North polar cap: last cell of the ring of index 47453132
+    assert_eq!(layer.from_ring(4503599757937643), 1150491446436257631);
+    assert_eq!(layer.to_ring(1150491446436257631), 4503599757937643);
+    // South polar cap
+    assert_eq!(layer.from_ring(3314649324134072316), 2449958197289549824);
+    assert_eq!(layer.to_ring(2449958197289549824), 3314649324134072316);
+    // Same centers in both schemes (a depth 29 cell is about 2e-9 rad wide)
+    for (ring, nested) in [
+      (4503599757937643, 1150491446436257631),
+      (3314649324134072316, 2449958197289549824),
+    ] {
+      let (lon_r, lat_r) = crate::ring::center(1 << 29, ring);
+      let (lon_n, lat_n) = layer.center(nested);
+      assert!((lon_r - lon_n).abs() < 1e-12 && (lat_r - lat_n).abs() < 1e-12);
+    }
+  }
 
   #[test]
   fn test_ring() {
