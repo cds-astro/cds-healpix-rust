@@ -151,6 +151,22 @@ pub(crate) const fn triangular_number_x4(n: u64) -> u64 {
   (n * (n + 1)) << 1
 }
 
+/// Integer square root (floor), exact for `x < 2^62`.
+/// `(x as f64).sqrt() as u64` alone is off by one for some `x` above 2^52
+/// (e.g. one too large for `x = k * k - 1` with `k > 2^26`).
+#[inline]
+pub(crate) fn isqrt(x: u64) -> u64 {
+  debug_assert!(x < 1 << 62);
+  let r = (x as f64).sqrt() as u64;
+  if r * r > x {
+    r - 1
+  } else if (r + 1) * (r + 1) <= x {
+    r + 1
+  } else {
+    r
+  }
+}
+
 /// Returns the cell number (hash value) associated with the given position on the unit sphere
 /// # Inputs
 /// - `nside`: the NSIDE of the RING scheme
@@ -315,7 +331,7 @@ pub fn center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
   if hash < first_hash_on_npc_eqr_transition(nside) {
     // North polar cap
     // Ring index from the northmost ring, increasing southward
-    let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+    let i_ring = (isqrt(1 + (hash << 1)) - 1) >> 1;
     // Number of cells in the ring for each base cell (Remark: n_in_ring = nside in the EQR)
     let n_in_ring = i_ring + 1;
     // Index in the ring
@@ -334,7 +350,7 @@ pub fn center_of_projected_cell(nside: u32, hash: u64) -> (f64, f64) {
   } else if hash >= first_hash_in_spc(nside) {
     // South polar cap
     let hash = n_hash(nside) - 1 - hash; // start counting in reverse order from south polar cap
-    let i_ring = (((1 + (hash << 1)) as f64).sqrt() as u64 - 1) >> 1;
+    let i_ring = (isqrt(1 + (hash << 1)) - 1) >> 1;
     let n_in_ring = i_ring + 1;
     let i_in_ring = ((n_in_ring << 2) - 1) - (hash - triangular_number_x4(i_ring));
     let q = i_in_ring / n_in_ring;
@@ -571,6 +587,16 @@ mod tests {
     let h = hash(nside, lon, lat);
     println!("h ring: {}", &h);
     assert_eq!(h, 4);
+  }
+
+  #[test]
+  fn testok_isqrt() {
+    // Around squares of integers above 2^26, where the f64 square root alone can round up
+    for k in [94906265_u64, 94906266, 94906267, 1518500249, (1 << 31) - 1] {
+      for x in [k * k - 1, k * k, k * k + 1] {
+        assert_eq!(isqrt(x), x.isqrt());
+      }
+    }
   }
 
   #[test]
