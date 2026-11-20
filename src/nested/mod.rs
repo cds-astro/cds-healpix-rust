@@ -2819,7 +2819,7 @@ impl Layer {
     if depth_start >= self.depth {
       let neigs: Vec<u64> = self
         .neighbours(self.hash(cone_lon, cone_lat), true)
-        .values_vec()
+        .sorted_values_vec()
         .into_iter()
         .filter(|neigh| {
           let (lon, lat) = self.center(*neigh);
@@ -5376,6 +5376,32 @@ mod tests {
 
     let actual_res = cone_coverage_centers(depth, lon, lat, radius);
     assert_eq!(actual_res.flat_iter().deep_size(), 764_usize);
+  }
+
+  #[test]
+  fn testok_cone_centers_small_cone_sorted() {
+    // Cone smaller than the cells: the result must be sorted like any BMOC
+    let depth = 3_u8;
+    let lon = 0.0_f64;
+    let lat = 40.0_f64;
+    let radius = 5.0_f64;
+
+    let actual_res = cone_coverage_centers(
+      depth,
+      lon.to_radians(),
+      lat.to_radians(),
+      radius.to_radians(),
+    );
+    let expected_res: [u64; 3] = [42, 213, 319];
+    assert_eq!(actual_res.flat_iter().deep_size(), expected_res.len());
+    for (h1, h2) in actual_res.flat_iter().zip(expected_res.iter()) {
+      assert_eq!(h1, *h2);
+    }
+    // The cone center is in cell 319, which is part of the result
+    assert!(matches!(
+      actual_res.test_coo(lon.to_radians(), lat.to_radians()),
+      Status::IN
+    ));
   }
 
   #[test]
